@@ -1,0 +1,101 @@
+﻿@page "/contracts/view/{Id:int}"
+@inject ChatUp.Services.ContractService ContractService
+@inject NavigationManager Navigation
+@using ChatUp.Application.Features.Contracts.DTOs
+
+<h3 class="text-2xl font-semibold mb-4 text-gray-800">📄 Contract Details</h3>
+
+@if (contract == null)
+{
+    <div class="text-center text-muted py-4">
+        <div class="spinner-border text-secondary" role="status"></div>
+        <p class="mt-2">Loading contract details...</p>
+    </div>
+}
+else
+{
+    <div class="card shadow-lg border-0 rounded-3 p-4">
+        <div class="mb-4 border-bottom pb-3">
+            <h4 class="fw-bold text-primary mb-1">@contract.Title</h4>
+            <p class="text-muted mb-0">@contract.Description</p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6">
+                <h5 class="fw-semibold text-secondary mb-2">📅 Contract Information</h5>
+                <ul class="list-unstyled ms-2">
+                    <li><strong>Start Date:</strong> @contract.StartDate?.ToShortDateString()</li>
+                    <li><strong>Expiration Date:</strong> @contract.ExpirationDate?.ToShortDateString()</li>
+                    <li>
+                        <strong>Status:</strong>
+                        @if (contract.IsTerminated)
+                        {
+                            <span class="badge bg-danger">Terminated</span>
+                        }
+                        else
+                        {
+                            <span class="badge bg-success">Active</span>
+                        }
+                    </li>
+                
+                </ul>
+            </div>
+
+            <div class="col-md-6">
+                <h5 class="fw-semibold text-secondary mb-2">👤 Client Information</h5>
+                <ul class="list-unstyled ms-2">
+                    <li><strong>Client ID:</strong> @contract.ClientId</li>
+                    <li><strong>Client Name:</strong> @contract.ClientName</li>
+                    <li>
+                        <strong>Client Users:</strong>
+                        @if (contract.ClientUsers?.Count > 0)
+                        {
+                            <ul class="ms-3">
+                                @foreach (var user in contract.ClientUsers)
+                                {
+                                    <li>@user.Name</li>
+                                    @* <li>@user.Name (@user.Email)</li> *@
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <span class="text-muted">None</span>
+                        }
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <hr class="my-4" />
+
+        <div>
+            <h5 class="fw-semibold text-secondary mb-2">🧩 Linked Projects</h5>
+            @if (contract.ProjectIds?.Count > 0)
+            {
+                <p>@string.Join(", ", contract.ProjectTitles)</p>
+            }
+            else
+            {
+                <p class="text-muted">No linked projects</p>
+            }
+        </div>
+
+        <div class="text-end mt-4">
+            <button class="btn btn-secondary px-4" type="button"
+                    @onclick="@(() => Navigation.NavigateTo("/contractlist"))">
+                ← Back to List
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private ContractDto? contract;
+
+    protected override async Task OnInitializedAsync()
+    {
+        contract = await ContractService.GetByIdAsync(Id);
+    }
+}

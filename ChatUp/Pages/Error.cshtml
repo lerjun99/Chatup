@@ -1,0 +1,115 @@
+﻿@page "/error"
+@{
+    Layout = null;
+}
+@model ChatUp.Pages.ErrorModel
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Error - ChatUp</title>
+
+    <link href="~/css/bootstrap/bootstrap.min.css" rel="stylesheet" />
+    <link href="~/css/site.css" rel="stylesheet" asp-append-version="true" />
+
+    <style>
+        body {
+            background: #f8fafc;
+            color: #0d1b2a;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .error-card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+            text-align: center;
+            padding: 3rem 2rem;
+            max-width: 480px;
+            width: 90%;
+        }
+
+        .error-icon {
+            font-size: 4rem;
+            color: #0078d7; /* Primary blue tone */
+            margin-bottom: 1rem;
+        }
+
+        .error-code {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #0078d7;
+        }
+
+        .error-message {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 0.75rem;
+        }
+
+        .error-details {
+            font-size: 0.95rem;
+            color: #64748b;
+            margin-bottom: 1.5rem;
+        }
+
+        a.btn-home {
+            background-color: #0078d7;
+            color: #fff;
+            font-weight: 600;
+            padding: 0.6rem 1.5rem;
+            border-radius: 10px;
+            text-decoration: none;
+            transition: background-color 0.3s ease;
+        }
+
+            a.btn-home:hover {
+                background-color: #005fa3;
+            }
+
+        .request-id {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="error-card">
+        <div class="error-icon">
+            <i class="fa-solid fa-circle-exclamation"></i>
+        </div>
+        <div class="error-code">500</div>
+        <div class="error-message">Something went wrong</div>
+        <p class="error-details">An unexpected error occurred while processing your request.</p>
+
+        @if (Model.ShowRequestId)
+        {
+            <p class="request-id">
+                <strong>Request ID:</strong> <code>@Model.RequestId</code>
+            </p>
+        }
+
+        <a class="btn-home" href="/">← Back to Home</a>
+
+        <div class="mt-4">
+            <small class="text-muted">
+                If the issue persists, please contact your administrator.
+            </small>
+        </div>
+    </div>
+
+    <!-- Font Awesome (for icons) -->
+    <script src="https://kit.fontawesome.com/a2d0b5c9d3.js" crossorigin="anonymous"></script>
+</body>
+</html>

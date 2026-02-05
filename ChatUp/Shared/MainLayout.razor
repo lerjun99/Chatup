@@ -1,0 +1,411 @@
+﻿@inherits LayoutComponentBase
+@inject ChatUp.Services.SessionService SessionService
+@inject NavigationManager NavigationManager
+@implements IDisposable
+@attribute [StreamRendering]
+@inject IDialogService DialogService
+@using ChatUp.Application.Auth.Commands
+@using Microsoft.JSInterop;
+@inject TitleService TitleService
+@inject NavigationManager Navigation
+@inject UserState UserState
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject ChatUp.Services.LinkService LinkService
+@inject ChatUp.Services.ChatService ChatService
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject AuthenticationStateProvider AuthStateProvider
+<FluentToastProvider />
+<FluentDialogProvider />
+<FluentTooltipProvider />
+<FluentMessageBarProvider />
+<FluentMenuProvider />
+<link href="fontawesome/css/all.min.css" rel="stylesheet" asp-append-version="true" />
+<div class="page">
+<div class="page d-flex flex-column flex-md-row">
+    @* ── Drawer overlay (shown only when drawer open on mobile) ── *@
+    @if (_drawerOpen)
+    {
+        <div class="drawer-overlay" @onclick="CloseDrawer"></div>
+    }
+
+    @* ── Sidebar / Drawer ── *@
+    <div id="sidebarNav"
+         class="@SidebarCss"
+         role="navigation"
+         tabindex="-1"
+         @ref="_sidebar">
+        <NavMenu OnNavigate="CloseDrawer" />
+    </div>
+
+    @* ── Main content ── *@
+    <main class="layout-main flex-grow-1 d-flex flex-column">
+        <div class="top-row d-flex align-items-center gap-3 px-3 px-md-4">
+            <button class="btn btn-link d-md-none p-0"
+                    @onclick="OpenDrawer"
+                    aria-controls="sidebarNav"
+                    aria-expanded="@_drawerOpen"
+                    aria-label="Open navigation">
+                <i class="fa-solid fa-window-maximize"></i>
+            </button>
+          @*   <button class="btn btn-link" style="color: black !important;"
+                    @onclick="NavigateBack">
+                <i class="fa-solid fa-arrow-left"></i> 
+            </button> *@
+            <h2 class="page-title flex-grow-1 mb-0 text-truncate">@PageTitle</h2>
+
+           <div class="d-flex flex-column align-items-end">
+            <small class="text-success lh-sm" style="display: flex; align-items: center;">
+                <img src="@(!string.IsNullOrEmpty(UserState.AvatarUrl) ? UserState.AvatarUrl : "/images/default-avatar.png")"
+                     class="rounded-circle"
+                     style="width: 40px; height: 40px; object-fit: cover; margin-right: 20px; cursor: pointer;"
+                     @onclick="NavigateAccount" />
+                Hi, <b>@UserState.Username</b>
+            </small>
+        </div>
+        </div>
+
+        <article class="form-scrollable flex-grow-1 overflow-auto px-3 px-md-4 py-3">
+            @Body
+        </article>
+    </main>
+
+    @* ── Bottom nav (mobile only) ── *@
+    @if (!_drawerOpen)  @* hide while drawer is open *@
+    {
+            <nav class="mobile-tabbar d-md-none" role="navigation">
+
+               @*  <a class='@BottomClass("/dashboard") nav-link' @onclick="NavigateDashboard" title="Dashboard">
+                    <i class="fa-solid fa-chart-simple"></i>
+                    <span class="d-none d-sm-inline">Dashboard</span>
+                </a> *@
+                 @if (UserState != null && UserState.UserType != 5)
+                {
+                   <NavLink href="#"
+                         class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateDashboard">
+                    <i class="fa-solid fa-chart-simple"></i>
+                    <span style="color:white !important"></span>
+                </NavLink>
+                <NavLink href="#"
+                         class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateTicketList">
+                    <i class="fa-solid fa-list"></i>
+                    <span style="color:white !important"></span>
+                </NavLink>
+                <NavLink href="#"
+                         class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateInbox">
+                    <i class="fa-solid fa-comment"></i>
+                    <span style="color:white !important"></span>
+                </NavLink>
+                }
+           @*      <NavLink href="#"
+                         class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateChat">
+                    <i class="fa-solid fa-headset"></i>
+                    <span style="color:white !important"></span>
+                </NavLink> *@
+                @if (UserState != null && UserState.UserType is 1 or 5)
+                {
+                    <NavLink href="#"
+                    class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateApplicant">
+                    <i class="fa-solid fa-file-contract"></i>
+                    <span class="d-none d-sm-inline">Applicant</span>
+                 </NavLink>
+                }
+                @if (UserState != null && UserState.UserType == 1)
+                {   
+                <NavLink href="#"
+                         class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateContracts">
+                    <i class="fa-solid fa-file-contract"></i>
+                    <span class="d-none d-sm-inline">Contracts</span>
+                </NavLink>
+                <NavLink href="#"
+                         class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateAssign">
+                    <i class="fa-solid fa-tags"></i>
+                    <span class="d-none d-sm-inline">Account Assignment</span>
+                </NavLink>
+                <NavLink href="#"
+                         class="sidebar-link nav-link"
+                         Match="NavLinkMatch.Prefix"
+                         @onclick="NavigateRegister">
+                    <i class="fa-solid fa-address-card"></i>
+                    <span class="d-none d-sm-inline">Registration</span>
+                </NavLink>
+                }
+           @*      <a class="sidebar-link nav-link" @onclick="NavigateApplicant" title="Log Out">
+                  <i class="fa-solid fa-users"></i>>
+                    <span class="d-none d-sm-inline">Applicants</span>
+                </a> *@
+                <a class="sidebar-link nav-link" @onclick="NavigateToLogout" title="Log Out">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span class="d-none d-sm-inline">Log Out</span>
+                </a>
+            </nav>
+    }
+
+</div>
+</div>
+
+@* <div id="blazor-error-ui">
+    An unhandled error has occurred.
+    <a href="" class="reload">Reload</a>
+    <a class="dismiss">🗙</a>
+</div> *@
+<SessionExpiredModal @bind-Show="_showSessionExpired" />
+
+<script>
+    window.setupDropZone = (zoneId, inputId) => {
+      const zone = document.getElementById(zoneId);
+      const input = document.getElementById(inputId);
+
+      zone.addEventListener('dragover', e => e.preventDefault());
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        if (!e.dataTransfer.files.length) return;
+
+        input.files = e.dataTransfer.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    };
+        window.triggerFileInput = id => {
+        const el = document.getElementById(id);
+        if (el) el.click();
+    };
+</script>
+
+@code {
+    private bool _showSessionExpired = false;
+    private bool _loaded;
+    // private void NavigateDashboard() => Navigate("/dashboard");
+    private void NavigateDashboard()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/dashboard/{encodedToken}");
+        }
+    }
+    // private void NavigateTicketList() => Navigate("/ticketlist");
+    private void NavigateApplicant() => Navigate("/applicants");
+    private void NavigateToUsers() => Navigate("/usermanagement");
+    private void NavigateContracts() => Navigate("/contractlist");
+    private void NavigateRegister() => Navigate("/users");
+    // private void NavigateInbox() => Navigate("/inbox");
+    private void NavigateInbox()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/inbox/{encodedToken}");
+        }
+    }
+    private void NavigateTicketList()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/ticketlist/{encodedToken}");
+        }
+    }
+    // private void NavigateRegister()
+    // {
+    //     if (UserState.UserId.HasValue)
+    //     {
+    //         // 🔐 Encrypt user ID
+    //         var token = LinkService.Protect(UserState.UserId.Value.ToString());
+    //         var encodedToken = Uri.EscapeDataString(token);
+    //         Navigate($"/user-registers/{encodedToken}");
+    //     }
+    // }
+    // private void NavigateAssign() => Navigate("/assignments");
+    private void NavigateAssign()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/assignments/{encodedToken}");
+        }
+    }
+    // private void NavigateChat() => Navigate($"/chat/{UserState.UserId}");
+    private void NavigateChat()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/chat/{encodedToken}");
+        }
+    }
+    /* ── Drawer state ── */
+    private bool _drawerOpen;
+    bool? canceled;
+    private ElementReference _sidebar;
+
+    private void OpenDrawer() => _drawerOpen = true;
+    private void CloseDrawer() => _drawerOpen = false;
+    private void NavigateBack()
+    {
+        Navigation.NavigateTo("/dashboard");
+    }
+    private async Task NavigateAccount()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            int id = UserState.UserId ?? 0;
+            Navigation.NavigateTo($"/user-registers/{encodedToken}");
+        }
+       
+           
+        
+    }
+    private async Task NavigateToLogout()
+    {
+        try
+        {
+            var dialog = await DialogService.ShowConfirmationAsync("Are you sure you want to log out?", "Yes", "No", "Warning");
+            var result = await dialog.Result;
+            if (result.Cancelled) return;
+
+            var userId = UserState?.UserId;
+            if (userId.HasValue)
+            {
+                try
+                {
+                    if (ChatService != null)
+                        await ChatService.SetUserOfflineAsync(userId.Value);
+
+                    var logoutCommand = new LogoutCommand { UserId = userId.Value };
+                    var response = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}Auth/Logout/logout", logoutCommand);
+                    Console.WriteLine($"Logout API: {response.StatusCode}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Logout service error: {ex.Message}");
+                }
+            }
+            if (SessionStorage != null)
+                await SessionStorage.ClearAsync();
+
+            if (LocalStorage != null)
+                await LocalStorage.ClearAsync();
+
+            if (UserState != null)
+            {
+                UserState.UserId = null;
+                UserState.Username = null;
+                UserState.UserType = 0;
+            }
+
+            if (AuthStateProvider is CustomAuthStateProvider provider)
+                provider.NotifyUserLogout();
+
+            if (ChatService != null)
+                await ChatService.DisposeAsync();
+
+            await JS.InvokeVoidAsync("console.log", "User logged out.");
+
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Logout failed: {ex.Message}");
+            await DialogService.ShowErrorAsync("Logout failed. Please try again later.");
+        }
+    }
+
+    private string PageTitle = "Councilor List Page";
+
+    protected override void OnInitialized()
+    {
+        TitleService.OnTitleChanged += HandleTitleChanged;
+        PageTitle = TitleService.Title;
+        UserState.OnChange += StateHasChanged;
+        SessionService.OnSessionExpired += HandleSessionExpired;
+    }
+    private async void HandleSessionExpired()
+    {
+        await InvokeAsync(() =>
+        {
+            _showSessionExpired = true;
+            StateHasChanged();
+        });
+    }
+    private void HandleTitleChanged(string title)
+    {
+        PageTitle = title;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        TitleService.OnTitleChanged -= HandleTitleChanged;
+        UserState.OnChange -= StateHasChanged;
+        SessionService.OnSessionExpired -= HandleSessionExpired;
+    }
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        if (first)
+            await UserState.LoadAsync(); // safe here
+        _loaded = true;
+        StateHasChanged(); // re-render after loading
+        if (_drawerOpen)
+            await _sidebar.FocusAsync();  // focus trap for a11y
+    }
+    private void Navigate(string url)
+    {
+        _drawerOpen = false;               // ensure drawer closed
+        NavigationManager.NavigateTo(url);
+    }
+
+    private void Logout()
+    {
+        NavigationManager.NavigateTo("/logout");
+    }
+
+    private string BottomClass(string href) =>
+        NavigationManager.Uri.EndsWith(href, StringComparison.OrdinalIgnoreCase)
+            ? "nav-item active"
+            : "nav-item";
+
+    private string GetPageNameFromUri()
+    {
+        var uri = new Uri(NavigationManager.Uri);
+        var segments = uri.Segments
+            .Select(s => s.Trim('/'))
+            .Where(s => !string.IsNullOrWhiteSpace(s) && !int.TryParse(s, out _)) // Exclude numeric parts
+            .ToList();
+
+        return segments.LastOrDefault() ?? "Untitled";
+    }
+
+    private string SidebarCss => _drawerOpen ? "sidebar-drawer open" : "sidebar-drawer";
+}
+
+<script>
+    window.isOnline = () => navigator.onLine;
+</script>

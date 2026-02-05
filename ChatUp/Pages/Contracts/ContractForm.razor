@@ -1,0 +1,328 @@
+﻿@page "/contracts/create"
+@page "/contracts/edit/{Id:int}"
+@inject ChatUp.Services.ContractService ContractService
+@inject NavigationManager Navigation
+@using ChatUp.Application.Features.Client.DTOs
+@using ChatUp.Application.Features.Contracts.Commands
+@using ChatUp.Application.Features.Contracts.DTOs
+@using ChatUp.Application.Features.Projects.DTOs
+@using ChatUp.Application.Features.User.DTOs
+@inject HttpClient Http
+<h3 class="text-2xl font-semibold mb-4">@((Id == 0) ? "Create Contract" : "Edit Contract")</h3>
+
+<EditForm Model="contract" OnValidSubmit="SaveContract">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label class="form-label">Title</label>
+        <InputText class="form-control" @bind-Value="contract.Title" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Description</label>
+        <InputTextArea class="form-control" @bind-Value="contract.Description" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Expiration Date</label>
+        <InputDate class="form-control" @bind-Value="contract.ExpirationDate" />
+    </div>
+    <div class="dropdown client-dropdown mb-3">
+        <button class="btn btn-light dropdown-toggle w-100 text-start d-flex align-items-center"
+                type="button"
+                @onclick="ToggleClientDropdown">
+            @if (selectedClient != null)
+            {
+                <img src="@selectedClient.PhotoUrl" class="client-avatar me-2" />
+                <span class="client-name">@selectedClient.ClientName</span>
+            }
+            else
+            {
+                <span class="text-muted">-- Select Client --</span>
+            }
+        </button>
+
+        @if (isClientDropdownOpen)
+        {
+            <div class="dropdown-menu show w-100 shadow-lg rounded-3 border-0 mt-1 p-1">
+                @foreach (var c in clients)
+                {
+                    <div class="dropdown-item d-flex align-items-center client-option"
+                         title="@c.ClientName"
+                         @onclick="() => SelectClient(c.Id)">
+                        <img src="@c.PhotoUrl" class="client-avatar me-2" />
+                        <span class="client-name">@c.ClientName</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    <div class="mb-3">
+        <label>Project</label>
+        @if (isLoadingProjects)
+        {
+            <div class="text-muted fst-italic">Loading projects...</div>
+        }
+        else
+       {
+        <InputSelect class="form-select" @bind-Value="selectedProjectId">
+            <option value="0">-- Select Project --</option>
+            @foreach (var p in projects)
+            {
+                <option value="@p.Id">@p.Title</option>
+            }
+        </InputSelect>
+        }
+    </div>
+
+    <!-- USERS TAG DISPLAY -->
+    <div class="mb-3">
+        <label class="form-label">Assigned Users</label>
+
+        @if (contract.UserIds != null && contract.UserIds.Any())
+        {
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var userId in contract.UserIds)
+                {
+                    var user = users.FirstOrDefault(u => u.Id == userId);
+                    if (user != null)
+                    {
+                        <div class="user-chip d-flex align-items-center px-2 py-1 bg-primary text-white rounded-pill shadow-sm">
+                            <img src="@user.AvatarUrl"
+                                 alt="@user.Name"
+                                 class="rounded-circle border border-white me-2"
+                                 style="width:34px; height:34px; object-fit:cover;" />
+
+                            <span class="fw-semibold">@user.Name</span>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-close btn-close-white ms-2"
+                                    aria-label="Remove"
+                                    style="filter: brightness(0) invert(1); opacity: 0.7;"
+                                    @onclick="@(() => RemoveUser(user.Id))">
+                            </button>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-muted fst-italic mt-1">No users selected yet.</div>
+        }
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Role</label>
+        <InputSelect class="form-select" @bind-Value="contract.UserType">
+            <option value="">-- Select User Type --</option>
+            <option value="1">Admin</option>
+            <option value="2">Support</option>
+            <option value="3">User</option>
+            <option value="4">Developer</option>
+            <option value="4">Quality Assurance</option>
+        </InputSelect>
+    </div>
+
+    <button class="btn btn-success" type="submit">💾 Save</button>
+    <button class="btn btn-secondary ms-2" type="button" @onclick="@(() => Navigation.NavigateTo("/contractlist"))">Cancel</button>
+</EditForm>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    private CreateContractCommand contract = new();
+    private UpdateContractCommand updatecontract = new();
+    private string projectIdsText = "";
+    private string userIdsText = "";
+    private List<ProjectDto> projects = new();
+    private List<ClientDto> clients = new();
+    private int selectedClientId;
+    private ClientDto? selectedClient;
+    private bool isClientDropdownOpen = false;
+    private bool isMobileClientDropdownOpen = false;
+    private bool isLoadingProjects = true;
+    private List<UserDto> users = new();
+    private int selectedProjectId;
+    private void ToggleClientDropdown() => isClientDropdownOpen = !isClientDropdownOpen;
+    private async Task SelectClient(int clientId)
+    {
+        selectedClientId = clientId;
+        selectedClient = clients.FirstOrDefault(c => c.Id == clientId);
+
+        // Load data first before closing dropdown
+        await LoadProjects(clientId);
+        await LoadUsersByClient(clientId);
+
+        // ✅ Now close the dropdown after everything loads
+        isClientDropdownOpen = false;
+        isMobileClientDropdownOpen = false;
+
+        // Force UI refresh
+        StateHasChanged();
+    }
+    private async Task LoadProjects(int clientId)
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Projects/GetByClient/{clientId}").ToString();
+            // var url = "https://localhost:7296/Projects/GetByClient/GetByClient/2";
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+            projects = JsonSerializer.Deserialize<List<ProjectDto>>(rawJson, options) ?? new List<ProjectDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load projects: {ex.Message}");
+        }
+    }
+    private async Task LoadUsersByClient(int clientId)
+    {
+        isLoadingProjects = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}User/GetUsersByClient/{clientId}");
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var json = await response.Content.ReadAsStringAsync();
+            var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            users = JsonSerializer.Deserialize<List<UserDto>>(json, opts) ?? new();
+
+            // Automatically assign all user IDs
+            contract.UserIds = users.Select(u => u.Id).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading users: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingProjects = false;
+            StateHasChanged();
+        }
+    }
+    private void RemoveUser(int userId)
+    {
+        contract.UserIds?.Remove(userId);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadClient();
+
+        if (Id != 0)
+        {
+            var existing = await ContractService.GetByIdAsync(Id);
+            if (existing != null)
+            {
+                contract = new CreateContractCommand
+                {
+                    Title = existing.Title,
+                    Description = existing.Description,
+                    ExpirationDate = existing.ExpirationDate,
+                    UserType = existing.UserType,
+                    ProjectIds = existing.ProjectIds ?? new(),
+                    UserIds = existing.UserIds ?? new()
+                };
+
+                // ✅ Auto-set selected client
+                selectedClientId = existing.Id;
+                selectedClient = clients.FirstOrDefault(c => c.Id == existing.ClientId);
+
+                // // ✅ Load related lists
+                await LoadProjects(existing.ClientId);
+                await LoadUsersByClient(existing.ClientId);
+
+                // ✅ Preselect the current project
+                if (existing.ProjectIds != null && existing.ProjectIds.Any())
+                    selectedProjectId = existing.ProjectIds.First();
+            }
+        }
+
+    }
+    private async Task LoadClient()
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Client/GetAll").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+            clients = JsonSerializer.Deserialize<List<ClientDto>>(rawJson, options) ?? new List<ClientDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load clients: {ex.Message}");
+        }
+    }
+    private async Task SaveContract()
+    {
+        try
+        {
+            if (selectedProjectId != 0)
+            {
+                contract.ProjectIds = new List<int> { selectedProjectId };
+                contract.ClientId = selectedClientId;
+            }
+
+            if (Id == 0)
+            {
+                // CREATE
+                var response = await ContractService.CreateAsync(contract);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var createdContract = await response.Content.ReadFromJsonAsync<ContractDto>();
+                    Console.WriteLine($"Contract created successfully: {createdContract.Id}");
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Failed: {error}");
+                }
+            }
+            else
+            {
+                // UPDATE
+                var updateCommand = new UpdateContractCommand
+                {
+                    Id = Id,
+                    Title = contract.Title,
+                    Description = contract.Description,
+                    ExpirationDate = contract.ExpirationDate,
+                    ProjectIds = contract.ProjectIds,
+                    UserIds = contract.UserIds,
+                    UserType = contract.UserType,
+                    ClientId = selectedClientId // ✅ same here
+                };
+
+                await ContractService.UpdateAsync(Id, updateCommand);
+            }
+
+            Navigation.NavigateTo("/contractlist");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load clients: {ex.Message}");
+        }
+    }
+
+    private List<int> ParseIds(string ids)
+    {
+        if (string.IsNullOrWhiteSpace(ids)) return new();
+        return ids.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                  .Select(id => int.TryParse(id.Trim(), out var val) ? val : 0)
+                  .Where(val => val > 0)
+                  .ToList();
+    }
+}

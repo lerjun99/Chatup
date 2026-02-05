@@ -1,0 +1,822 @@
+﻿@page "/applicants"
+@using ChatUp.Application.Features.UserApplicant.DTOs
+@inject ChatUp.Services.ApplicantApiService Api
+@inject NavigationManager Nav
+@inject HttpClient Http
+@inject IJSRuntime JS
+@using System.Net.Http.Json
+@using ChatUp.Services
+@inject IDialogService DialogService
+@inject TitleService TitleService
+@if (isSendingEmail)
+{
+    <div class="email-overlay">
+        <div class="email-spinner">
+            <img src="images/email-sendings.gif" alt="Sending Email..." class="email-gif" />
+            <p>Sending emails... Please wait</p>
+        </div>
+    </div>
+}
+@* <video id="video" autoplay playsinline style="width:320px; border:1px solid #ccc;"></video>
+
+<br />
+<button class="btn btn-success mt-2" @onclick="Capture" disabled="@(!cameraReady)">Scan Face</button>
+
+@if (!cameraReady)
+{
+    <p>Initializing camera...</p>
+} *@
+@* <button class="btn btn-success mt-2" @onclick="Capture" disabled="@(!cameraReady)">Scan Face</button> *@
+<div class="flex-grow-1 p-3 p-md-4 bg-light" style="margin-bottom:50px">
+    <div class="toolbar-container d-flex flex-wrap gap-2 mb-3 justify-content-between align-items-center">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <div class="d-flex gap-2 align-items-center">
+                <!-- Search box takes most of the space -->
+                <input class="form-control flex-grow-1" style="min-width: 400px;"
+                       placeholder="🔍 Search by name, school, or batch"
+                       @bind="searchTerm" @bind:event="oninput" />
+
+                <!-- Dropdown stays small -->
+                <select class="form-select" style="width: 200px;" @bind="SelectedStatus" @bind:event="onchange">
+                    <option value="">All Status</option>
+                    @foreach (var s in statusOptions)
+                    {
+                        <option value="@s">@s</option>
+                    }
+                </select>
+            </div>
+
+            <button class="btn btn-primary" @onclick="FilterApplicants">
+                <i class="fa-solid fa-magnifying-glass"></i> Search
+            </button>
+
+            <button class="btn btn-outline-danger" disabled="@(!SelectedApplicants.Any())" @onclick="BulkDelete">
+                <i class="fa-solid fa-trash"></i> Delete
+            </button>
+
+            <button class="btn btn-outline-info" disabled="@(!SelectedApplicants.Any())" @onclick="BulkSendEmail">
+                <i class="fa-solid fa-envelope"></i> Email
+            </button>
+        </div>
+        <button class="btn btn-success rounded-pill px-3" @onclick="RegisterApplicant">
+            <i class="fa-solid fa-user-plus"></i> <span class="btn-text">Register New</span>
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="loading-section text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrapper">
+            <div class="table-responsive scrollable-table">
+                <table class="table table-hover align-middle fixed-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="col-checkbox">
+                                <input type="checkbox"
+                                       @onchange="SelectAllChanged"
+                                       checked="@selectAll" />
+                            </th>
+                            <th>Name</th>
+                            <th>School</th>
+                            <th>Batch</th>
+                            <th>Status</th>
+                            <th class="col-actions">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (filteredApplicants is not null && filteredApplicants.Any())
+                        {
+                            @foreach (var a in pagedApplicants)
+                            {
+                                <tr>
+                                    <td class="col-checkbox">
+                                        <input type="checkbox"
+                                               value="@a.Id"
+                                               @onchange="() => ToggleSelection(a.Id)"
+                                               checked="@selectedApplicants.Contains(a.Id)" />
+                                    </td>
+                                    <td>@a.ApplicantName</td>
+                                    <td>@a.School</td>
+                                    <td>@a.Batch</td>
+                                    <td>@a.Status</td>
+                                    <td class="col-actions">
+                                        <div class="action-buttons d-flex gap-1">
+                                            <button class="btn btn-sm btn-primary" @onclick="() => EditApplicant(a.Id)">
+                                                <i class="fa-solid fa-pencil"></i> 
+                                            </button>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteApplicant(a.Id)">
+                                                <i class="fa-solid fa-trash"></i> 
+                                            </button>
+                                            <button class="btn btn-sm btn-info"
+                                                    @onclick="() => OpenStatusModal(a.Id)">
+                                                <i class="fa-solid fa-envelope"></i> Email
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    No applicants found
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+           
+
+            @if (filteredApplicants.Any())
+            {
+                <div class="pagination-holder d-flex justify-content-between align-items-center mt-2">
+                    <span>Showing @FromPage to @ToPage of @filteredApplicants.Count entries</span>
+                    <div class="pagination-button-holder">
+                        <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(!CanGoPrev)">
+                            <i class="fa-solid fa-backward"></i>
+                        </button>
+
+                        @for (int i = 1; i <= TotalPage; i++)
+                        {
+                            int page = i;
+                            <input type="button" value=@(page)
+                                   class="@(CurrentPage == page ? "active" : "")"
+                                   @onclick="() => SelectPage(page)" />
+                        }
+
+                        <button class="btn btn-secondary" @onclick="NextPage" disabled="@(!CanGoNext)">
+                            <i class="fa-solid fa-forward"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+@* Dashboard *@
+<div class="applicant-dashboard">
+    <!-- SIDEBAR -->
+    <aside class="sidebar @(sidebarVisible ? "visible" : "")">
+        <div class="sidebar-brand fw-bold mb-4">ApplicantOps</div>
+        <nav>
+            <div class="text-muted mb-2">Analytics</div>
+            <ul class="nav flex-column">
+                <li class="nav-item mb-1"><a class="nav-link">Dashboard</a></li>
+                <li class="nav-item mb-1"><a class="nav-link">Applicants</a></li>
+                <li class="nav-item mb-1"><a class="nav-link">Interviews</a></li>
+                <li class="nav-item mb-1"><a class="nav-link">Schools</a></li>
+            </ul>
+        </nav>
+    </aside>
+
+    <!-- MAIN CONTENT -->
+    <main class="main">
+        <!-- HEADER -->
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+               @*  <h2>Applicant Management Dashboard</h2> *@
+                <div class="text-muted">OJT / Internship overview</div>
+            </div>
+
+            <div class="d-flex gap-2">
+                <input type="date" @bind="FilterStartDate" class="form-control form-control-sm" />
+                <input type="date" @bind="FilterEndDate" class="form-control form-control-sm" />
+                <button class="btn btn-primary btn-sm" @onclick="ApplyFilter">Apply</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="SetToday">Today</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="SetMonth">Month</button>
+            </div>
+        </header>
+
+        <!-- LOADING -->
+        @if (isLoading)
+        {
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary"></div>
+                <p class="text-muted mt-2">Loading dashboard...</p>
+            </div>
+        }
+        else if (_Dashboard == null)
+        {
+            <p class="text-muted">No data available</p>
+        }
+        else
+        {
+            <!-- KPI CARDS -->
+            <div class="d-flex gap-3 mb-4">
+                @foreach (var card in new[]
+                            {
+                        new { Label = "Total Applicants", Value = _Dashboard.TotalApplicants, Color = "bg-primary text-white" },
+                        new { Label = "Initial Assessment", Value = _Dashboard.InitialAssessmentCount, Color = "bg-info text-dark" },
+                        new { Label = "For Interview", Value = _Dashboard.InterviewCount, Color = "bg-warning text-dark" },
+                        new { Label = "Assessed", Value = _Dashboard.AssessmentCount, Color = "bg-success text-white" },
+                        new { Label = "Shortlisted", Value = _Dashboard.ShortlistedCount, Color = "bg-secondary text-white" },
+                        new { Label = "Rejected", Value = _Dashboard.RejectedCount, Color = "bg-danger text-white" },
+                        new { Label = "Onboarding", Value = _Dashboard.OnboardingCount, Color = "bg-info text-white" },
+                        new { Label = "Backout", Value = _Dashboard.BackoutCount, Color = "bg-dark text-white" }
+                        })
+                {
+                    <div class="card shadow-sm p-3 text-center @card.Color" style="flex:1;">
+                        <div class="small">@card.Label</div>
+                        <div class="h3 fw-bold">@card.Value</div>
+                    </div>
+                }
+            </div>
+            <!-- STATUS & SCHOOL -->
+            <div class="row g-3 mb-4">
+                <!-- STATUS BREAKDOWN -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm p-3">
+                        <h5 class="mb-3">Applicants by Status</h5>
+                        @foreach (var s in _Dashboard.StatusBreakdown)
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <strong>@s.Status</strong>
+                                    <div class="text-muted small">@s.Count applicants</div>
+                                </div>
+                                <div class="progress flex-grow-1 mx-3" style="height:10px;">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width:@s.Percent%"
+                                         aria-valuenow="@s.Percent" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                <span class="badge bg-primary">@($"{s.Percent:F1}%")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- SCHOOL BREAKDOWN -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm p-3">
+                        <h5 class="mb-3">Applicants by School</h5>
+                        <table class="table table-sm table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>School</th>
+                                    <th>Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var s in _Dashboard.ApplicantsBySchool)
+                                {
+                                    <tr>
+                                        <td>@s.School</td>
+                                        <td><strong>@s.Total</strong></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RECENT APPLICANTS -->
+            <div class="card shadow-sm p-3 mb-4">
+                <h5>Recent Applicants</h5>
+                <div class="list-group list-group-flush" style="max-height:300px; overflow-y:auto;">
+                    @foreach (var a in _Dashboard.RecentApplicants)
+                    {
+                        <div class="list-group-item d-flex justify-content-between align-items-center border-bottom">
+                            <div>
+                                <div class="fw-semibold">@a.ApplicantName</div>
+                                <div class="text-muted small">@a.School • Applied @a.CreatedAt.ToString("MMM dd, yyyy")</div>
+                            </div>
+                            <span class="badge @GetStatusBadge(a.Status)">@a.Status</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </main>
+
+  @*   <!-- SIDEBAR TOGGLE BUTTON -->
+    <button class="btn btn-primary sidebar-toggle" @onclick="ToggleSidebar">☰</button> *@
+</div>
+
+@if (showStatusModal)
+{
+    <!-- Modal Overlay -->
+    <div class="modal fade show d-block" tabindex="-1" style="z-index: 1055 !important;">
+        <div class="modal-dialog modal-dialog-centered modal-md">
+            <div class="modal-content">
+
+                <!-- Header -->
+                <div class="modal-header bg-modal">
+                    <h5 class="modal-title">Applicant Status</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+
+                <!-- Body -->
+                <div class="modal-body">
+
+                    <!-- Status -->
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select"
+                                @bind-value="Status"
+                                @bind-value:event="onchange">
+                            <option value="">-- Select Status --</option>
+                            @foreach (var status in statusOptions)
+                            {
+                                <option value="@status">@status</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Remarks -->
+                    @if (statusForm.Status == "For Interview" || statusForm.Status == "Final Interview")
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Remarks / Arrival Schedule</label>
+                            <textarea class="form-control"
+                                      rows="4"
+                                      placeholder="e.g. Jan 15, 2026 – 9:00 AM. Please arrive 15 minutes early."
+                                      @bind="statusForm.Remarks"></textarea>
+                        </div>
+                    }
+
+                </div>
+
+                <!-- Footer -->
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                    <button class="btn btn-primary" disabled="@isSendingEmail" @onclick="SubmitStatus">
+                        @(isSendingEmail ? "Sending..." : "Update & Send Email")
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Backdrop -->
+    <div class="modal-backdrop fade show" style="z-index: 1040;"></div>
+}
+
+
+@code {
+    private string selectedStatus = "";
+    private string SelectedStatus
+    {
+        get => selectedStatus;
+        set
+        {
+            if (selectedStatus != value)
+            {
+                selectedStatus = value;
+                FilterApplicants();
+            }
+        }
+    }
+    private string SearchTerm
+    {
+        get => searchTerm;
+        set
+        {
+            searchTerm = value;
+            FilterApplicants();
+        }
+    }
+
+    private bool sidebarVisible;
+    private ApplicantDashboardDto? _Dashboard;
+    private DateTime FilterStartDate = DateTime.UtcNow.Date;
+    private DateTime FilterEndDate = DateTime.UtcNow.Date;
+    private bool cameraReady = false;
+    private List<ApplicantListDto> applicants = new();
+    private List<ApplicantListDto> filteredApplicants = new();
+    private List<ApplicantListDto> pagedApplicants => filteredApplicants.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+    private HashSet<int> selectedApplicants = new();
+    private bool selectAll = false;
+    private bool showModal = false;
+    private bool isLoading = true;
+    private string searchTerm = string.Empty;
+    private bool isSendingEmail = false;
+    private int CurrentPage = 1;
+    private int PageSize = 10;
+    private bool showStatusModal;
+    private int TotalPage => (int)Math.Ceiling((double)filteredApplicants.Count / PageSize);
+    private int FromPage => ((CurrentPage - 1) * PageSize) + 1;
+    private int ToPage => Math.Min(CurrentPage * PageSize, filteredApplicants.Count);
+    private bool isBulkEmail = false;
+    private bool CanGoPrev => CurrentPage > 1;
+    private bool CanGoNext => CurrentPage < TotalPage;
+    private UpdateApplicantStatusDto statusForm = new();
+    private int selectedApplicantId;
+    private void OpenStatusModal(int id)
+    {
+        selectedApplicantId = id;
+        isBulkEmail = false;
+
+        statusForm = new UpdateApplicantStatusDto
+        {
+            Status = statusOptions.FirstOrDefault(), // first option default
+            Screening = true,
+            Remarks = string.Empty // make sure remarks start empty
+        };
+
+        showStatusModal = true;
+    }
+    private List<string> statusOptions = new()
+    {
+        "Initial Assessment",
+        "For Interview",
+        "Exam Passed",
+        "Final Interview",
+        "Shortlisted",
+        "Rejected",
+        "Onboarding",
+        "Backout"
+
+    };
+    private void OnStatusChanged(ChangeEventArgs e)
+    {
+        selectedStatus = e.Value?.ToString() ?? "";
+        FilterApplicants();
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        TitleService.SetTitle("Applicant Management Dashboard");
+        await LoadApplicants();
+        FilterEndDate = DateTime.UtcNow.Date;
+        FilterStartDate = FilterEndDate.AddMonths(-1);
+        await LoadDashboardAsync();
+        StateHasChanged();
+    }
+    private async Task LoadDashboardAsync()
+    {
+        isLoading = true;
+        TitleService.SetTitle("Applicant Dashboard");
+
+        _Dashboard = await Api.GetDashboardAsync(
+            FilterStartDate,
+            FilterEndDate);
+
+        isLoading = false;
+          StateHasChanged();
+    }
+
+    private async Task ApplyFilter() => await RefreshAllAsync();
+
+    private async Task SetToday()
+    {
+        FilterStartDate = DateTime.UtcNow.Date;
+        FilterEndDate = DateTime.UtcNow.Date;
+        await ApplyFilter();
+    }
+    private async Task RefreshAllAsync()
+    {
+        await LoadApplicants();
+        await LoadDashboardAsync();
+        SelectedApplicants.Clear();          // clear selected checkboxes
+        SelectedStatus = "";                 // reset status dropdown
+        searchTerm = "";
+    }
+    private async Task SetMonth()
+    {
+        var today = DateTime.UtcNow;
+        FilterStartDate = new DateTime(today.Year, today.Month, 1);
+        FilterEndDate = FilterStartDate.AddMonths(1).AddDays(-1);
+        await ApplyFilter();
+    }
+
+    private void ToggleSidebar() => sidebarVisible = !sidebarVisible;
+
+    private string GetStatusBadge(string status) => status switch
+    {
+        "Initial Assessment" => "bg-info",
+        "For Interview" => "bg-warning text-dark",
+        "Accepted" => "bg-success",
+        "Rejected" => "bg-danger",
+        _ => "bg-secondary"
+    };
+    private async Task LoadApplicants()
+    {
+        isLoading = true;
+        applicants = await Api.GetApplicantsAsync();
+        filteredApplicants = applicants.ToList();
+        selectedApplicants.Clear();
+        selectAll = false;
+        CurrentPage = 1;
+        isLoading = false;
+    }
+
+
+    private string Status
+    {
+        get => statusForm.Status;
+        set
+        {
+            statusForm.Status = value;
+
+            // Hide and clear remarks if Initial Assessment
+            if (value == "Initial Assessment")
+            {
+                statusForm.Remarks = string.Empty;
+            }
+        }
+    }
+    private void UpdatePagination()
+    {
+        StateHasChanged(); // trigger UI update
+    }
+    private void FilterApplicants()
+    {
+        IEnumerable<ApplicantListDto> query = applicants;
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            query = query.Where(a =>
+                a.ApplicantName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                a.School.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                a.Batch.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedStatus))
+        {
+            query = query.Where(a => a.Status == selectedStatus);
+        }
+
+        filteredApplicants = query.ToList();
+        CurrentPage = 1;
+        UpdatePagination();
+    }
+
+    private void ToggleSelection(int id)
+    {
+        if (!selectedApplicants.Add(id))
+        {
+            selectedApplicants.Remove(id);
+        }
+    }
+
+    private void SelectAllChanged(ChangeEventArgs e)
+    {
+        selectAll = (bool)e.Value;
+        selectedApplicants.Clear();
+
+        if (selectAll)
+        {
+            foreach (var a in filteredApplicants)
+                selectedApplicants.Add(a.Id);
+        }
+    }
+
+    private List<ApplicantListDto> SelectedApplicants => applicants.Where(a => selectedApplicants.Contains(a.Id)).ToList();
+
+    private async Task DeleteApplicant(int id)
+    {
+        var success = await Api.DeleteAsync(id);
+        if (success)
+           await RefreshAllAsync();
+    }
+
+    private void EditApplicant(int id)
+    {
+        Nav.NavigateTo($"/applicants/edit/{id}");
+    }
+
+    private void RegisterApplicant()
+    {
+        Nav.NavigateTo("/applicants/new");
+    }
+
+    private async Task SendEmail(int id)
+    {
+        try
+        {
+            isSendingEmail = true;
+            StateHasChanged();
+
+            var dto = new UpdateApplicantStatusDto
+            {
+                Status = "For Interview",
+                Screening = true,
+                Interview = false,
+                AcceptanceLetter = false,
+                Orientation = false,
+                Onboarding = false,
+                Remarks = "Approved for interview"
+            };
+
+            // Call API
+            var result = await Api.UpdateApplicantStatusAsync(id, dto);
+
+            if (result != null)
+            {
+                // Update local list with the response from API
+                var index = filteredApplicants.FindIndex(a => a.Id == id);
+                if (index != -1)
+                {
+                    filteredApplicants[index] = new ApplicantListDto
+                    {
+                        Id = result.Id,
+                        ApplicantName = result.ApplicantName,
+                        Status = result.Status,
+                        School = filteredApplicants[index].School,
+                        Batch = filteredApplicants[index].Batch
+                        // include other fields as needed
+                    };
+                }
+                 await RefreshAllAsync();
+                await DialogService.ShowSuccessAsync(result.Message);
+            }
+            else
+            {
+                await DialogService.ShowErrorAsync("❌ Approval failed.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowErrorAsync($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSendingEmail = false;
+            StateHasChanged();
+        }
+    }
+    private async Task SubmitStatus()
+    {
+        try
+        {
+            isSendingEmail = true;
+            StateHasChanged();
+
+            // Auto-map flags based on status
+            statusForm.Interview = statusForm.Status?.Contains("Interview") == true;
+            statusForm.AcceptanceLetter = false;
+            statusForm.Orientation = false;
+            statusForm.Onboarding = false;
+
+            // Clear remarks if Initial Assessment
+            if (statusForm.Status == "Initial Assessment")
+                statusForm.Remarks = string.Empty;
+
+            if (isBulkEmail)
+            {
+                int sent = 0;
+                int skipped = 0;
+                int failed = 0;
+
+                foreach (var applicant in SelectedApplicants)
+                {
+                    try
+                    {
+                        var result = await Api.UpdateApplicantStatusAsync(applicant.Id, statusForm);
+
+                        if (result != null && !string.IsNullOrEmpty(result.Message))
+                        {
+                            sent++;
+
+                            // Update table automatically
+                            var index = filteredApplicants.FindIndex(a => a.Id == applicant.Id);
+                            if (index != -1)
+                            {
+                                filteredApplicants[index].Status = result.Status;
+                            }
+                        }
+                        else
+                        {
+                            failed++;
+                        }
+                    }
+                    catch
+                    {
+                        failed++;
+                    }
+                }
+
+                await DialogService.ShowSuccessAsync(
+                    $"Bulk Email Summary: ✅ Sent: {sent}, ⚠ Skipped: {skipped}, ❌ Failed: {failed}");
+            }
+            else
+            {
+                var result = await Api.UpdateApplicantStatusAsync(selectedApplicantId, statusForm);
+
+                if (result != null && !string.IsNullOrEmpty(result.Message))
+                {
+                    // Update table automatically
+                    var index = filteredApplicants.FindIndex(a => a.Id == selectedApplicantId);
+                    if (index != -1)
+                    {
+                        filteredApplicants[index].Status = result.Status;
+                    }
+
+                    await DialogService.ShowSuccessAsync(result.Message);
+                }
+                else
+                {
+                    await DialogService.ShowErrorAsync("❌ Approval failed.");
+                }
+            }
+            await RefreshAllAsync();
+            CloseModal();
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowErrorAsync($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isSendingEmail = false;
+            StateHasChanged();
+        }
+    }
+
+ 
+    private void BulkDelete()
+    {
+        foreach (var id in SelectedApplicants.Select(a => a.Id).ToList())
+        {
+            DeleteApplicant(id);
+        }
+        selectedApplicants.Clear();
+    }
+
+
+    private void BulkSendEmail()
+    {
+        if (!SelectedApplicants.Any())
+        {
+            DialogService.ShowWarningAsync("No applicants selected for email sending.");
+            return;
+        }
+
+        isBulkEmail = true;
+
+        statusForm = new UpdateApplicantStatusDto
+        {
+            Status = statusOptions.FirstOrDefault(),
+            Screening = true,
+            Remarks = string.Empty
+        };
+        showStatusModal = true;
+    }
+
+    private void CloseModal()
+    {
+        showStatusModal = false;
+    }
+
+    private void PreviousPage()
+    {
+        if (CanGoPrev) CurrentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (CanGoNext) CurrentPage++;
+    }
+
+    private void SelectPage(int page)
+    {
+        CurrentPage = page;
+    }
+  
+    private async Task Capture()
+    {
+        if (!cameraReady) return;
+
+        try
+        {
+            var imageBase64 = await JS.InvokeAsync<string>("faceCamera.capture");
+            Console.WriteLine("Captured image length: " + imageBase64.Length); // Debug
+
+            var response = await Http.PostAsJsonAsync(
+                "http://localhost:5196/FaceRecognition/Identify/identify",
+                new { ImageBase64 = imageBase64 }
+            );
+
+            if (response.IsSuccessStatusCode)
+            {
+                Console.WriteLine("Face captured successfully!");
+            }
+            else
+            {
+                Console.WriteLine("Server returned error: " + response.StatusCode);
+            }
+        }
+        catch (JSException jsEx)
+        {
+            Console.WriteLine("JS Error: " + jsEx.Message);
+        }
+        catch (HttpRequestException httpEx)
+        {
+            Console.WriteLine("HTTP Error: " + httpEx.Message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("General Error: " + ex.Message);
+        }
+    }
+}

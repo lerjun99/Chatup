@@ -1,0 +1,176 @@
+﻿@page "/otp-verification"
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@inject PasswordRecoveryService PasswordService
+@layout LoginLayout
+@using System.Timers
+@using ChatUp.Application.Features.EmailOTP.Commands
+@using ChatUp.Services
+
+<div class="login-container">
+    <div class="login-box">
+        <h2>OTP Verification</h2>
+        <p>Please enter the 6-digit code sent to your email: <strong>@Email</strong></p>
+
+        <div class="otp-inputs">
+            @for (int i = 0; i < OtpDigits.Count; i++)
+            {
+                var idx = i;
+                <input type="text"
+                       maxlength="1"
+                       class="otp-box"
+                       value="@OtpDigits[idx]"
+                       @oninput="@(e => OnOtpInput(e, idx))"
+                       @ref="@OtpRefs[idx]" />
+            }
+        </div>
+
+        <button class="btn-verify" @onclick="VerifyOtp" disabled="@IsLoading">
+            @(IsLoading ? "Verifying..." : "Verify OTP")
+        </button>
+
+        <div class="resend-section">
+            @if (ResendCountdown > 0)
+            {
+                <span>Resend code in <strong>@ResendCountdown</strong>s</span>
+            }
+            else
+            {
+                <a href="#" @onclick="ResendOtp">Resend OTP</a>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="error">@ErrorMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    private string Email = string.Empty;
+    private List<string> OtpDigits = Enumerable.Repeat(string.Empty, 6).ToList();
+    private List<ElementReference> OtpRefs = Enumerable.Repeat(default(ElementReference), 6).ToList();
+    private bool IsLoading;
+    private string? ErrorMessage;
+    private int ResendCountdown = 60;
+    private Timer? timer;
+
+    protected override void OnInitialized()
+    {
+        // Parse email from query string
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        if (Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query)
+            .TryGetValue("email", out var email))
+        {
+            Email = email;
+        }
+
+        if (string.IsNullOrEmpty(Email))
+        {
+            // Redirect back if email missing
+            Nav.NavigateTo("/verify-email");
+            return;
+        }
+
+        StartCountdown();
+    }
+
+    private void InitializeOtpFields()
+    {
+        OtpDigits = Enumerable.Repeat(string.Empty, 6).ToList();
+        OtpRefs = Enumerable.Repeat(default(ElementReference), 6).ToList();
+    }
+
+    private async Task OnOtpInput(ChangeEventArgs e, int index)
+    {
+        var value = e.Value?.ToString() ?? string.Empty;
+        if (value.Length > 1) value = value.Substring(0, 1);
+
+        OtpDigits[index] = value;
+
+        if (!string.IsNullOrEmpty(value) && index < OtpDigits.Count - 1)
+        {
+            await JS.InvokeVoidAsync("eval", $"document.getElementsByClassName('otp-box')[{index + 1}].focus()");
+        }
+    }
+
+    private async Task VerifyOtp()
+    {
+        ErrorMessage = string.Empty;
+        var otp = string.Join("", OtpDigits);
+
+        if (otp.Length != 6)
+        {
+            ErrorMessage = "Please enter the complete OTP.";
+            return;
+        }
+
+        IsLoading = true;
+        try
+        {
+            var command = new VerifyOtpCommand(Email, otp);
+            var success = await PasswordService.VerifyOtpAsync(command);
+
+            if (success)
+            {
+                // Navigate to change password page
+                Nav.NavigateTo($"/change-password/{Uri.EscapeDataString(Email)}");
+            }
+            else
+            {
+                ErrorMessage = "Invalid or expired OTP. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Error verifying OTP: {ex.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task ResendOtp()
+    {
+        if (string.IsNullOrEmpty(Email))
+        {
+            ErrorMessage = "Email missing. Cannot resend OTP.";
+            return;
+        }
+
+        var command = new ResendOtpCommand(Email);
+        var success = await PasswordService.ResendOtpAsync(command);
+
+        if (success)
+        {
+            OtpDigits = Enumerable.Repeat(string.Empty, 6).ToList();
+            ResendCountdown = 60;
+            StartCountdown();
+        }
+        else
+        {
+            ErrorMessage = "Failed to resend OTP. Try again later.";
+        }
+    }
+
+    private void StartCountdown()
+    {
+        timer?.Dispose();
+        timer = new Timer(1000);
+        timer.Elapsed += (_, _) =>
+        {
+            if (ResendCountdown > 0)
+            {
+                ResendCountdown--;
+                InvokeAsync(StateHasChanged);
+            }
+            else
+            {
+                timer?.Stop();
+            }
+        };
+        timer.Start();
+    }
+}

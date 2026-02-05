@@ -1,0 +1,573 @@
+﻿@page "/user-registers/{EncryptedId}"
+@using ChatUp.Application.Features.Client.DTOs
+@using ChatUp.Application.Features.User.DTOs
+@using ChatUp.Application.Features.UserRegistration.Commands
+@using ChatUp.Application.Features.UserRegistration.DTOs
+@using ChatUp.Services
+@using ChatUp.Domain.Entities
+@inject UserService UserService
+@inject IDialogService DialogService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject UserState UserState
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<h3 class="mb-4 fw-bold text-primary">
+    <i class="bi bi-person-plus me-2"></i>
+    @(IsEditMode ? "Edit User Account" : "Create New User")
+</h3>
+<div class="form-wrapper">
+<EditForm Model="@model" OnValidSubmit="HandleSubmit" class="registration-form card shadow-lg border-0 rounded-4 p-4">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="row g-4">
+        <div id="dropZone" class="file-upload-box">
+
+            <label class="upload-label d-block w-100" for="fileInput">
+                <div class="text-center">
+                    @if (Previews.Any())
+                    {
+                        var preview = Previews.First();
+                        @if (preview.IsImage)
+                        {
+                            <img src="@preview.Url" class="uploaded-thumb" alt="Preview" />
+                        }
+                        else
+                        {
+                            <div class="uploaded-file">
+                                📄 @preview.ShortName
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div>
+                            📤<br />Upload your Profile here<br />
+                            <a href="#" @onclick:preventDefault @onclick="e => TriggerBrowse(e)">Browse Files</a>
+                        </div>
+                    }
+                </div>
+            </label>
+
+            <InputFile id="fileInput"
+                       OnChange="OnFileSelection"
+                       accept=".jpeg,.jpg,.png"
+                       multiple
+                       style="display:none" />
+        </div>
+        <!-- Username -->
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Username</label>
+            <InputText class="form-control form-control-lg" @bind-Value="model.Username" placeholder="Enter username" required />
+        </div>
+
+        <!-- Password -->
+         <!-- Password -->
+            @if (!IsEditMode)
+            {
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Password</label>
+
+                    <div class="position-relative">
+                        <InputText class="form-control form-control-lg pe-5"
+                                   type="password"
+                                   @bind-Value="model.Password"
+                                   placeholder="Enter password" />
+
+                        <!-- Button inside input -->
+                        <button class="btn btn-sm btn-outline-primary position-absolute top-50 end-0 translate-middle-y me-2"
+                                type="button"
+                                @onclick="NavigateChangePassword">
+                            <i class="fa-solid fa-key"></i>
+                            Change Password
+                        </button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Password</label>
+
+                    <div class="position-relative">
+                        <input class="form-control form-control-lg bg-light pe-5"
+                               value="••••••••"
+                               readonly />
+
+                        <!-- Button inside input -->
+                        <button class="btn btn-sm btn-outline-primary position-absolute top-50 end-0 translate-middle-y me-2"
+                                type="button"
+                                @onclick="NavigateChangePassword">
+                            <i class="fa-solid fa-key"></i>
+                            Change Password
+                        </button>
+                    </div>
+
+                    <small class="text-muted fst-italic">Password is hidden for security.</small>
+                </div>
+            }
+
+
+        <!-- Name Fields -->
+        <div class="col-12">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Last Name</label>
+                    <InputText class="form-control" @bind-Value="lastName" @oninput="OnNameChanged" placeholder="Last name" required />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">First Name</label>
+                    <InputText class="form-control" @bind-Value="firstName" @oninput="OnNameChanged" placeholder="First name" required />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-semibold">Middle Name</label>
+                    <InputText class="form-control" @bind-Value="middleName" @oninput="OnNameChanged" placeholder="Middle name" />
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-generated Full Name -->
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Full Name (Auto-generated)</label>
+            <InputText class="form-control bg-light" @bind-Value="model.FullName" readonly />
+        </div>
+
+        <!-- Email -->
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Email Address</label>
+            <InputText class="form-control" @bind-Value="model.EmailAddress" placeholder="Enter email" />
+        </div>
+ @if (UserState?.UserType == 1)
+    {
+        <!-- User Type -->
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">User Type</label>
+            <InputSelect class="form-select" @bind-Value="model.UserType">
+                <option value="">-- Select User Type --</option>
+                <option value="1">Admin</option>
+                <option value="2">Support</option>
+                <option value="3">User</option>
+                <option value="4">Developer</option>
+                <option value="4">Quality Assurance</option>
+                <option value="5">HR</option>
+            </InputSelect>
+        </div>
+
+        <!-- Status -->
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Status</label>
+            <InputSelect class="form-select" @bind-Value="model.Status">
+                <option value="">-- Select Status --</option>
+                <option value="1">Pending</option>
+                <option value="2">Approved</option>
+                <option value="3">Blocked</option>
+            </InputSelect>
+        </div>
+
+        <!-- Is Client -->
+        <div class="col-md-6 d-flex align-items-center">
+            <label class="me-3 mb-0 fw-semibold">Is Client</label>
+            <div class="form-check form-switch">
+                <InputCheckbox class="form-check-input" @bind-Value="model.IsClient" />
+                <label class="form-check-label ms-2">@(model.IsClient ? "Yes" : "No")</label>
+            </div>
+        </div>
+
+        <!-- Is Active Toggle -->
+        <div class="col-md-6 d-flex align-items-center mt-2">
+            <label class="me-3 mb-0 fw-semibold">Is Active</label>
+            <div class="form-check form-switch">
+                <InputCheckbox class="form-check-input toggle-active" @bind-Value="model.IsActive" />
+                <label class="form-check-label ms-2">@(model.IsActive ? "Active" : "Inactive")</label>
+            </div>
+        </div>
+
+        @if (model.IsClient)
+        {
+            <!-- Client Dropdown -->
+            <div class="col-md-6">
+                <label class="form-label fw-semibold">Select Client</label>
+                <div class="dropdown client-dropdown">
+                    <button class="btn btn-light border w-100 text-start d-flex align-items-center justify-content-between"
+                            type="button" @onclick="ToggleClientDropdown">
+                        <div class="d-flex align-items-center">
+                            @if (selectedClient != null)
+                            {
+                                <img src="@selectedClient.PhotoUrl" class="client-avatar me-2" />
+                                <span>@selectedClient.ClientName</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">-- Select Client --</span>
+                            }
+                        </div>
+                        <i class="bi bi-chevron-down text-muted"></i>
+                    </button>
+
+                    @if (isClientDropdownOpen)
+                    {
+                        <div class="dropdown-menu show w-100 shadow border-0 rounded-3 mt-2 p-2" style="max-height: 300px; overflow-y: auto;">
+                            <input type="text" class="form-control form-control-sm mb-2" placeholder="🔍 Search client..."
+                                   @bind="clientSearchText" @bind:event="oninput" />
+                            <hr class="my-1" />
+
+                            @if (FilteredClients.Any())
+                            {
+                                @foreach (var c in FilteredClients)
+                                {
+                                    <div class="dropdown-item d-flex align-items-center client-option py-2 @(selectedClient?.Id == c.Id ? "active" : "")"
+                                         @onclick="() => SelectClient(c)">
+                                        <img src="@c.PhotoUrl" class="client-avatar me-2" />
+                                        <span>@c.ClientName</span>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="dropdown-item text-center text-muted py-2">No clients found.</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        }
+     </div>
+    
+        <div class="form-buttons gap-3">
+            <button type="submit" class="btn btn-primary btn-elegant">
+                <i class="fa-solid fa-floppy-disk"></i> @(IsEditMode ? "Update" : "Register")
+            </button>
+                <button type="button" class="btn btn-danger btn-elegant " @onclick="ResetForm">
+                    <i class="fa-solid fa-rotate-right"></i>  Reset
+                </button>
+        </div>
+</EditForm>
+</div>
+@code {
+
+    private void NavigateChangePassword()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigation.NavigateTo($"/change-password/{encodedToken}", true);
+        }
+    }
+    [Parameter] public string EncryptedId { get; set; }
+    [Inject] public LinkService LinkService { get; set; }
+    private List<IBrowserFile> Uploads = [];
+    private int UserId;
+    private string firstName = string.Empty;
+    private string middleName = string.Empty;
+    private string lastName = string.Empty;
+    private bool isClientDropdownOpen = false;
+    private bool IsEditMode = false;
+    private CreateUserCommand model = new();
+    private List<ClientDto> clients = new();
+    private ClientDto? selectedClient;
+    private string clientSearchText = string.Empty;
+    private record PreviewItem(string Name, string ShortName, bool IsImage, string Url);
+    private readonly List<PreviewItem> Previews = new();
+    private IEnumerable<ClientDto> FilteredClients =>
+        string.IsNullOrWhiteSpace(clientSearchText)
+            ? clients
+            : clients.Where(c => c.ClientName.Contains(clientSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private void OnNameChanged(ChangeEventArgs e)
+    {
+        model.FullName = $"{Capitalize(firstName)} {Capitalize(middleName)} {Capitalize(lastName)}".Trim();
+    }
+
+    private static string Capitalize(string input) =>
+        string.IsNullOrWhiteSpace(input) ? "" : char.ToUpper(input[0]) + input[1..].ToLower();
+
+    private void ToggleClientDropdown() => isClientDropdownOpen = !isClientDropdownOpen;
+    private void TriggerBrowse(MouseEventArgs args)
+       => JS.InvokeVoidAsync("triggerFileInput", "fileInput");
+
+    private async Task OnFileSelection(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles();
+        await HandleFilesAsync(files);
+    }
+    private async Task HandleFilesAsync(IEnumerable<IBrowserFile> files)
+    {
+        const int MAX_MB = 25;
+        const long MAX_BYTES = MAX_MB * 1024L * 1024L;
+
+        var file = files.FirstOrDefault();
+        if (file == null)
+            return;
+
+        var ext = Path.GetExtension(file.Name).ToLowerInvariant();
+        bool isImage = ext is ".png" or ".jpg" or ".jpeg" or ".webp";
+
+        if (!isImage)
+        {
+            await DialogService.ShowErrorAsync("Invalid image file. Only PNG, JPG, JPEG, WEBP are allowed.");
+            return;
+        }
+
+        // Generate unique filename to prevent overwrite
+        var uniqueFileName = $"cha{Guid.NewGuid().ToString().Substring(0, 8)}{ext}";
+
+        // wwwroot path
+        var wwwRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images");
+
+        // Ensure folder exists
+        if (!Directory.Exists(wwwRootPath))
+            Directory.CreateDirectory(wwwRootPath);
+
+        // Full path
+        var filePath = Path.Combine(wwwRootPath, uniqueFileName);
+
+        // Save file to disk
+        using (var stream = new FileStream(filePath, FileMode.Create))
+        {
+            await file.OpenReadStream(MAX_BYTES).CopyToAsync(stream);
+        }
+
+        // Save to model
+        model.UploadFile = new UploadedFileDto
+        {
+            Name = uniqueFileName,
+            FileType = "ProfileImg",
+            Base64Content = $"images/{uniqueFileName}" ,// relative path to use in <img src="..." />
+            ContentType = file.ContentType,
+            Size = file.Size > int.MaxValue ? int.MaxValue : (int)file.Size,
+
+        };
+        if (UserState.UserId == UserId && model.UploadFile != null)
+        {
+            await LocalStorage.RemoveItemAsync("AvatarUrl");
+            UserState.AvatarUrl = $"images/{uniqueFileName}";
+            await LocalStorage.SetItemAsync("AvatarUrl", $"images/{uniqueFileName}");
+            UserState.NotifyStateChanged(); // Notify all components
+        }
+        // Save preview
+        Previews.Clear();
+        Previews.Add(new PreviewItem(file.Name, uniqueFileName, isImage, $"/images/{uniqueFileName}"));
+
+        // Optional: keep the file in memory for reference
+        Uploads.Clear();
+        Uploads.Add(file);
+
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task HandleSubmit()
+    {
+        try
+        {
+            if (IsEditMode)
+            {
+                var updateCommand = new UpdateUserCommand
+                {
+                    Id = UserId,
+                    Username = model.Username,
+                    FullName = model.FullName,
+                    EmailAddress = model.EmailAddress,
+                    UserType = model.UserType,
+                    Status = model.Status,
+                    IsClient = model.IsClient,
+                    IsActive = model.IsActive,
+                    UploadFile = model.UploadFile,
+                    ClientId = model.ClientId
+                };
+                await UserService.UpdateAsync(updateCommand);
+                await DialogService.ShowSuccessAsync("User updated successfully!");
+
+            }
+            else
+            {
+                // 🆕 Create new user
+                model.Role = model.UserType;
+                model.IsDeleted = false;
+                model.CreatedBy = UserId;
+                model.RememberToken = "";
+                await UserService.RegisterAsync(model);
+                await DialogService.ShowSuccessAsync("User registered successfully!");
+                Navigation.NavigateTo("/users");
+            }
+
+            ResetForm();
+        }
+        catch (InvalidOperationException ex)
+        {
+              // Map specific backend messages to user-friendly UI text
+            string userMessage;
+
+            if (ex.Message.Contains("Username already exists", StringComparison.OrdinalIgnoreCase))
+                userMessage = "The username you entered is already in use. Please choose another one.";
+            else if (ex.Message.Contains("Email address already exists", StringComparison.OrdinalIgnoreCase))
+                userMessage = "The email address you entered is already in use. Please use a different email.";
+            else if (ex.Message.Contains("Client user must be linked", StringComparison.OrdinalIgnoreCase))
+                userMessage = "You must select a client before creating a client user.";
+            else if (ex.Message.Contains("Client with ID", StringComparison.OrdinalIgnoreCase))
+                userMessage = "The specified client record does not exist.";
+            else
+                userMessage = "A validation error occurred while processing your request.";
+
+            await DialogService.ShowWarningAsync(userMessage);
+        }
+        catch (HttpRequestException ex)
+        {
+            // Handles failed API calls (network/server issues)
+            await DialogService.ShowWarningAsync("Unable to connect to the server. Please try again later.");
+        }
+        catch (Exception ex)
+        {
+            // Fallback for unexpected exceptions
+            await DialogService.ShowWarningAsync("An unexpected error occurred. Please contact support.");
+        }
+    }
+
+    private void SelectClient(ClientDto client)
+    {
+        selectedClient = client;
+        model.ClientId = client.Id;
+        isClientDropdownOpen = false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+
+        if (string.IsNullOrEmpty(decrypted))
+        {
+            Navigation.NavigateTo("/unauthorized");
+            return;
+        }
+        UserState.OnChange += StateHasChanged;
+        if (decrypted.Equals("new", StringComparison.OrdinalIgnoreCase))
+        {
+            // 🟢 Create New Mode
+            IsEditMode = false;
+            model = new CreateUserCommand(); // initialize empty form
+            await LoadClient();
+            await LoadUserDetails(0);
+        }
+        else
+        {
+            // 🟣 Edit Mode
+            IsEditMode = true;
+            UserId = int.Parse(decrypted);
+            await LoadClient();
+            await LoadUserDetails(UserId);
+    
+        }
+    }
+    private async Task LoadUserDetails(int userId)
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}User/GetUser/{userId}").ToString();
+            var response = await Http.GetAsync(url);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine($"Failed to load user details: {response.StatusCode}");
+                return;
+            }
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+            UserDetailsDto? user = null;
+
+            try
+            {
+                // Try single object
+                user = JsonSerializer.Deserialize<UserDetailsDto>(rawJson, options);
+            }
+            catch (JsonException)
+            {
+                // Try array fallback
+                var list = JsonSerializer.Deserialize<List<UserDetailsDto>>(rawJson, options);
+                user = list?.FirstOrDefault();
+            }
+
+            if (user == null)
+            {
+                Console.WriteLine("No user data found in response.");
+                return;
+            }
+
+            // 🧭 Map to your form model
+            model.Username = user.Username;
+            model.FullName = user.FullName;
+            model.EmailAddress = user.EmailAddress;
+            model.UserType = user.UserType;
+            model.Status = user.Status;
+            model.IsClient = user.IsClient;
+            model.IsActive = user.IsActive;
+            model.ClientId = user.ClientId;
+
+            // 🖼️ Load profile photo
+            if (user.UploadedFiles?.Any() == true)
+            {
+                var photo = user.UploadedFiles.FirstOrDefault(f => f.FileType == "ProfileImg");
+                if (photo != null)
+                {
+                    model.UploadFile = new UploadedFileDto
+                    {
+                        Name = photo.Name,
+                        Base64Content = photo.Base64Content,
+                        FileType = photo.FileType,
+                        ContentType = photo.ContentType,
+                        Size = photo.Size
+                    };
+
+                    Previews.Clear();
+                    Previews.Add(new PreviewItem(photo.Name, photo.Name, true, $"/{photo.Base64Content}"));
+                }
+            }
+
+            // 👤 Split full name into individual fields
+            var nameParts = (user.FullName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (nameParts.Length > 0) lastName = nameParts.ElementAtOrDefault(0);
+            if (nameParts.Length > 1) firstName = nameParts.ElementAtOrDefault(1);
+            if (nameParts.Length > 2) middleName = nameParts.ElementAtOrDefault(2);
+
+            // 🧩 Select client if exists
+            if (model.ClientId.HasValue)
+                selectedClient = clients.FirstOrDefault(c => c.Id == model.ClientId.Value);
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user details: {ex.Message}");
+        }
+    }
+    private async Task LoadClient()
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Client/GetAll").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            clients = JsonSerializer.Deserialize<List<ClientDto>>(rawJson, options) ?? new List<ClientDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load clients: {ex.Message}");
+        }
+    }
+
+    private void ResetForm()
+    {
+        model = new CreateUserCommand();
+        selectedClient = null;
+        firstName = middleName = lastName = string.Empty;
+        StateHasChanged();
+    }
+}

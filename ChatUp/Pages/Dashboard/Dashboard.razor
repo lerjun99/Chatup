@@ -1,0 +1,439 @@
+﻿@page "/dashboard/{EncryptedId}"
+@using System.Globalization
+@using System.Linq
+@using ChatUp.Application.Features.Dashboard.DTOs
+@using ChatUp.Domain.Entities
+@using ChatUp.Services
+@using ChatUp.Services.DTOs
+@inject TitleService TitleService
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject UserState UserState
+
+<link href="css/dashboard.css" rel="stylesheet" />
+
+
+<div class="erp-app">
+    <aside class="sidebar @(sidebarVisible ? "mobile-visible" : "mobile-hidden")">
+        <div style="font-weight:700; margin-bottom:12px;">SupportOps</div>
+        <nav>
+            <div class="muted">Analytics</div>
+            <div style="margin-top:10px;">
+                <div class="muted">Dashboard</div>
+                <div class="muted">Tickets</div>
+                <div class="muted">Agents</div>
+                <div class="muted">SLA</div>
+            </div>
+        </nav>
+    </aside>
+
+    <main class="main">
+        <header class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h2>Support & Ticket Operations</h2>
+                <div class="muted">Overview & productivity</div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <input type="date" @bind="FilterStartDate" class="form-control form-control-sm" />
+                <input type="date" @bind="FilterEndDate" class="form-control form-control-sm" />
+
+                <button class="btn btn-primary btn-sm" @onclick="ApplyFilter">Apply</button>
+
+                <button class="btn btn-outline-secondary btn-sm" @onclick="SetToday">Today</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="SetWeek">Week</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="SetMonth">Month</button>
+            </div>
+        </header>
+
+        <section>
+            @if (isLoading)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Loading dashboard...</p>
+                </div>
+            }
+            else if (_Dashboard == null)
+            {
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Loading _Dashboard...</p>
+                </div>
+            }
+            else
+            {
+                <!-- KPIs -->
+                <div class="grid grid-4 mb-4">
+                    <div class="card kpi">
+                        <div class="kpi-label">Open Tickets</div>
+                        <div class="kpi-value">@_Dashboard.TicketCounts.Open</div>
+                        <div class="muted small">@($"{_Dashboard.TicketCounts.OpenPercent:F1}% of total")</div>
+                    </div>
+
+                    <div class="card kpi">
+                        <div class="kpi-label">SLA Compliance</div>
+                        <div class="kpi-value">@($"{_Dashboard.TicketCounts.CriticalPercent:F1}%")</div>
+                        <div class="muted small">within SLA</div>
+                    </div>
+
+                    <div class="card kpi">
+                        <div class="kpi-label">Avg First Response</div>
+                        <div class="kpi-value">@FormatTime(_Dashboard.AvgFirstResponseMinutes)</div>
+                        <div class="muted small">lower is better</div>
+                    </div>
+
+                    <div class="card kpi">
+                        <div class="kpi-label">Avg Resolution</div>
+                        <div class="kpi-value">@FormatTime(_Dashboard.AvgResolutionHours)</div>
+                        <div class="muted small">time to close</div>
+                    </div>
+                </div>
+
+                <!-- Status & SLA Donut -->
+                <div class="grid grid-2 mb-4">
+                    <div class="card">
+                        <h3>Tickets by Status</h3>
+                        <div class="d-flex gap-3 mt-2">
+                            <div style="flex:1">
+                                @foreach (var status in new[] { "Open", "InProgress", "Closed", "Rejected", "Critical" })
+                                {
+                                    <div class="ticket-item mb-2">
+                                        <div>
+                                            <div class="fw-600">@status</div>
+                                            <div class="muted">
+                                                @(status == "Open" ? _Dashboard.TicketCounts.Open :
+                                                                                        status == "InProgress" ? _Dashboard.TicketCounts.InProgress :
+                                                                                        status == "Closed" ? _Dashboard.TicketCounts.Closed :
+                                                                                        status == "Rejected" ? _Dashboard.TicketCounts.Rejected :
+                                                                                        _Dashboard.TicketCounts.Critical)
+                                    </div>
+                                </div>
+                                <div><span class="badge @(status.ToLower())">@status</span></div>
+                            </div>
+                                                        }
+                            </div>
+
+                            <!-- Donut Chart -->
+                            <div style="width:220px;">
+                                <svg viewBox="0 0 42 42" class="donut w-100 h-200">
+                                    <circle class="donut-ring" cx="21" cy="21" r="15.9155" fill="transparent" stroke="#eef2ff" stroke-width="6"></circle>
+
+                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
+                                            stroke="#7e22ce" stroke-width="6"
+                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.CriticalPercent:F1} {100 - _Dashboard.TicketCounts.CriticalPercent:F1}")"
+                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetCritical">
+                                        <title>Critical: @_Dashboard.TicketCounts.Critical (@($"{_Dashboard.TicketCounts.CriticalPercent:F1}%"))</title>
+                                    </circle>
+
+                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
+                                            stroke="#ef4444" stroke-width="6"
+                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.RejectedPercent:F1} {100 - _Dashboard.TicketCounts.RejectedPercent:F1}")"
+                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetRejected">
+                                        <title>Rejected: @_Dashboard.TicketCounts.Rejected (@($"{_Dashboard.TicketCounts.RejectedPercent:F1}%"))</title>
+                                    </circle>
+
+                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
+                                            stroke="#f97316" stroke-width="6"
+                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.ClosedPercent:F1} {100 - _Dashboard.TicketCounts.ClosedPercent:F1}")"
+                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetClosed">
+                                        <title>Closed: @_Dashboard.TicketCounts.Closed (@($"{_Dashboard.TicketCounts.ClosedPercent:F1}%"))</title>
+                                    </circle>
+
+                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
+                                            stroke="#22c55e" stroke-width="6"
+                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.InProgressPercent:F1} {100 - _Dashboard.TicketCounts.InProgressPercent:F1}")"
+                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetInProgress">
+                                        <title>In Progress: @_Dashboard.TicketCounts.InProgress (@($"{_Dashboard.TicketCounts.InProgressPercent:F1}%"))</title>
+                                    </circle>
+
+                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
+                                            stroke="#3b82f6" stroke-width="6"
+                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.OpenPercent:F1} {100 - _Dashboard.TicketCounts.OpenPercent:F1}")"
+                                            stroke-dashoffset="0">
+                                        <title>Open: @_Dashboard.TicketCounts.Open (@($"{_Dashboard.TicketCounts.OpenPercent:F1}%"))</title>
+                                    </circle>
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SLA Alerts -->
+                    <div class="card">
+                        <h3>SLA Alerts</h3>
+                        <table class="sla-table table-hover align-middle">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>Ticket No.</th>
+                                    <th>Client</th>
+                                    <th>Status</th>
+                                    <th>Elapsed</th>
+                                    <th>SLA</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var t in tickets)
+                                {
+                                    var elapsed = DateTime.UtcNow - t.DateReceived;
+                                    var timeLeft = t.DueDate.HasValue ? t.DueDate.Value - DateTime.UtcNow : TimeSpan.Zero;
+
+                                    string elapsedFormatted = elapsed.TotalDays >= 1
+                                    ? $"{(int)elapsed.TotalDays}d {(int)elapsed.Hours}h"
+                                    : elapsed.TotalHours >= 1
+                                    ? $"{(int)elapsed.TotalHours}h {(int)elapsed.Minutes}m"
+                                    : $"{(int)elapsed.TotalMinutes}m";
+
+                                    // Determine SLA badge CSS and text
+                                    string slaClass = t.SlaStatus switch
+                                    {
+                                        "Breached" => "bg-danger",
+                                        "NearSLA" => "bg-warning text-dark",
+                                        "OnTrack" => "bg-success",
+                                        _ => "bg-light text-dark"
+                                    };
+
+                                    string slaText = t.SlaStatus switch
+                                    {
+                                        "Breached" => "⚠ Breached",
+                                        "NearSLA" => "⏳ Near SLA",
+                                        "OnTrack" => "✅ On Track",
+                                        _ => t.SlaStatus
+                                    };
+
+                                    <tr>
+                                        <td><strong>@t.TicketNo</strong></td>
+                                        <td>@t.ClientName</td>
+                                        <td>
+                                            <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
+                                        </td>
+                                        <td><span class="elapsed-pill">@elapsedFormatted</span></td>
+                                        <td>
+                                            <span class="badge @slaClass">@slaText</span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+               @if (UserState?.UserType != 3)
+                {
+                <!-- Agent Productivity -->
+                <div class="card mb-4">
+                    <h3>Support Agent Productivity</h3>
+                    <table class="agent-table mt-2">
+                        <thead>
+                            <tr>
+                                <th>Agent</th>
+                                <th>Tickets Assigned</th>
+                                <th>Avg First Response (mins)</th>
+                                <th>Idle Time (mins)</th>
+                                <th>Proactiveness (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var a in AgentStats)
+                            {
+                                <tr>
+                                    <td>@a.Name</td>
+                                    <td>@a.TicketCount</td>
+                                    <td>@($"{a.AvgFirstResponseMinutes:F1}")</td>
+                                    <td>@($"{a.AvgIdleMinutes:F1}")</td>
+                                    <td>@($"{a.ProactivenessPercent:F0}%")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Recent Tickets -->
+                <div class="card mb-4">
+                    <h3>Recent Tickets</h3>
+                    <div class="mt-2" style="overflow:auto; height:250px;">
+                        @foreach (var t in _Dashboard.RecentTickets.OrderByDescending(x => x.CreatedAt).Take(10))
+                        {
+                            <div class="ticket-item d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <div class="fw-600">• @t.Subject</div>
+                                    <div class="muted">@t.ClientName • Created @t.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
+                                    <div class="muted mt-1">SLA: @t.SlaStatus</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+                }
+            }
+        </section>
+    </main>
+</div>
+<button class="mobile-menu-btn" @onclick="ToggleSidebar">Menu</button>
+@code {
+    private bool sidebarVisible = false;
+    [Parameter]
+    public string EncryptedId { get; set; }
+    private bool isLoading = false;
+    [Inject]
+    public LinkService LinkService { get; set; }
+    private int UserId;
+    void ToggleSidebar()
+    {
+        sidebarVisible = !sidebarVisible;
+    }
+    // Dashboard Data
+    private DashboardDto? _Dashboard { get; set; }
+
+    // SLA Alerts
+    private List<TicketSummaryDto> tickets => _Dashboard?.SlaAlerts.ToList() ?? new List<TicketSummaryDto>();
+    private int _currentPage = 1;
+    private int _totalPages = 1;
+    private int _totalRecords = 0;
+    private int FromPage => (_Dashboard != null) ? ((_Dashboard.CurrentPage - 1) * _Dashboard.SlaAlerts.Count() + 1) : 0;
+    private int ToPage => (_Dashboard != null) ? Math.Min(_Dashboard.CurrentPage * _Dashboard.SlaAlerts.Count(), _totalRecords) : 0;
+
+    // Agent Stats
+    private IEnumerable<AgentStatDto> AgentStats => _Dashboard?.AgentStats ?? Enumerable.Empty<AgentStatDto>();
+
+    // Recent Tickets
+    private IEnumerable<TicketSummaryDto> RecentTickets => _Dashboard?.RecentTickets ?? Enumerable.Empty<TicketSummaryDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardAsync(_currentPage);
+    }
+    private DateTime FilterStartDate { get; set; } = DateTime.UtcNow.Date;
+    private DateTime FilterEndDate { get; set; } = DateTime.UtcNow.Date;
+
+    private async Task ApplyFilter()
+    {
+        await LoadDashboardAsync(_currentPage, FilterStartDate, FilterEndDate);
+    }
+
+    private async Task SetToday()
+    {
+        FilterStartDate = DateTime.UtcNow.Date;
+        FilterEndDate = DateTime.UtcNow.Date;
+        await ApplyFilter();
+    }
+
+    private async Task SetWeek()
+    {
+        var today = DateTime.UtcNow.Date;
+        FilterStartDate = today.AddDays(-(int)today.DayOfWeek);
+        FilterEndDate = FilterStartDate.AddDays(6);
+        await ApplyFilter();
+    }
+
+    private async Task SetMonth()
+    {
+        var today = DateTime.UtcNow.Date;
+        FilterStartDate = new DateTime(today.Year, today.Month, 1);
+        FilterEndDate = FilterStartDate.AddMonths(1).AddDays(-1);
+        await ApplyFilter();
+    }
+
+    private async Task LoadDashboardAsync(int page, DateTime? startDate = null, DateTime? endDate = null)
+    {
+        _currentPage = page;
+        _currentPage = page;
+        isLoading = true;
+        StateHasChanged(); // Immediately show spinner
+        TitleService.SetTitle("Admin Dashboard");
+
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+        if (string.IsNullOrEmpty(decrypted))
+        {
+            Navigation.NavigateTo("/unauthorized");
+            return;
+        }
+        UserId = int.Parse(decrypted);
+
+        // Build query params
+        var query = $"?page={page}&pageSize=10";
+        if (startDate.HasValue)
+            query += $"&from={startDate.Value:yyyy-MM-ddTHH:mm:ss}";
+        if (endDate.HasValue)
+            query += $"&to={endDate.Value:yyyy-MM-ddTHH:mm:ss}";
+        try
+        {
+            var url = $"{AppConfig.ChatUrl}Dashboard/GetDashboard{query}";
+            var response = await Http.GetFromJsonAsync<DashboardDto>(url);
+            if (response != null)
+            {
+                _Dashboard = response;
+                _totalPages = response.TotalPages;
+                _totalRecords = response.TotalRecords;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged(); // Refresh UI after loading
+        }
+    }
+
+    // Pagination helpers
+    private bool CanGoPrev => _currentPage > 1;
+    private bool CanGoNext => _currentPage < _totalPages;
+
+    private async Task PrevPage()
+    {
+        if (CanGoPrev)
+        {
+            await LoadDashboardAsync(_currentPage - 1);
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (CanGoNext)
+        {
+            await LoadDashboardAsync(_currentPage + 1);
+        }
+    }
+
+    private async Task SelectedPage(int page)
+    {
+        if (page != _currentPage)
+        {
+            await LoadDashboardAsync(page);
+        }
+    }
+
+    // Badge CSS based on ticket status
+    private string GetBadgeClass(string status) => status switch
+    {
+        "Open" => "bg-success",
+        "InProgress" => "bg-info",
+        "Resolved" => "bg-primary",
+        "Closed" => "bg-secondary",
+        "Rejected" => "bg-danger",
+        _ => "bg-light text-dark"
+    };
+    private string FormatTime(double totalMinutes)
+    {
+        if (totalMinutes < 60)
+            return $"{Math.Round(totalMinutes, 1)}m"; // minutes
+
+        double totalHours = totalMinutes / 60;
+        if (totalHours < 24)
+            return $"{Math.Round(totalHours, 1)}h"; // hours
+
+        double totalDays = totalHours / 24;
+        return $"{Math.Round(totalDays, 1)}d"; // days
+    }
+    // Donut Chart Percentages
+    private double OpenPct => _Dashboard?.TicketCounts.OpenPercent ?? 0;
+    private double InProgressPct => _Dashboard?.TicketCounts.InProgressPercent ?? 0;
+    private double ClosedPct => _Dashboard?.TicketCounts.ClosedPercent ?? 0;
+    private double RejectedPct => _Dashboard?.TicketCounts.RejectedPercent ?? 0;
+    private double CriticalPct => _Dashboard?.TicketCounts.CriticalPercent ?? 0;
+
+    private double OffsetCritical => _Dashboard?.TicketCounts.OffsetCritical ?? 0;
+    private double OffsetRejected => _Dashboard?.TicketCounts.OffsetRejected ?? 0;
+    private double OffsetClosed => _Dashboard?.TicketCounts.OffsetClosed ?? 0;
+    private double OffsetInProgress => _Dashboard?.TicketCounts.OffsetInProgress ?? 0;
+}

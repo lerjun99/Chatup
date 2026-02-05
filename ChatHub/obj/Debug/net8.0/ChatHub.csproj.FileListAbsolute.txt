@@ -1,0 +1,7 @@
+C:\Users\lerju\source\repos\ChatUp\ChatHub\obj\Debug\net8.0\ChatHub.csproj.AssemblyReference.cache
+C:\Users\lerju\source\repos\ChatUp\ChatHub\obj\Debug\net8.0\rpswa.dswa.cache.json
+C:\Users\lerju\source\repos\ChatUp\ChatHub\obj\Debug\net8.0\ChatHub.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\lerju\source\repos\ChatUp\ChatHub\obj\Debug\net8.0\ChatHub.AssemblyInfoInputs.cache
+C:\Users\lerju\source\repos\ChatUp\ChatHub\obj\Debug\net8.0\ChatHub.AssemblyInfo.cs
+C:\Users\lerju\source\repos\ChatUp\ChatHub\obj\Debug\net8.0\ChatHub.csproj.CoreCompileInputs.cache
+C:\Users\lerju\source\repos\ChatUp\ChatHub\obj\Debug\net8.0\ChatHub.MvcApplicationPartsAssemblyInfo.cache

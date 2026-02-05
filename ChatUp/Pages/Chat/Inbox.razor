@@ -1,0 +1,2502 @@
+﻿@page "/inbox/{EncryptedId}"
+@using ChatUp.Application.Common.Helpers
+@using ChatUp.Application.Features.Client.DTOs
+@using ChatUp.Application.Features.Projects.DTOs
+@using ChatUp.Application.Features.TicketMessage.Commands
+@using ChatUp.Application.Features.TicketMessage.DTOs
+@using ChatUp.Application.Features.User.DTOs
+@using ChatUp.Application.Features.UserRegistration.Commands
+@using ChatUp.Domain.Entities
+@using ChatUp.Services
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@using ChatUp.Services
+@inject ChatUp.Services.ChatService ChatService
+@inject TitleService TitleService
+@inject UserState UserState
+@inject IJSRuntime JS
+@using Microsoft.AspNetCore.SignalR.Client
+@inject IDialogService DialogService
+@inject ChatUp.Services.TicketNotificationService _ticketNotificationService
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+<link href="css/ticket-chat.css" rel="stylesheet" />
+
+
+
+<div class="ticket-container @(IsSidebarOpen ? "sidebar-open" : "")">
+
+    <!-- Sidebar -->
+    <aside class="ticket-sidebar">
+        <!-- Sidebar Header -->
+        <div class="sidebar-header">
+            <!-- Mobile menu button (visible only on mobile) -->
+            <!-- Manager info (always visible) -->
+            <div class="manager-info"
+                 data-intro="This shows your profile and online status."
+                 data-step="1">
+                <img src="@(!string.IsNullOrEmpty(UserState.AvatarUrl) ? UserState.AvatarUrl : "/images/default-avatar.png")" class="manager-avatar" />
+                <div class="manager-details">
+                    <div class="manager-name">@UserState.Username</div>
+                    <div class="manager-status">
+                        <span class="status-dots @(IsOnline ? "online" : "offline")"></span>
+                        @(IsOnline ? "Online" : "Offline")
+                    </div>
+                </div>
+            </div>
+            <div class="chat-mobile-header">
+                <button class="menu-btn" @onclick="ToggleSidebar">☰</button>
+                <div class="mobile-title"></div>
+            </div>
+        </div>
+
+        <!-- Tickets Summary -->
+        <div class="tickets-summary"
+             data-intro="Here you can see all your tickets and filter them by status."
+             data-step="2">
+            <div class="summary-top">
+                <div>
+                    <div class="summary-title">My Tickets</div>
+                    <div>
+                        <div class="summary-stats">
+                            <span class="status-link" @onclick="() => ApplyStatusFilter(null)">
+                                All Tickets
+                            </span> |
+                            <span class="status-link" @onclick="() => ApplyStatusFilter(TicketStatus.Open)">
+                                Open: <strong>@OpenCount</strong>
+                            </span> |
+
+                            <span class="status-link" @onclick="() => ApplyStatusFilter(TicketStatus.InProgress)">
+                                InProgress: <strong>@InProgress</strong>
+                            </span> |
+
+
+                            <span class="status-link" @onclick="() => ApplyStatusFilter(TicketStatus.Closed)">
+                                Closed: <strong>@ClosedCount</strong>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                @* <button class="new-ticket" @onclick="CreateNewTicket">＋ New</button> *@
+                @*     <div class="summary-actions">
+                    @if (UserState?.UserType is 1 or 2)
+                    {
+                        <i class="fa-solid fa-ticket  filter-icon glow-ticket"
+                           title="Create New Ticket"
+                           @onclick='() => OpenTicketModal("ticket")'></i>
+                    }
+
+                    @if (UserState?.UserType == 3)
+                    {
+                        <i class="fa-solid fa-pen-to-square new-ticket-icon"
+                           title="Create New Case"
+                           @onclick='() => OpenTicketModal("case")'></i>
+                    }
+                </div> *@
+            </div>
+
+            <input type="text" class="search-box" placeholder="Search" @bind="SearchText"
+                   data-intro="Search tickets by title or ticket number."
+                   data-step="3" />
+        </div>
+
+        <!-- Ticket List -->
+        <ul class="ticket-list"
+            data-intro="This is your ticket list. Click a ticket to open the conversation."
+            data-step="4">
+
+            @* INITIAL LOAD *@
+            @if (isLoadingTickets && !Tickets.Any())
+            {
+                <li class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">Loading Tickets...</p>
+                </li>
+            }
+            else if (!Tickets.Any())
+            {
+                <li class="text-center py-3 text-muted">
+                    No tickets found.
+                </li>
+            }
+            else
+            {
+                @foreach (var ticket in Tickets.Where(t =>
+                            string.IsNullOrWhiteSpace(SearchText)
+                            || t.IssueTitle.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
+                            || t.TicketNo.Contains(SearchText, StringComparison.OrdinalIgnoreCase)))
+                {
+                    <li class="ticket-item @(SelectedTicket?.Id == ticket.Id ? "active" : "")"
+                        @onclick="@(() => SelectTicket(ticket))">
+
+                        <div class="ticket-item-container">
+                            <div class="ticket-icon-container">
+                                <input type="checkbox" />
+                                <img src="@(!string.IsNullOrEmpty(ticket.ClientAvatar)
+                                                                 ? ticket.ClientAvatar
+                                                                 : "/images/default.png")"
+                                                                                         class="avatar"
+                                                                                         title="@ticket.ClientName" />
+                                                                                </div>
+
+                            <div class="ticket-info-container">
+                                <div class="ticket-status-row">
+                                    <span class="ticket-status shadow px-2 py-1 rounded fw-semibold
+                                        @(GetStatusClass(Enum.TryParse<TicketStatus>(ticket.Status, out var ts)
+                                                                              ? ts
+                                                                              : (TicketStatus?)null))">
+                                @ticket.Status
+                            </span>
+
+                                    <span class="timestamp shadow">@ticket.ResponseTime</span>
+                                </div>
+
+                                <div class="ticket-details">
+                                    <div class="ticket-title">@ticket.IssueTitle</div>
+                                    <div class="ticket-id">
+                                        <span class="red-dot"></span>
+                                        @(ticket.IsCase? ticket.CaseNo: ticket.TicketNo)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </li>
+                        }
+            }
+
+            @* LOAD MORE SPINNER (ONLY when tickets already exist) *@
+            @if (isLoadingTickets && Tickets.Any())
+            {
+                <li class="text-center py-3">
+                    <i class="fa fa-spinner fa-spin"></i> Loading more...
+                </li>
+            }
+
+            @* LOAD MORE BUTTON *@
+            @if (!isLoadingTickets && hasMoreTickets && Tickets.Any())
+            {
+                <li class="text-center py-3">
+                    <span class="load-more-text"
+                          style="cursor:pointer; color:#007bff; font-weight:600;"
+                          @onclick="LoadMoreClick">
+                        Load More
+                    </span>
+                </li>
+            }
+
+        </ul>
+        <div class="sidebar-bottom-button filter-icon">
+
+            @if (UserState?.UserType is 1 or 2)
+            {
+                <button class="bottom-action-btn  glow-ticket "
+                        title="Create New Ticket"
+                        @onclick='() => OpenTicketModal("ticket")'
+                        data-intro="Click here to create a new ticket"
+                        data-step="7">
+                    <i class="fa-solid fa-ticket me-2 "></i>
+                    Create New Ticket
+                </button>
+            }
+
+            @if (UserState?.UserType == 3)
+            {
+                <button class="bottom-action-btn  glow-ticket"
+                        title="Create New Case"
+                        @onclick='() => OpenTicketModal("case")'
+                        data-intro="Click here to create a new case."
+                        data-step="7">
+                    <i class="fa-solid fa-pen-to-square me-2"></i>
+                    Create New Case
+                </button>
+            }
+        </div>
+
+    </aside>
+
+    <!-- Main Chat Panel -->
+    <main class="chat-panel"
+          data-intro="This is where you view and respond to ticket messages."
+          data-step="5">
+        <!-- Mobile Header -->
+        <div class="chat-mobile-header">
+            <button class="menu-btn" @onclick="ToggleSidebar">☰</button>
+            <div class="mobile-title">Tickets</div>
+        </div>
+
+        @if (SelectedTicket != null)
+        {
+          <!-- Chat Header -->
+            <div class="chat-header d-flex flex-wrap align-items-center justify-content-between">
+
+                <!-- LEFT : Ticket Info -->
+                <div class="ticket-info d-flex align-items-center gap-2 flex-wrap">
+
+                    <i class="fa-solid fa-rectangle-list ticket-icon shadow"></i>
+
+                    <div class="ticket-details">
+
+                        @if (SelectedTicket != null)
+                        {
+                            <div class="ticket-title fw-bold d-flex align-items-center gap-2">
+
+                                @if (!isEditingTitle)
+                                {
+                                    <div class="chat-title d-flex align-items-center gap-2">
+                                        <span class="issue-title">
+                                            @SelectedTicket.IssueTitle
+                                        </span>
+
+                                        <i class="fa-solid fa-pencil text-primary edit-icon"
+                                           @onclick="() => isEditingTitle = true"></i>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="chat-title d-flex align-items-center gap-2 w-100">
+                                        <input class="form-control form-control-sm flex-grow-1"
+                                               @bind="editingTitle"
+                                               @bind:event="oninput" />
+
+                                        <i class="fa-solid fa-floppy-disk text-success action-icon"
+                                           @onclick="SaveTitle"></i>
+
+                                        <i class="fa-solid fa-times text-danger action-icon"
+                                           @onclick="CancelEditTitle"></i>
+                                    </div>
+                                }
+
+                                <!-- Status + Priority -->
+                                <div class="chat-ticketstatus">
+                                    <span class="ticket-status shadow px-2 py-1 rounded fw-semibold
+                                          @(GetStatusClass(Enum.Parse<TicketStatus>(SelectedTicket.Status)))">
+                                        @SelectedTicket.Status
+                                    </span>
+
+                                    <span class="ticket-status shadow px-2 py-1 rounded fw-semibold
+                                          @(GetPriorityClass(SelectedTicket.Priority))">
+                                        @SelectedTicket.Priority
+                                    </span>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Meta -->
+                        <div class="ticket-meta text-muted small fw-bold d-flex flex-wrap gap-1">
+                            <NavLink href="#"
+                                     class="sidebar-link nav-link p-0"
+                                     Match="NavLinkMatch.All"
+                                     @onclick="NavigateTicket">
+                                @(SelectedTicket.IsCase ? SelectedTicket.CaseNo : SelectedTicket.TicketNo)
+                            </NavLink>
+                            <span>|</span>
+                            <span>@SelectedTicket.DateReceived?.ToString("MMM dd, yyyy")</span>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(SelectedTicket.ProjectTitle))
+                        {
+                            <div class="ticket-project text-muted small mt-1">
+                                <i class="fa-solid fa-diagram-project me-1"></i>
+                                @SelectedTicket.ProjectTitle
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- RIGHT : Actions -->
+                <div class="chat-header-actions d-flex align-items-center gap-2">
+                    @if (SelectedTicket.Status != TicketStatus.Closed.ToString() &&
+                         SelectedTicket.Status != TicketStatus.Rejected.ToString())
+                    {
+                        @if (UserState?.UserType is 1 or 2)
+                        {
+                            @if (SelectedTicket.IsCase)
+                            {
+                                <button class="btn btn-warning w-100 w-md-auto"
+                                        @onclick="() => ConvertToCase(SelectedTicket.Id)">
+                                    Convert to Ticket
+                                </button>
+
+                                <button class="btn btn-danger w-100 w-md-auto"
+                                        @onclick="() => showCloseTicketModal = true">
+                                    Close Ticket
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-danger w-100 w-md-auto"
+                                        @onclick="() => showCloseTicketModal = true">
+                                    Close Ticket
+                                </button>
+                            }
+                        }
+                    }
+                </div>
+            </div>
+            <!-- Chat Body -->
+            <div class="chat-body" @ref="chatWindowRef">
+                @* ─────────────── TOP STATUS (Older messages) ─────────────── *@
+                @if (isLoadingOlderMessages)
+                {
+                    <div class="loading-older text-center py-2 border-bottom bg-light small">
+                        <i class="fa fa-spinner fa-spin me-2"></i>
+                        Loading older messages...
+                    </div>
+                }
+                else if (allMessagesLoaded && SelectedTicket?.Messages?.Any() == true)
+                {
+                    <div class="text-center py-2 border-bottom text-muted small bg-light">
+                        <i class="fa-solid fa-check me-1"></i>
+                        Messages already updated
+                    </div>
+                }
+                @if (SelectedTicket == null)
+                {
+                    <div class="no-chat">Select or create a ticket to view details</div>
+                }
+                else if (isLoadingMessages )
+                {
+                    <div class="text-center py-3">
+                        <i class="fa fa-spinner fa-spin"></i> Loading messages...
+                    </div>
+                }
+                else if (SelectedTicket.Messages != null && SelectedTicket.Messages.Any())
+                {
+                    @foreach (var msg in SelectedTicket.Messages.OrderBy(m => m.DateCreated))
+                    {
+                        bool isMine = msg.SenderId == UserId;
+
+                        <div class="chat-message @(isMine ? "user" : "agent")">
+                            <div class="bubble-wrapper d-flex @(isMine ? "justify-content-end" : "justify-content-start")">
+
+                                @* Avatar for agent *@
+                                @if (!isMine)
+                                {
+                                    <img src="@(!string.IsNullOrEmpty(msg.SenderAvatar)? msg.SenderAvatar: "/images/default.png")"class="avatar" />
+                                        
+                                }
+
+                                <div class="bubble-container @(isMine ? "user-bubble" : "agent-bubble")">
+
+                                    @* Sender name *@
+                                    @if (!isMine)
+                                    {
+                                        <div class="sender-name">@msg.SenderName</div>
+                                    }
+
+                                    @* Message text *@
+                                    @if (!string.IsNullOrWhiteSpace(msg.Content))
+                                    {
+                                        <div class="bubble">
+                                            @msg.Content
+                                        </div>
+                                    }
+
+                                    @* Attachments inside bubble *@
+                                    @if (msg.Attachments?.Any() == true)
+                                    {
+                                        <div class="chat-attachments">
+                                            @foreach (var file in msg.Attachments)
+                                            {
+                                                <div class="chat-attachment">
+                                                    <div class="attachment-preview">
+
+                                                        @* ACTION BUTTONS ON TOP-RIGHT *@
+
+                                                        <div class="attachment-actions-top">
+                                                            <button class="btn btn-sm btn-light"
+                                                                    title="Download"
+                                                                    @onclick="() => DownloadAttachment(file)">
+                                                                <i class="fa-solid fa-download"></i>
+                                                            </button>
+
+                                                            @if (file.UploadedById == UserId)
+                                                            {
+                                                                <button class="btn btn-sm btn-danger"
+                                                                        title="Remove"
+                                                                        @onclick="() => RemoveAttachment(file)">
+                                                                    <i class="fa-solid fa-xmark"></i>
+                                                                </button>
+                                                            }
+                                                        </div>
+
+                                                        @* PREVIEW *@
+                                                        @if (file.FileType.StartsWith("image/"))
+                                                        {
+                                                            @*  <div class="chat-image-wrapper">
+                                                                <img src="@($"data:{file.FileType};base64,{file.Base64Content}")"
+                                                                     class="chat-image magnify"
+                                                                     alt="@file.FileName"
+                                                                     role="button"
+                                                                     tabindex="0"
+                                                                     title="Click to magnify"
+                                                                     @onclick="() => OpenImage(file.Base64Content, file.FileType)"
+                                                                     @onclick:stopPropagation />
+
+                                                                <span class="zoom-icon">
+                                                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                                                                </span>
+                                                            </div> *@
+                                                            <div class="chat-image-wrapper">
+                                                                <img src="@($"data:{file.FileType};base64,{file.ThumbnailBase64}")"
+                                                                     class="chat-image magnify"
+                                                                     alt="@file.FileName"
+                                                                     role="button" loading="lazy"
+                                                                     title="Click to view full image"
+                                                                     @onclick="() => OpenImage(file)"
+                                                                     @onclick:stopPropagation />
+
+                                                                <span class="zoom-icon">
+                                                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
+                                                                </span>
+                                                            </div>
+                                                        }
+                                                        else
+                                                        {
+                                                            <div class="file-preview">
+                                                                <i class="fa-solid fa-file fa-2x"></i>
+                                                                <span class="file-name">@file.FileName</span>
+                                                            </div>
+                                                        }
+
+
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="timestamp">
+                                        @msg.DateCreated?.ToLocalTime().ToString("hh:mm tt")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <div class="text-center py-3 text-muted">No messages yet.</div>
+                }
+            </div>
+
+
+
+            <!-- Chat Input -->
+            <div class="chat-inputs">
+                @if (SelectedTicket.Status == TicketStatus.Closed.ToString())
+                {
+                    <div class="rating-container text-center p-3">
+                        <p class="fw-bold mb-2">Rate our service</p>
+
+                        <div class="star-rating">
+                            @for (int i = 1; i <= 5; i++)
+                            {
+                                int starIndex = i;
+                                <i class="@GetStarClass(starIndex)"
+                                   style="cursor:@(IsUserRestricted ? "not-allowed" : "pointer"); font-size:24px;"
+                                   @onclick="@(IsUserRestricted ? null : (() => SetRating(starIndex)))"
+                                   @onmouseover="@(IsUserRestricted ? null : (() => HoverStar(starIndex)))"
+                                   @onmouseout="@(IsUserRestricted ? null : ClearHover)">
+                                </i>
+                            }
+                        </div>
+
+                        @if (IsUserRestricted)
+                        {
+
+                        }
+                        else
+                        {
+                            <button class="btn btn-primary mt-2" @onclick="SubmitRating" disabled="@( !canSubmitRating )">
+                                Submit Rating
+                            </button>
+                        }
+                    </div>
+                }
+                else
+                {
+
+                    @if (NewAttachments.Any())
+                    {
+                        <div class="attachment-preview-container">
+                            @foreach (var file in NewAttachments)
+                            {
+                                <div class="attachment-preview-wrapper">
+
+                                    @if (file.Type.StartsWith("image/"))
+                                    {
+                                        <div class="image-wrapper">
+                                            <img src="@($"data:{file.Type};base64,{file.Base64}")"
+                                                 class="preview-image magnify" />
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="file-preview">
+                                            <i class="fa-solid fa-file"></i>
+                                            <span>@file.Name</span>
+                                        </div>
+                                    }
+
+
+                                    <button class="btn btn-sm btn-danger"
+                                            title="Remove"
+                                            @onclick="() => RemoveNewAttachment(file)">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    @if (showImageModal)
+                    {
+                        <div class="image-modal-overlay" @onclick="CloseImage">
+                            <div class="image-modal-card" @onclick:stopPropagation>
+
+                                <button class="image-modal-close" @onclick="CloseImage">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+
+                                <img src="@($"data:{selectedImageType};base64,{selectedImageBase64}")"
+                                     class="image-modal-img"
+                                     alt="Preview" />
+                            </div>
+                        </div>
+                    }
+
+                    <!-- ⭐ MAIN CHAT INPUT WITH ATTACH BUTTON -->
+                    <div class="chat-input-wrapper" @ref="chatInputRef"
+                         @ondragover:preventDefault
+                         @ondrop:preventDefault
+                         @ondrop="HandleDrop"
+                         data-intro="Type your reply here and send messages or attachments."
+                         data-step="6">
+                         <div class="attach-btn">
+                              <button class="btn btn-light"
+                                @onclick="TriggerFileUpload">
+                            <i class="fa-solid fa-paperclip"></i>
+                        </button>
+                         </div>
+                       
+
+                        <InputFile id="fileUpload"
+                                   class="d-none"
+                                   multiple
+                                   accept="image/*,application/pdf"
+                                   OnChange="HandleFileSelected" />
+                        <textarea class="chat-message-input"
+                                  placeholder="Type a message…"
+                                  @bind="NewMessage"
+                                  @bind:event="oninput"
+                                  @ref="chatInputRef"
+                                  @onkeydown="HandleKeyDown"
+                                  @onpaste="HandlePaste">
+                                </textarea>
+
+                        <button class="btn btn-primary"
+                                @onclick="SendMessage">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="no-chat">Select or create a ticket to view details</div>
+        }
+    </main>
+</div>
+@if (showTicketModal)
+{
+    <div class="modal show d-block custom-modal-overlay" tabindex="-1">
+        <div class="modal-dialog @(modalMode == "case" ? "modal-dialog-centered modal-sm-case" : "modal-dialog-centered modal-lg")"
+             style="display:flex; justify-content:center;">
+            <div class="custom-modal-content @(modalMode == "case" ? "modal-small" : "modal-large")">
+                <div class="modal-header bg-modal">
+                    <h5 class="modal-title">
+                        @(modalMode == "case" ? "Create New Case" : "Create Ticket")
+                    </h5>
+                    <button type="button" class="btn-close"
+                            style="background-color:white"
+                            @onclick="() => showTicketModal = false"></button>
+                </div>
+
+                <div class="modal-body">
+
+                    @if (!string.IsNullOrEmpty(clientValidationError))
+                    {
+                        <div class="alert alert-warning text-center mb-3">
+                            @clientValidationError
+                        </div>
+                    }
+
+                    <EditForm Model="@newTicket">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+                        @if (modalMode == "case")
+                        {
+                            <div class="case-center-box">
+                                <label class="fw-semibold d-block mb-2" style="text-align:right">Select Project</label>
+
+                                <InputSelect class="form-select w-100" @bind-Value="selectedProjectId">
+                                    <option value="0">-- Select Project --</option>
+                                    @foreach (var p in projects)
+                                    {
+                                        <option value="@p.Id">@p.Title</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                            <div class="form-group">
+                                <label>Priority</label>
+                                <InputSelect class="form-select" @bind-Value="newTicket.Priority">
+                                    @foreach (var priority in Enum.GetValues<TicketPriority>())
+                                    {
+                                        <option value="@priority">@priority</option>
+                                    }
+                                </InputSelect>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="modal-grid">
+
+                                @* ---------- ISSUE TITLE ---------- *@
+                                @if (modalMode == "ticket")
+                                {
+                                    <div class="form-group">
+                                        <label>Issue Title</label>
+                                        <InputText class="form-control" @bind-Value="newTicket.IssueTitle" />
+                                    </div>
+                                }
+
+                                @* ---------- CLIENT ---------- *@
+                                <div class="form-group">
+                                    @if (UserState.UserType != 3)
+                                    {
+                                        <label class="fw-semibold">Select Client</label>
+                                        <div class="dropdown client-dropdown">
+                                            <button class="btn btn-light border w-100 d-flex justify-content-between"
+                                                    type="button"
+                                                    @onclick="ToggleClientDropdown"
+                                                    disabled="@(UserState.ClientId != 0)">
+                                                <span>
+                                                    @(selectedClient != null ? selectedClient.ClientName : "-- Select Client --")
+                                                </span>
+                                                <i class="bi bi-chevron-down text-muted"></i>
+                                            </button>
+
+                                            @if (isClientDropdownOpen)
+                                            {
+                                                <div class="dropdown-menu show w-100 shadow mt-1 p-2">
+                                                    <input type="text"
+                                                           class="form-control form-control-sm mb-2"
+                                                           placeholder="Search..."
+                                                           @bind="clientSearchText"
+                                                           @bind:event="oninput" />
+
+                                                    @foreach (var c in FilteredClients)
+                                                    {
+                                                        <div class="dropdown-item"
+                                                             @onclick="() => SelectClient(c)">
+                                                            @c.ClientName
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+
+                                @* ---------- USER CLIENT DROPDOWN ---------- *@
+                                @if (selectedClient != null)
+                                {
+                                    <div class="form-group">
+                                        <label class="fw-semibold">Contact Person</label>
+
+                                        @if (isLoadingUsers)
+                                        {
+                                            <div class="text-muted fst-italic">Loading users...</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="dropdown user-dropdown">
+                                                <button class="btn btn-light border w-100 d-flex justify-content-between"
+                                                        type="button"
+                                                        @onclick="ToggleUserDropdown">
+                                                    <span>
+                                                        @(selectedUser != null ? selectedUser.Name : "-- Select User --")
+                                                    </span>
+                                                    <i class="bi bi-chevron-down text-muted"></i>
+                                                </button>
+
+                                                @if (isUserDropdownOpen)
+                                                {
+                                                    <div class="dropdown-menu show w-100 shadow mt-1 p-2">
+                                                        <input type="text"
+                                                               class="form-control form-control-sm mb-2"
+                                                               placeholder="Search user..."
+                                                               @bind="userSearchText"
+                                                               @bind:event="oninput" />
+
+                                                        @foreach (var u in FilteredUserClients)
+                                                        {
+                                                            <div class="dropdown-item"
+                                                                 @onclick="() => SelectUser(u)">
+                                                                @u.FullName (@u.Username)
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+
+                                @* ---------- PROJECT ---------- *@
+                                <div class="form-group">
+                                    <label class="fw-semibold">Project</label>
+
+                                    <div class="dropdown project-dropdown">
+                                        <button class="btn btn-light border w-100 d-flex justify-content-between"
+                                                type="button"
+                                                @onclick="ToggleProjectDropdown">
+                                            <span>
+                                                @(selectedProject != null ? selectedProject.Title : "-- Select Project --")
+                                            </span>
+                                            <i class="bi bi-chevron-down text-muted"></i>
+                                        </button>
+
+                                        @if (isProjectDropdownOpen)
+                                        {
+                                            <div class="dropdown-menu show w-100 shadow mt-1 p-2">
+                                                <input type="text"
+                                                       class="form-control form-control-sm mb-2"
+                                                       placeholder="Search project..."
+                                                       @bind="projectSearchText"
+                                                       @bind:event="oninput" />
+
+                                                @foreach (var p in FilteredProjects)
+                                                {
+                                                    <div class="dropdown-item"
+                                                         @onclick="() => SelectProject(p)">
+                                                        @p.Title
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                @* ---------- STATUS ---------- *@
+                                @if (modalMode == "ticket")
+                                {
+                                    <div class="form-group">
+                                        <label>Status</label>
+                                        <InputSelect class="form-select" @bind-Value="newTicket.Status">
+                                            @foreach (var status in Enum.GetValues<TicketStatus>())
+                                            {
+                                                <option value="@status">@status</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label>Priority</label>
+                                        <InputSelect class="form-select" @bind-Value="newTicket.Priority">
+                                            @foreach (var priority in Enum.GetValues<TicketPriority>())
+                                            {
+                                                <option value="@priority">@priority</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        @* ---------- BIG TEXTAREA FOR CONCERN (FULL WIDTH) ---------- *@
+                        @if (modalMode == "ticket")
+                        {
+                            <div class="form-group mt-2 full-width">
+                                <label>Concern</label>
+                                <textarea class="form-control concern-textarea"
+                                          @bind="newTicket.Concern"></textarea>
+                            </div>
+                        }
+                        <div class="modal-footer">
+                            <button class="btn-submit-small mt-3"
+                                    @onclick="@(modalMode == "case" ? CreateCase : HandleCreateTicket)">
+                                @(modalMode == "case" ? "Create Case" : "Submit Ticket")
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+@if (showCloseTicketModal)
+{
+    <div class="modal show d-block custom-modal-overlay" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-md">
+            <div class="modal-content custom-modal-content">
+                <div class="modal-header bg-modal">
+                    <h5 class="modal-title">Close Ticket</h5>
+                    <button type="button" class="btn-close" style="background-color:white" @onclick="() => showCloseTicketModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Remarks (optional)</label>
+                        <textarea class="form-control" @bind="closeRemarks" rows="4" placeholder="Add remarks before closing the ticket..."></textarea>
+                    </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <button class="btn btn-secondary" @onclick="() => showCloseTicketModal = false">Cancel</button>
+                        <button class="btn btn-danger" @onclick="ConfirmCloseTicket">Close Ticket</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+@if (isImageModalOpen)
+{
+    <!-- Fullscreen Overlay -->
+    <div class="image-modal-overlay" @onclick="CloseImage">
+
+        <!-- Modal Card: centers image -->
+        <div class="image-modal-card" @onclick:stopPropagation>
+
+            <!-- Image -->
+            <img src="@modalImageSrc" class="image-modal-img" alt="Ticket Image" />
+
+        </div>
+
+        <!-- Close Button (fixed top-right) -->
+        <button class="image-modal-close" @onclick="CloseImage">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+
+    </div>
+}
+@code {
+
+    private string? attachmentPreview;     // Base64 preview
+    private IBrowserFile? attachmentFile;  // Actual image file
+    private string? attachmentFileName;
+    private List<AttachmentItem> Attachments => SelectedTicket.Messages
+        .SelectMany(m => m.Attachments)
+        .Select(a => new AttachmentItem
+        {
+            Name = a.FileName,
+            Type = a.FileType,
+            Base64 = a.Base64Content
+        })
+        .ToList();
+    private List<AttachmentItem> NewAttachments = new();
+    private class AttachmentItem
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
+        public string Base64 { get; set; } = string.Empty;
+    }
+    private string? attachmentFileType;
+    private int currentPage = 1;
+    private const int pageSize = 5;
+    private bool hasMoreTickets = true;
+    private int rating = 0;
+    private bool canSubmitRating = false;
+    private string modalMode = "ticket";
+    private HubConnection? hubConnection;
+    [Parameter]
+    public string EncryptedId { get; set; }
+    private CancellationTokenSource _cts;
+    [Inject]
+    public LinkService LinkService { get; set; }
+    private int UserId;
+    private List<TicketDto> Tickets = new();
+    private TicketDto? SelectedTicket;
+    private string _newMessage = string.Empty;
+    private string NewMessage
+    {
+        get => _newMessage;
+        set
+        {
+            _newMessage = value;
+            _ = AutoResizeTextArea(); // call JS interop to resize
+        }
+    }
+
+    private string SearchText = string.Empty;
+    private bool IsSidebarOpen = false;
+    private List<MessageDto> messages = new();
+    [Parameter] public int ReceiverId { get; set; }
+    private bool showTicketModal;
+    private string clientValidationError = string.Empty;
+    private CreateTicketCommand newTicket = new();
+    private int selectedProjectId;
+    private List<ClientDto> clients = new();
+    private List<ProjectDto> projects = new();
+    private ClientDto? selectedClient;
+    private int selectedClientId;
+    private UserDto? selectedUser;
+    private ProjectDto? selectedProject;
+    private ChatConversation? currentConversation;
+    private bool isLoadingProjects = true;
+    private bool showCloseTicketModal = false;
+    private string closeRemarks = string.Empty;
+    private string updateMessage = string.Empty;
+    private bool isLoadingTickets = false;
+    private bool isLoadingMessages = false;
+    private bool isEditingTitle = false;
+    private string editingTitle;
+    private bool IsUserRestricted => UserState?.UserType is 1 or 2;
+    private ElementReference scrollContainer;
+    private List<UserClientDto> filteredUserClients = new();
+    private int selectedUserId = 0;
+    private bool isLoadingUsers = false;
+    private bool isUserDropdownOpen = false;
+    private string userSearchText = "";
+    private bool showImageModal;
+    private string? selectedImageBase64;
+    private string? selectedImageType;
+    private const int MinLoadingMs = 600; // adjust if needed
+    private async Task AutoResizeTextArea()
+    {
+        if (chatInputRef.Context is not null)
+        {
+            await JS.InvokeVoidAsync("autoResizeTextArea", chatInputRef);
+        }
+    }
+    // void OpenImage(string base64, string type)
+    // {
+    //     selectedImageBase64 = base64;
+    //     selectedImageType = type;
+    //     showImageModal = true;
+
+    // }
+
+    // void CloseImage()
+    // {
+    //     showImageModal = false;
+    //     selectedImageBase64 = null;
+    //     selectedImageType = null;
+    // }
+    private bool isImageModalOpen;
+    private string? modalImageSrc;
+    private void CloseImage()
+    {
+        isImageModalOpen = false;
+        modalImageSrc = null;
+    }
+    private void OpenImage(TicketUploadDto file)
+    {
+        isImageModalOpen = true;
+        modalImageSrc = $"data:{file.FileType};base64,{file.Base64Content}";
+    }
+    private IEnumerable<UserClientDto> FilteredUserClients =>
+        filteredUserClients.Where(u =>
+            string.IsNullOrEmpty(userSearchText) ||
+            u.FullName.Contains(userSearchText, StringComparison.OrdinalIgnoreCase) ||
+            u.Username.Contains(userSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleUserDropdown() => isUserDropdownOpen = !isUserDropdownOpen;
+    private void SelectUser(UserClientDto user)
+    {
+        selectedUserId = user.Id;
+        selectedUser = new UserDto
+        {
+            Id = user.Id,
+            Name = user.FullName
+        };
+
+        isUserDropdownOpen = false;
+    }
+    private bool isProjectDropdownOpen = false;
+    private string projectSearchText = "";
+
+    private IEnumerable<ProjectDto> FilteredProjects =>
+        projects.Where(p =>
+            string.IsNullOrEmpty(projectSearchText) ||
+            p.Title.Contains(projectSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private void ToggleProjectDropdown() => isProjectDropdownOpen = !isProjectDropdownOpen;
+
+    private void SelectProject(ProjectDto project)
+    {
+        selectedProjectId = project.Id;
+        selectedProject = project;
+        isProjectDropdownOpen = false;
+    }
+    private async Task LoadUserClients()
+    {
+        if (selectedClient == null) return;
+
+        isLoadingUsers = true;
+        StateHasChanged();
+
+        try
+        {
+
+            // Call your API to get client users
+            filteredUserClients = await Http.GetFromJsonAsync<List<UserClientDto>>($"{AppConfig.ChatUrl}User/GetClientUsers/client/{selectedClient.ClientId}");
+        }
+        finally
+        {
+            isLoadingUsers = false;
+            StateHasChanged();
+        }
+    }
+
+    private TicketStatus? SelectedStatusFilter = null;
+
+    private async Task ApplyStatusFilter(TicketStatus? status)
+    {
+        SelectedStatusFilter = status;
+
+        // Reset pagination
+        currentPage = 1;
+        hasMoreTickets = true;
+        Tickets.Clear();
+
+        await LoadMoreTickets(true);
+    }
+    private string newMessage
+    {
+        get => _newMessage;
+        set
+        {
+            if (_newMessage != value)
+            {
+                _newMessage = value;
+                _ = NotifyTyping();
+            }
+        }
+    }
+    private async Task RemoveAttachment(TicketUploadDto file)
+    {
+        if (file == null || SelectedTicket == null)
+            return;
+
+        try
+        {
+            var url = $"{AppConfig.ChatUrl}TicketMessage/DeleteUpload/{file.Id}?ticketId={SelectedTicket.Id}";
+            var response = await Http.DeleteAsync(url);
+
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Find the message containing this attachment
+                var msg = SelectedTicket.Messages
+                    .FirstOrDefault(m => m.Attachments.Any(a => a.Id == file.Id));
+
+                if (msg != null)
+                {
+                    // Option 1️⃣: Remove attachment from the list
+                    msg.Attachments.Remove(file);
+
+                    // Option 2️⃣: Append placeholder to message content
+                    msg.Content += "\n[Attachment removed]";
+                }
+
+                StateHasChanged();
+            }
+            else
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Error deleting attachment: {errorText}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception deleting attachment: {ex.Message}");
+        }
+    }
+    private async Task TriggerFileUpload()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("triggerFileInput", "fileUpload");
+        }
+        catch (JSException ex)
+        {
+            Console.WriteLine($"JS error: {ex.Message}");
+        }
+    }
+    private void RemoveNewAttachment(AttachmentItem file)
+    {
+        NewAttachments.Remove(file);
+    }
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        foreach (var file in e.GetMultipleFiles())
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024); // 10 MB limit
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms); // Copy entire file safely
+
+            NewAttachments.Add(new AttachmentItem
+            {
+                Name = file.Name,
+                Type = file.ContentType,
+                Base64 = Convert.ToBase64String(ms.ToArray())
+            });
+        }
+
+        StateHasChanged(); // Update UI
+    }
+    private void HandleDragOver(DragEventArgs e)
+    {
+
+    }
+    public class DroppedFile
+    {
+        public string Name { get; set; } = "";
+        public string Type { get; set; } = "";
+        public long Size { get; set; }
+        public string Base64 { get; set; } = "";
+    }
+    private async Task HandleDrop(DragEventArgs e)
+    {
+        try
+        {
+            var files = await JS.InvokeAsync<AttachmentItem[]>(
+                "getDroppedFiles", e);
+
+            if (files == null || files.Length == 0)
+                return;
+
+            foreach (var file in files)
+            {
+                NewAttachments.Add(new AttachmentItem
+                {
+                    Name = file.Name,
+                    Type = file.Type,
+                    Base64 = file.Base64
+                });
+            }
+
+            StateHasChanged();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Safe to ignore
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+        }
+    }
+
+    public class ClipboardFileData
+    {
+        public string Name { get; set; } = "";
+        public string Type { get; set; } = "";
+        public long Size { get; set; }
+        public string Base64 { get; set; } = "";
+    }
+    private async Task HandlePaste(ClipboardEventArgs e)
+    {
+        try
+        {
+            var files = await JS.InvokeAsync<AttachmentItem[]>(
+                "getClipboardImage");
+
+            if (files == null || files.Length == 0)
+                return;
+
+            foreach (var file in files)
+            {
+                NewAttachments.Add(new AttachmentItem
+                {
+                    Name = file.Name,
+                    Type = file.Type,
+                    Base64 = file.Base64
+                });
+            }
+
+            StateHasChanged();
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit closed — safe to ignore
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+        }
+    }
+    protected override void OnParametersSet()
+    {
+        if (SelectedTicket != null)
+        {
+            editingTitle = SelectedTicket.IssueTitle;
+        }
+    }
+    private void CancelEditTitle()
+    {
+        // Simply exit editing mode and discard changes
+        editingTitle = SelectedTicket?.IssueTitle;
+        isEditingTitle = false;
+    }
+    private async Task SaveTitle()
+    {
+        if (!string.IsNullOrWhiteSpace(editingTitle))
+        {
+            SelectedTicket.IssueTitle = editingTitle;
+
+            // Call your update function here, e.g., API call
+            await UpdateTicketTitle(SelectedTicket.Id, editingTitle);
+
+            isEditingTitle = false;
+        }
+    }
+    int Rating = 0;        // clicked rating
+    int HoverRating = 0;   // hover rating
+
+    void SetRating(int value)
+    {
+        canSubmitRating = true;
+        Rating = value;
+    }
+
+    void HoverStar(int value)
+    {
+        HoverRating = value;
+    }
+
+    void ClearHover()
+    {
+        HoverRating = 0;
+    }
+
+    string GetStarClass(int starNumber)
+    {
+        if (HoverRating >= starNumber)
+            return "fas fa-star text-warning"; // hover effect
+        if (Rating >= starNumber)
+            return "fas fa-star text-warning"; // selected
+        return "far fa-star text-secondary";   // default empty
+    }
+    private async Task SubmitRating()
+    {
+        if (!canSubmitRating || SelectedTicket == null)
+            return;
+
+        var command = new SubmitTicketRatingCommand
+        {
+            TicketId = SelectedTicket.Id,
+            Rating = Rating,
+            ClientId = UserId
+        };
+
+        var result = await Http.PostAsJsonAsync(
+            $"{AppConfig.ChatUrl}TicketMessage/SubmitRating/SubmitRating",
+            command
+        );
+
+        if (result.IsSuccessStatusCode)
+        {
+            canSubmitRating = false; // disable further rating
+            var dialog = await DialogService.ShowSuccessAsync("Thank you for your feedback!");
+        }
+        else
+        {
+            var error = await result.Content.ReadAsStringAsync();
+            var dialog = await DialogService.ShowWarningAsync($"Failed to submit rating");
+
+        }
+    }
+    private async Task UpdateTicketTitle(int ticketId, string newTitle)
+    {
+        if (string.IsNullOrWhiteSpace(newTitle))
+            return;
+
+        var payload = new
+        {
+            TicketId = ticketId,
+            NewTitle = newTitle
+        };
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}TicketMessage/UpdateTitle/update-title", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                // Update local ticket object
+                SelectedTicket.IssueTitle = newTitle;
+                SelectedTicket.IssueTitle = editingTitle;
+
+                // Update ticket in the sidebar list
+                var ticketInList = Tickets.FirstOrDefault(t => t.Id == SelectedTicket.Id);
+                if (ticketInList != null)
+                {
+                    ticketInList.IssueTitle = editingTitle;
+                }
+                isEditingTitle = false; // hide input, show label
+                StateHasChanged();
+            }
+            else
+            {
+                var message = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Error updating title: {message}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception: {ex.Message}");
+        }
+    }
+    private string clientSearchText = string.Empty;
+    private IEnumerable<ClientDto> FilteredClients =>
+    string.IsNullOrWhiteSpace(clientSearchText)
+        ? clients
+        : clients.Where(c => c.ClientName.Contains(clientSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private bool isClientDropdownOpen = false;
+    private void ToggleClientDropdown() => isClientDropdownOpen = !isClientDropdownOpen;
+    private const int TypingTimeout = 2000;
+    private bool isOtherUserTyping = false;
+    private Timer? typingTimer;
+    private List<UserDto> users = new();
+    private ElementReference chatWindowRef;
+    private bool shouldScroll = false;
+    private ElementReference chatInputRef;
+    int OpenCount = 0;
+    int InProgress = 0;
+    int ClosedCount = 0;
+    int ResolvedCount = 0;
+    int RejectedCount = 0;
+    string ManagerName = "Account Manager"; // or pull from logged-in user
+    bool IsOnline = true; // or bind from your SignalR user status hub
+    private CreateUserCommand model = new();
+    protected override async Task OnInitializedAsync()
+    {
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+
+        if (string.IsNullOrEmpty(decrypted))
+        {
+            // If invalid token, redirect to error or home
+            Navigation.NavigateTo("/unauthorized");
+            return;
+        }
+        ChatService.OnMessageInboxReceived += HandleIncomingMessage;
+        ChatService.OnTypingReceived += HandleTypingStatus;
+        ChatService.OnUserStatusChanged += HandleUserStatusChanged;
+
+        await ChatService.StartAsync(UserId);
+        TitleService.SetTitle("Inbox");
+        UserId = int.Parse(decrypted);
+
+        await LoadClient();
+        await LoadTickets(true);
+        await base.OnInitializedAsync();
+        if (ReceiverId != 0)
+        {
+        }
+        else if (users.Any())
+        {
+            ReceiverId = users.First().Id;
+            selectedUser = users.First();
+        }
+
+    }
+    [Parameter] public EventCallback OnNavigate { get; set; }
+    private async Task ConvertToCase(int ticketId)
+    {
+        var payload = new { updatedBy = UserId };
+        var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateIsCase/UpdateIsCase/{ticketId}?updatedBy={UserId}", payload);
+
+        if (response.IsSuccessStatusCode)
+        {
+            // Reload all tickets list
+            await LoadTickets(true);
+
+            // Reload the selected ticket details
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+
+            SelectedTicket = await Http.GetFromJsonAsync<TicketDto>(
+                $"{AppConfig.ChatUrl}TicketMessage/GetTicket/{ticketId}", options);
+
+            // Reload conversation/messages if necessary
+            if (SelectedTicket != null)
+            {
+                await LoadConversation(SelectedTicket.Id);
+            }
+
+            StateHasChanged();
+            await DialogService.ShowSuccessAsync("Ticket converted to case successfully");
+        }
+        else
+        {
+            await DialogService.ShowErrorAsync("Failed to update ticket");
+        }
+    }
+    /* -------- nav helpers -------- */
+    private void Navigate(string url)
+    {
+        Navigation.NavigateTo(url, forceLoad: false);
+        if (OnNavigate.HasDelegate)
+            OnNavigate.InvokeAsync();
+    }
+    private void NavigateTicket()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/tickets/{SelectedTicket.Id}");
+        }
+    }
+    private async Task LoadClient()
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Client/GetAssignedClients/assigned/{UserId}").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            clients = JsonSerializer.Deserialize<List<ClientDto>>(rawJson, options) ?? new List<ClientDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load clients: {ex.Message}");
+        }
+    }
+    private async Task InitializeHubConnection()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/chathub"))
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            Console.WriteLine($"{user}: {message}");
+        });
+
+        try
+        {
+            await hubConnection.StartAsync();
+            Console.WriteLine("Hub connection started.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Hub connection failed: {ex.Message}");
+        }
+    }
+    private async Task SelectClient(ClientDto client)
+    {
+        selectedClient = client;
+        selectedClientId = client.ClientId;
+        newTicket.ClientId = client.ClientId;
+
+        isClientDropdownOpen = false;
+
+        // Load projects for selected client
+        await LoadProjects(client.ClientId);
+        _ = LoadUserClients();
+        selectedProjectId = 0;
+    }
+    // private async Task CloseTicket()
+    // {
+    //     if (SelectedTicket == null) return;
+
+    //     // Example API call to close ticket
+    //     var response = await Http.PostAsync($"TicketMessage/CloseTicket/{SelectedTicket.Id}", null);
+
+    //     if (response.IsSuccessStatusCode)
+    //     {
+    //         SelectedTicket.Status = "Closed"; // Update local status
+    //         StateHasChanged();
+    //     }
+    //     else
+    //     {
+    //         // Handle error (optional)
+    //         Console.WriteLine("Failed to close ticket.");
+    //     }
+    // }
+    private async Task ConfirmCloseTicket()
+    {
+        if (SelectedTicket == null) return;
+
+        var payload = new
+        {
+            TicketId = SelectedTicket.Id,
+            NewStatus = TicketStatus.Closed.ToString(),
+            UpdatedBy = UserState.UserId,
+            UpdatedAt = DateTime.UtcNow,
+            Remarks = closeRemarks
+        };
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateStatus", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                SelectedTicket.Status = TicketStatus.Closed.ToString();
+                updateMessage = $"✅ Ticket closed with remarks: {closeRemarks}";
+                closeRemarks = string.Empty;
+                showCloseTicketModal = false;
+
+                // Reload ticket history if needed
+                if (ChatService != null)
+                {
+                    await ChatService.NotifyTicketUpdateAsync();
+                }
+                await LoadTickets(true);
+            }
+            else
+            {
+                updateMessage = "⚠ Failed to close ticket.";
+            }
+        }
+        catch (Exception ex)
+        {
+            updateMessage = $"Error: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+    private string loadMoreLabel = "Load More";
+    private bool disableScrollLoading = false;
+    private TaskCompletionSource<bool>? _introCompletionSource;
+    private async Task LoadMoreClick()
+    {
+        if (isLoadingTickets)
+            return;
+
+        disableScrollLoading = true;
+
+        await LoadMoreTickets(true);
+
+        disableScrollLoading = false;
+    }
+    private async Task LoadTickets(bool isloading)
+    {
+        currentPage = 1;
+        Tickets.Clear();
+        hasMoreTickets = true;
+
+        var runIntro = await SessionStorage.GetItemAsync<string>("runInboxIntro");
+        if (runIntro == "true")
+        {
+            _onboardingStarted = true;
+            await JS.InvokeVoidAsync("startOnboarding", _dotNetRef);
+
+            _introCompletionSource = new TaskCompletionSource<bool>();
+            bool finished = await _introCompletionSource.Task;
+
+            Console.WriteLine($"Onboarding finished/skipped: {finished}");
+
+            // await SessionStorage.RemoveItemAsync("runInboxIntro");
+
+            if (finished)
+            {
+                await SessionStorage.RemoveItemAsync("runInboxIntro");
+            }
+            _onboardingStarted = false;
+        }
+
+        await LoadMoreTickets(isloading);
+
+    }
+    [JSInvokable("OnOnboardingFinished")]
+    public Task OnOnboardingFinished(bool completed)
+    {
+        if (completed)
+        {
+            Console.WriteLine("User completed the onboarding ✅");
+            // Do actions for completed tour
+        }
+        else
+        {
+            Console.WriteLine("User skipped the onboarding ⚠️");
+            // Do actions for skipped tour
+        }
+
+        // Signal TaskCompletionSource if you're awaiting it
+        _introCompletionSource?.TrySetResult(completed);
+
+        return Task.CompletedTask;
+    }
+    private async Task LoadMoreTickets(bool isloading)
+    {
+        if (isLoadingTickets)
+            return;
+
+        if (Tickets.Count == 0)
+            hasMoreTickets = true;
+
+        isLoadingTickets = isloading;
+
+        // 🔥 IIS-safe render
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
+
+        // Minimum loader timer only if tickets exist
+        var startTime = Tickets.Any()
+            ? DateTime.UtcNow
+            : (DateTime?)null;
+
+        try
+        {
+            string url = $"{AppConfig.ChatUrl}TicketMessage/GetTickets/GetTickets" +
+                         $"?userId={UserId}&includeMessages=false&page={currentPage}&pageSize={pageSize}";
+
+            if (SelectedStatusFilter.HasValue)
+                url += $"&status={SelectedStatusFilter.Value}";
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            options.Converters.Add(
+                new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.CamelCase)
+            );
+
+            var response = await Http.GetFromJsonAsync<TicketPagedResponse>(url, options);
+
+            if (response == null || response.Tickets.Count == 0)
+            {
+                hasMoreTickets = false;
+                return;
+            }
+
+            Tickets.AddRange(response.Tickets);
+            currentPage++;
+
+            if (response.StatusCounts != null)
+            {
+                OpenCount = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.Open)?.Count ?? 0;
+                InProgress = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.InProgress)?.Count ?? 0;
+                RejectedCount = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.Rejected)?.Count ?? 0;
+                ClosedCount = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.Closed)?.Count ?? 0;
+            }
+        }
+        catch
+        {
+            hasMoreTickets = false;
+        }
+        finally
+        {
+            // ⏱ Minimum loading time
+            if (startTime.HasValue)
+            {
+                var elapsed = (DateTime.UtcNow - startTime.Value).TotalMilliseconds;
+                if (elapsed < MinLoadingMs)
+                    await Task.Delay(MinLoadingMs - (int)elapsed);
+            }
+
+            isLoadingTickets = false;
+            await InvokeAsync(StateHasChanged);
+        }
+
+    }
+    private async Task HandleScroll()
+    {
+        if (disableScrollLoading || isLoadingTickets)
+            return;
+
+        var scrollData = await JS.InvokeAsync<ScrollInfo>("getScrollInfo", scrollContainer);
+
+        if (scrollData.ScrollHeight - scrollData.ScrollTop - scrollData.ClientHeight < 100)
+        {
+            await LoadMoreTickets(true);
+        }
+    }
+
+    public class ScrollInfo
+    {
+        public double ScrollTop { get; set; }
+        public double ScrollHeight { get; set; }
+        public double ClientHeight { get; set; }
+    }
+    private async Task HandleCreateTicket()
+    {
+        try
+        {
+            var utype = UserState.UserType;
+            if (utype == 1 && selectedClient == null)
+            {
+                clientValidationError = "⚠ Please select a client before creating a ticket.";
+                return;
+            }
+
+            if (selectedProjectId == 0)
+            {
+                clientValidationError = "⚠ Please select a project before creating a ticket.";
+                return;
+            }
+
+            var payload = new CreateTicketCommand
+            {
+                Concern = newTicket.Concern,
+                IssueTitle = newTicket.IssueTitle,
+                ProjectId = selectedProjectId,
+                ClientId = newTicket.ClientId,
+                RequestedById = selectedUserId,
+                SupportedById = UserId,
+                InitialMessage = newTicket.InitialMessage,
+                Status = newTicket.Status == default ? TicketStatus.Open.ToString() : newTicket.Status,
+                Priority = TicketPriority.Medium
+            };
+
+            var res = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}Tickets/Create", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                var createdTicketFromResponse = await res.Content.ReadFromJsonAsync<ChatUp.Application.Features.Ticket.DTOs.TicketDto>();
+                var selectedUser = filteredUserClients.FirstOrDefault(u => u.Id == selectedUserId);
+                // Map to Ticket.DTOs.TicketDto
+                var createdTicket = new ChatUp.Application.Features.Ticket.DTOs.TicketDto(
+                   createdTicketFromResponse.Id,
+                   createdTicketFromResponse.TicketNo,
+                   createdTicketFromResponse.DateReceived,
+                   createdTicketFromResponse.IssueTitle,
+                   createdTicketFromResponse.Concern,
+                   createdTicketFromResponse.Description,
+                   createdTicketFromResponse.RequestedById,
+                   createdTicketFromResponse.RequestedByName,
+                   createdTicketFromResponse.ClientId,
+                   createdTicketFromResponse.ClientName,
+                   createdTicketFromResponse.ProjectId,
+                   createdTicketFromResponse.ProjectName,
+                   createdTicketFromResponse.Status,
+                   createdTicketFromResponse.SupportedById,
+                   createdTicketFromResponse.SupportedByName,
+                   createdTicketFromResponse.Priority,
+                   createdTicketFromResponse.DueDate,
+                   createdTicketFromResponse.IsBreached,
+                   createdTicketFromResponse.IsArchived,
+
+                   // 🔥 THESE MUST MATCH EXACTLY
+                   createdTicketFromResponse.RequesterEmail ?? string.Empty,
+                   createdTicketFromResponse.ClientEmail ?? string.Empty,
+                   selectedUser?.EmailAddress ?? string.Empty,     // DeveloperEmail
+                   selectedUser?.FullName ?? string.Empty          // DeveloperName
+               );
+                showTicketModal = false;
+                newTicket = new();
+                selectedClientId = 0;
+                selectedClient = null;
+                selectedProjectId = 0;
+                await LoadTickets(true); // this now replaces the list reference
+                await InvokeAsync(StateHasChanged);
+
+                await DialogService.ShowSuccessAsync("Successfully Created a Ticket");
+                await _ticketNotificationService.SendAsync(
+                      createdTicket,
+                       TicketNotificationService.TicketNotificationType.NewTicket,
+                       createdTicket.Concern
+                   );
+                // await SendChatMessage(
+                //     $"🎫 New Ticket Created: " +
+                //     $"<a href='/tickets/{createdTicket.Id}' class='ticket-link'>#{createdTicket.TicketNo}</a> " +
+                //     $"<br/> ⏳ SLA Due: {createdTicket.DueDate?.ToLocalTime():g}"
+                // );
+
+            }
+            else
+            {
+                Console.WriteLine("Ticket creation failed. Status: " + res.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to create ticket: {ex.Message}");
+        }
+    }
+    private async Task SelectTicket(TicketDto ticket)
+    {
+        SelectedTicket = ticket;
+        IsSidebarOpen = false;
+        isLoadingMessages = true;
+        StateHasChanged();
+
+        try
+        {
+            // Join the SignalR group for this ticket
+            if (ChatService.IsConnected)
+            {
+                // Join the correct ticket group
+                await ChatService.JoinConversation(ticket.Id); // old: might map to conversation
+            }
+
+            // JSON options to handle enums safely
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            };
+            options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(
+                System.Text.Json.JsonNamingPolicy.CamelCase));
+
+            // Load full ticket including messages
+            SelectedTicket = await Http.GetFromJsonAsync<TicketDto>(
+                $"{AppConfig.ChatUrl}TicketMessage/GetTicket/{ticket.Id}", options);
+
+            if (SelectedTicket != null)
+            {
+                await LoadConversation(SelectedTicket.Id, loadMore: false);
+                if (SelectedTicket.Status == TicketStatus.Closed.ToString())
+                {
+                    var ratingResponse = await Http.GetFromJsonAsync<int>(
+                        $"{AppConfig.ChatUrl}TicketMessage/GetTicketRating/GetTicketRating/{SelectedTicket.Id}");
+
+                    Rating = ratingResponse;      // Set current rating
+                    HoverRating = ratingResponse; // Optional: hover stars match rating
+                    canSubmitRating = Rating == 0; // Allow submit only if no rating yet
+                }
+                else
+                {
+                    canSubmitRating = false; // Disable if ticket is not closed
+                }
+            }
+        }
+        finally
+        {
+            isLoadingMessages = false;
+
+            StateHasChanged(); // Trigger UI update
+
+            // Lazy load images
+
+            // Wait for DOM updates to complete before scrolling
+            await Task.Delay(50);
+            await ScrollToBottom();
+            await JS.InvokeVoidAsync("initLazyImages", chatWindowRef);
+
+        }
+    }
+    private string GetThumbnailSrc(TicketUploadDto file)
+    {
+        var base64 = file.ThumbnailBase64.Replace("\r", "").Replace("\n", "");
+        return base64.StartsWith("data:")
+            ? base64
+            : $"data:{file.FileType};base64,{base64}";
+    }
+
+    private void ToggleSidebar()
+    {
+        IsSidebarOpen = !IsSidebarOpen;
+    }
+
+    private async Task CreateCase()
+    {
+        try
+        {
+            var utype = UserState.UserType;
+
+
+            if (selectedProjectId == 0)
+            {
+                clientValidationError = "⚠ Please select a project before creating a ticket.";
+                return;
+            }
+
+            newTicket.RequestedById = UserId;
+            newTicket.ClientId = selectedClient != null ? selectedClient.Id : UserState.ClientId;
+            newTicket.ProjectId = selectedProjectId;
+            newTicket.SupportedById = UserId;
+            newTicket.IssueTitle = "New Message";
+            newTicket.Concern = "New Message";
+            newTicket.Status = "New";
+            newTicket.IsCase = true;
+            if (newTicket.Priority == default)
+                newTicket.Priority = TicketPriority.Medium;
+
+            var res = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}Tickets/Create", newTicket);
+
+            if (res.IsSuccessStatusCode)
+            {
+                // var createdTicket = await res.Content.ReadFromJsonAsync<TicketDto>();
+
+                showTicketModal = false;
+                newTicket = new();
+                selectedClientId = 0;
+                selectedClient = null;
+                selectedProjectId = 0;
+                await LoadTickets(true);
+                StateHasChanged();
+                await DialogService.ShowSuccessAsync("Successfully Create Case");
+                // await SendChatMessage(
+                //     $"🎫 New Ticket Created: " +
+                //     $"<a href='/tickets/{createdTicket.Id}' class='ticket-link'>#{createdTicket.TicketNo}</a> " +
+                //     $"<br/> ⏳ SLA Due: {createdTicket.DueDate?.ToLocalTime():g}"
+                // );
+
+            }
+            else
+            {
+                Console.WriteLine("Ticket creation failed. Status: " + res.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to create ticket: {ex.Message}");
+        }
+    }
+    private async Task OpenTicketModal(string mode)
+    {
+        modalMode = mode;  // "ticket" or "case"
+        showTicketModal = true;
+
+        // Reset fields
+        newTicket = new CreateTicketCommand();
+        selectedProjectId = 0;
+        clientValidationError = string.Empty;
+
+        // Determine correct ClientId
+        int? finalClientId = null;
+
+        if (UserState != null)
+        {
+            finalClientId = UserState.ClientId == 0
+                            ? selectedUser?.ClientId     // If user has no client, get from selectedUser
+                            : UserState.ClientId;        // Otherwise use their assigned client
+        }
+
+        // Auto-select client if mode is case
+        if (mode == "case")
+        {
+            newTicket.IssueTitle = "New Case";
+            newTicket.Concern = string.Empty;
+
+            // Auto-select client for CASE mode
+            if (finalClientId != null && finalClientId > 0)
+            {
+                selectedClient = clients.FirstOrDefault(c => c.Id == finalClientId);
+                newTicket.ClientId = finalClientId.Value;
+                selectedClientId = finalClientId.Value;
+            }
+        }
+        else
+        {
+            // TICKET mode → clear previous selection
+            selectedClient = null;
+            selectedClientId = 0;
+            newTicket.ClientId = 0;
+        }
+
+        // Load projects only if we have a client
+        if (finalClientId != null && finalClientId > 0)
+            await LoadProjects(finalClientId.Value);
+
+        StateHasChanged();
+    }
+    private async Task LoadProjects(int clientId)
+    {
+        try
+        {
+            isLoadingProjects = true;
+            StateHasChanged();
+
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Projects/GetByClient/{clientId}").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode)
+            {
+                projects = new List<ProjectDto>();
+                return;
+            }
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            projects = JsonSerializer.Deserialize<List<ProjectDto>>(rawJson, options) ?? new List<ProjectDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load projects: {ex.Message}");
+            projects = new List<ProjectDto>();
+        }
+        finally
+        {
+            isLoadingProjects = false;
+            StateHasChanged();
+        }
+    }
+    // private async Task SendMessage()
+    // {
+    //     if (SelectedTicket == null) return;
+
+    //     if (SelectedTicket.Status is "Closed" or "Rejected")
+    //         return;
+
+    //     if (string.IsNullOrWhiteSpace(NewMessage) && !NewAttachments.Any())
+    //         return;
+
+    //     try
+    //     {
+    //         // 1️⃣ Send TEXT message first (FAST)
+    //         var messageResponse = await Http.PostAsJsonAsync(
+    //             $"{AppConfig.ChatUrl}TicketMessage/AddMessage/{SelectedTicket.Id}/messages",
+    //             new
+    //             {
+    //                 UserId = UserId,
+    //                 IsUser = true,
+    //                 Content = NewMessage ?? string.Empty
+    //             });
+
+    //         if (!messageResponse.IsSuccessStatusCode) return;
+
+    //         var newMsg = await messageResponse.Content.ReadFromJsonAsync<MessageDto>();
+    //         if (newMsg == null) return;
+
+    //         newMsg.Attachments = new List<TicketUploadDto>();
+
+    //         // // 2️⃣ Update UI immediately (NO WAITING)
+    //         // SelectedTicket.Messages ??= new();
+    //         // SelectedTicket.Messages.Add(newMsg);
+    //         // NewMessage = string.Empty;
+    //         // StateHasChanged();
+    //         // await ScrollToBottom();
+
+    //         // // 3️⃣ Upload attachments in PARALLEL (NON-BLOCKING)
+    //         // var uploadTasks = NewAttachments.Select(async attachment =>
+    //         // {
+    //         //     var thumbnailBase64 = attachment.Type.StartsWith("image/")
+    //         //         ? await ImageResizeHelper.ResizeBase64Async(attachment.Base64)
+    //         //         : attachment.Base64;
+
+    //         //     var uploadResponse = await Http.PostAsJsonAsync(
+    //         //         $"{AppConfig.ChatUrl}TicketMessage/UploadFile",
+    //         //         new
+    //         //         {
+    //         //             TicketId = SelectedTicket.Id,
+    //         //             TicketMessageId = newMsg.Id,
+    //         //             UploadedById = UserId,
+    //         //             FileName = attachment.Name,
+    //         //             FileType = attachment.Type,
+    //         //             Base64Content = thumbnailBase64
+    //         //         });
+
+    //         //     if (uploadResponse.IsSuccessStatusCode)
+    //         //     {
+    //         //         newMsg.Attachments.Add(new TicketUploadDto
+    //         //         {
+    //         //             FileName = attachment.Name,
+    //         //             FileType = attachment.Type,
+    //         //             Base64Content = thumbnailBase64,
+    //         //             ThumbnailBase64 = thumbnailBase64
+    //         //         });
+
+    //         //         await InvokeAsync(StateHasChanged);
+    //         //         await ScrollToBottom();
+    //         //     }
+    //         // });
+
+    //         // await Task.WhenAll(uploadTasks);
+
+    //         // // 4️⃣ SignalR – send LIGHT message only
+    //         // if (ChatService.IsConnected)
+    //         //     await ChatService.SendMessageInbox(newMsg);
+
+    //         // NewAttachments.Clear();
+    //          // 2️⃣ Upload attachments (sequentially or parallel, but complete before SignalR)
+    //     foreach (var attachment in NewAttachments)
+    //     {
+    //         var thumbnailBase64 = attachment.Type.StartsWith("image/")
+    //             ? await ImageResizeHelper.ResizeBase64Async(attachment.Base64)
+    //             : attachment.Base64;
+
+    //         var uploadResponse = await Http.PostAsJsonAsync(
+    //             $"{AppConfig.ChatUrl}TicketMessage/UploadFile",
+    //             new
+    //             {
+    //                 TicketId = SelectedTicket.Id,
+    //                 TicketMessageId = newMsg.Id,
+    //                 UploadedById = UserId,
+    //                 FileName = attachment.Name,
+    //                 FileType = attachment.Type,
+    //                 Base64Content = thumbnailBase64
+    //             });
+
+    //         if (uploadResponse.IsSuccessStatusCode)
+    //         {
+    //             newMsg.Attachments.Add(new TicketUploadDto
+    //             {
+    //                 FileName = attachment.Name,
+    //                 FileType = attachment.Type,
+    //                 Base64Content = thumbnailBase64,
+    //                 ThumbnailBase64 = thumbnailBase64
+    //             });
+    //         }
+    //     }
+
+    //     // 3️⃣ Update local UI
+    //     SelectedTicket.Messages ??= new();
+    //     SelectedTicket.Messages.Add(newMsg);
+
+    //     NewMessage = string.Empty;
+    //     NewAttachments.Clear();
+
+    //     StateHasChanged();
+    //     await ScrollToBottom();
+
+    //     // 4️⃣ Send via SignalR (now includes attachments)
+    //     if (ChatService.IsConnected)
+    //         await ChatService.SendMessageInbox(newMsg);
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"SendMessage error: {ex.Message}");
+    //     }
+
+    // }
+    private async Task SendMessage()
+    {
+        if (SelectedTicket == null || SelectedTicket.Status is "Closed" or "Rejected")
+            return;
+
+        if (string.IsNullOrWhiteSpace(NewMessage) && !NewAttachments.Any())
+            return;
+
+        // ------------------- Optimistic UI -------------------
+        // 1. Update internal timestamp
+        SelectedTicket.ResponseTimeSeconds  = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        // 2. Update UI immediately
+        SelectedTicket.ResponseTime = "Just now"; // for display only
+        StateHasChanged();
+
+        try
+        {
+            // ------------------- Prepare attachments DTO -------------------
+            var attachmentsDto = NewAttachments.Select(a => new TicketUploadDto
+            {
+                FileName = a.Name,
+                FileType = a.Type,
+                Base64Content = a.Base64,
+                ThumbnailBase64 = a.Type.StartsWith("image/") ? a.Base64 : null
+            }).ToList();
+
+            var request = new AddMessageRequest
+            {
+                UserId = UserId,
+                IsUser = true,
+                Content = NewMessage,
+                Attachments = attachmentsDto
+            };
+
+            // ------------------- Send to server -------------------
+            var response = await Http.PostAsJsonAsync(
+                $"{AppConfig.ChatUrl}TicketMessage/AddMessage/{SelectedTicket.Id}/messages",
+                request);
+
+            if (!response.IsSuccessStatusCode)
+                return;
+
+            // ------------------- Clear UI input -------------------
+            NewMessage = string.Empty;
+            NewAttachments.Clear();
+            // ------------------- Sort tickets automatically -------------------
+            await LoadTickets(false);
+
+            StateHasChanged();
+
+            // Scroll to bottom in the conversation
+            await ScrollToBottom();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SendMessage error: {ex.Message}");
+        }
+    }
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _dotNetRef?.Dispose();
+        ChatService.OnMessageInboxReceived -= HandleIncomingMessage;
+        ChatService.OnTypingReceived -= HandleTypingStatus;
+        ChatService.OnUserStatusChanged -= HandleUserStatusChanged;
+    }
+    private async void HandleIncomingMessage(MessageDto msg)
+    {
+        await InvokeAsync(() =>
+      {
+          if (msg == null)
+              return;
+
+          var ticket = Tickets.FirstOrDefault(t => t.Id == msg.TicketId);
+          if (ticket == null)
+              return;
+
+          ticket.Messages ??= new List<MessageDto>();
+
+          if (ticket.Messages.Any(m => m.Id == msg.Id))
+              return;
+
+          ticket.Messages.Add(msg);
+          if (SelectedTicket != null && SelectedTicket.Id == ticket.Id)
+          {
+              SelectedTicket.Messages ??= new List<MessageDto>();
+              if (!SelectedTicket.Messages.Any(m => m.Id == msg.Id))
+                  SelectedTicket.Messages.Add(msg);
+          }
+          // ✅ REQUIRED because SelectedTicket is a different instance
+          // if (SelectedTicket != null && SelectedTicket.Id == ticket.Id)
+          // {
+          //     SelectedTicket.Messages = ticket.Messages;
+
+          // }
+
+          StateHasChanged();
+          _ = ScrollToBottom();
+      });
+    }
+
+    private async Task NotifyTyping()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage))
+        {
+            await ChatService.SendTypingStatus(UserId, ReceiverId, false);
+            return;
+        }
+
+        await ChatService.SendTypingStatus(UserId, ReceiverId, true);
+
+        typingTimer?.Dispose();
+        typingTimer = new Timer(async _ =>
+        {
+            await ChatService.SendTypingStatus(UserId, ReceiverId, false);
+        }, null, TypingTimeout, Timeout.Infinite);
+    }
+
+    private void HandleTypingStatus(int senderId, int receiverId, bool isTyping)
+    {
+
+        isOtherUserTyping = isTyping;
+        InvokeAsync(StateHasChanged);
+
+    }
+    private void HandleUserStatusChanged(int userId, bool isOnline, DateTime lastLogin)
+    {
+        var user = users.FirstOrDefault(u => u.Id == userId);
+        if (user != null)
+        {
+            user.IsOnline = isOnline;
+            user.LastLogin = lastLogin;
+            StateHasChanged();
+        }
+    }
+    private int m_currentPage = 1;
+    private int m_pageSize = 15;
+    private bool m_isLoadingMessages = false;
+    private bool isLoadingOlderMessages = false;
+    private bool allMessagesLoaded = false;
+
+    private async Task LoadConversation(int ticketId, bool loadMore = false)
+    {
+        if (m_isLoadingMessages || (loadMore && allMessagesLoaded)) return;
+
+        m_isLoadingMessages = true;
+        isLoadingOlderMessages = loadMore;     // ← simple & correct
+        try
+        {
+            int pageToLoad = loadMore ? m_currentPage + 1 : 1;
+
+            if (!loadMore)
+            {
+                m_currentPage = 1;
+                allMessagesLoaded = false;
+                SelectedTicket.Messages ??= new List<MessageDto>();
+            }
+
+            var url = $"{AppConfig.ChatUrl}TicketMessage/GetConversation/{ticketId}/conversation?page={pageToLoad}&pageSize={m_pageSize}";
+            var conversation = await Http.GetFromJsonAsync<TicketConversationDto>(url);
+            var newMessages = conversation?.Messages ?? new List<MessageDto>();
+
+            // 🔴 NO MORE DATA — FINAL STATE
+            if (!newMessages.Any())
+            {
+                if (loadMore)
+                    allMessagesLoaded = true;
+
+                return;
+            }
+
+            if (loadMore)
+            {
+                // Insert older messages on top
+                SelectedTicket.Messages.InsertRange(0, newMessages);
+                m_currentPage++;
+            }
+            else
+            {
+                SelectedTicket.Messages = newMessages;
+                await ScrollToBottom();
+            }
+
+            // 🔴 LAST PAGE DETECTED
+            if (newMessages.Count < m_pageSize)
+            {
+                allMessagesLoaded = true;
+                isLoadingOlderMessages = false;
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load conversation: {ex.Message}");
+        }
+        finally
+        {
+            m_isLoadingMessages = false;
+            isLoadingOlderMessages = false;     // always reset when done
+        }
+    }
+    [JSInvokable]
+    public async Task LoadMoreMessages()
+    {
+        // if (isLoadingMessages || isLoadingOlderMessages || allMessagesLoaded)
+        //     return;
+        if(allMessagesLoaded)
+        {
+            isLoadingOlderMessages = false;
+        }
+        else
+        {
+            isLoadingOlderMessages = true;
+        }
+            StateHasChanged();
+        await LoadConversation(SelectedTicket.Id, loadMore: true);
+
+        // Keep scroll stable ONLY if more data exists
+        if (!allMessagesLoaded)
+        {
+            await JS.InvokeVoidAsync("maintainScrollPosition", chatWindowRef);
+        }
+    }
+    private string GetStatusClass(TicketStatus? status) => status switch
+    {
+        TicketStatus.Open => "bg-success text-white",
+        TicketStatus.InProgress => "bg-warning text-dark",
+        TicketStatus.Resolved => "bg-primary text-white",
+        TicketStatus.Closed => "bg-dark text-white",
+        TicketStatus.Rejected => "bg-danger text-white",
+        TicketStatus.New => "bg-info text-dark",
+        _ => "bg-secondary text-white"
+    };
+    private string GetPriorityClass(TicketPriority priority)
+    {
+        return priority switch
+        {
+            TicketPriority.Low => "bg-success text-white",
+            TicketPriority.Medium => "bg-warning text-dark",
+            TicketPriority.High => "bg-danger text-white",
+            TicketPriority.Critical => "bg-dark text-white",
+            _ => "bg-secondary"
+        };
+    }
+    private bool _pasteHandlerInitialized = false;
+    private DotNetObjectReference<Inbox>? _dotNetRef; // Chat = your component class
+    private bool _jsInitialized;
+    private bool _isPrerendering = true;
+    private bool _onboardingStarted;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_isPrerendering)
+        {
+            if (JS is IJSInProcessRuntime) // still prerendering
+                return;
+            _isPrerendering = false;
+        }
+
+        if (firstRender && !_jsInitialized)
+        {
+            _dotNetRef ??= DotNetObjectReference.Create(this);
+
+            // Wait for chatInputRef to be ready
+            while (chatInputRef.Context == null)
+            {
+                await Task.Delay(50);
+            }
+
+            await JS.InvokeVoidAsync("enablePasteImage", chatInputRef, _dotNetRef);
+            await JS.InvokeVoidAsync("registerScrollUpEvent", chatWindowRef, _dotNetRef);
+            await JS.InvokeVoidAsync("registerDropZone", chatInputRef, _dotNetRef);
+            await JS.InvokeVoidAsync("initLazyImages", chatWindowRef);
+
+            _jsInitialized = true;
+        }
+
+        // Trigger onboarding only if JS is initialized and session flag is set
+
+
+        if (shouldScroll)
+        {
+            shouldScroll = false;
+            await ScrollToBottom();
+        }
+    }
+
+    private async Task AutoResizeTextArea(ChangeEventArgs e)
+    {
+        if (chatInputRef.Context is not null)
+        {
+            await JS.InvokeVoidAsync("autoResizeTextArea", chatInputRef);
+        }
+    }
+    private async Task ScrollToBottom()
+    {
+        await JS.InvokeVoidAsync("blazorScrollToBottom", chatWindowRef);
+    }
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    [JSInvokable]
+    public void ReceivePastedImage(string base64Image)
+    {
+        attachmentPreview = base64Image;
+        attachmentFile = null; // Cannot get IBrowserFile from clipboard
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public void ReceiveDroppedFile(string base64, string fileName, string fileType)
+    {
+        NewAttachments.Add(new AttachmentItem
+        {
+            Base64 = base64,
+            Name = fileName,
+            Type = fileType
+        });
+
+        InvokeAsync(async () =>
+           {
+               StateHasChanged();
+               await JS.InvokeVoidAsync("initLazyImages", chatWindowRef);
+           });
+    }
+    [JSInvokable]
+    private async Task DownloadAttachment(TicketUploadDto file)
+    {
+        var fileBytes = Convert.FromBase64String(file.Base64Content);
+        var fileName = file.FileName;
+
+        using var memoryStream = new MemoryStream(fileBytes);
+        var streamRef = new DotNetStreamReference(memoryStream);
+
+        try
+        {
+            // Await the JS call so that Blazor finishes sending the stream before disposing
+            await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+        }
+        finally
+        {
+            memoryStream.Dispose(); // Dispose AFTER JS finishes
+        }
+    }
+}

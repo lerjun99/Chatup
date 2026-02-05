@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Remove="Pages\Chat\Chat.razor" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Blazored.LocalStorage" Version="4.5.0" />
+    <PackageReference Include="Blazored.SessionStorage" Version="2.4.0" />
+    <PackageReference Include="Blazored.Toast" Version="4.2.1" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.20" />
+    <PackageReference Include="Microsoft.Fast.Components.FluentUI" Version="3.8.0" />
+    <PackageReference Include="Radzen.Blazor" Version="8.4.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+	  
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChatUp.Application\ChatUp.Application.csproj" />
+    <ProjectReference Include="..\ChatUp.Domain\ChatUp.Domain.csproj" />
+    <ProjectReference Include="..\Shared\Shared.csproj" />
+  </ItemGroup>
+
+
+</Project>

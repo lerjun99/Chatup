@@ -1,0 +1,1091 @@
+﻿@import url('open-iconic/font/css/open-iconic-bootstrap.min.css');
+
+html, body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+h1:focus {
+    outline: none;
+}
+
+a, .btn-link {
+    color: #0071c1;
+}
+
+.btn-primary {
+    color: #fff;
+    background-color: #1b6ec2;
+    border-color: #1861ac;
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+.content {
+    padding-top: 1.1rem;
+}
+
+.valid.modified:not([type=checkbox]) {
+    outline: 1px solid #26b050;
+}
+
+.invalid {
+    outline: 1px solid red;
+}
+
+.validation-message {
+    color: red;
+}
+
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+
+.blazor-error-boundary {
+    background: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTYiIGhlaWdodD0iNDkiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIG92ZXJmbG93PSJoaWRkZW4iPjxkZWZzPjxjbGlwUGF0aCBpZD0iY2xpcDAiPjxyZWN0IHg9IjIzNSIgeT0iNTEiIHdpZHRoPSI1NiIgaGVpZ2h0PSI0OSIvPjwvY2xpcFBhdGg+PC9kZWZzPjxnIGNsaXAtcGF0aD0idXJsKCNjbGlwMCkiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0yMzUgLTUxKSI+PHBhdGggZD0iTTI2My41MDYgNTFDMjY0LjcxNyA1MSAyNjUuODEzIDUxLjQ4MzcgMjY2LjYwNiA1Mi4yNjU4TDI2Ny4wNTIgNTIuNzk4NyAyNjcuNTM5IDUzLjYyODMgMjkwLjE4NSA5Mi4xODMxIDI5MC41NDUgOTIuNzk1IDI5MC42NTYgOTIuOTk2QzI5MC44NzcgOTMuNTEzIDI5MSA5NC4wODE1IDI5MSA5NC42NzgyIDI5MSA5Ny4wNjUxIDI4OS4wMzggOTkgMjg2LjYxNyA5OUwyNDAuMzgzIDk5QzIzNy45NjMgOTkgMjM2IDk3LjA2NTEgMjM2IDk0LjY3ODIgMjM2IDk0LjM3OTkgMjM2LjAzMSA5NC4wODg2IDIzNi4wODkgOTMuODA3MkwyMzYuMzM4IDkzLjAxNjIgMjM2Ljg1OCA5Mi4xMzE0IDI1OS40NzMgNTMuNjI5NCAyNTkuOTYxIDUyLjc5ODUgMjYwLjQwNyA1Mi4yNjU4QzI2MS4yIDUxLjQ4MzcgMjYyLjI5NiA1MSAyNjMuNTA2IDUxWk0yNjMuNTg2IDY2LjAxODNDMjYwLjczNyA2Ni4wMTgzIDI1OS4zMTMgNjcuMTI0NSAyNTkuMzEzIDY5LjMzNyAyNTkuMzEzIDY5LjYxMDIgMjU5LjMzMiA2OS44NjA4IDI1OS4zNzEgNzAuMDg4N0wyNjEuNzk1IDg0LjAxNjEgMjY1LjM4IDg0LjAxNjEgMjY3LjgyMSA2OS43NDc1QzI2Ny44NiA2OS43MzA5IDI2Ny44NzkgNjkuNTg3NyAyNjcuODc5IDY5LjMxNzkgMjY3Ljg3OSA2Ny4xMTgyIDI2Ni40NDggNjYuMDE4MyAyNjMuNTg2IDY2LjAxODNaTTI2My41NzYgODYuMDU0N0MyNjEuMDQ5IDg2LjA1NDcgMjU5Ljc4NiA4Ny4zMDA1IDI1OS43ODYgODkuNzkyMSAyNTkuNzg2IDkyLjI4MzcgMjYxLjA0OSA5My41Mjk1IDI2My41NzYgOTMuNTI5NSAyNjYuMTE2IDkzLjUyOTUgMjY3LjM4NyA5Mi4yODM3IDI2Ny4zODcgODkuNzkyMSAyNjcuMzg3IDg3LjMwMDUgMjY2LjExNiA4Ni4wNTQ3IDI2My41NzYgODYuMDU0N1oiIGZpbGw9IiNGRkU1MDAiIGZpbGwtcnVsZT0iZXZlbm9kZCIvPjwvZz48L3N2Zz4=) no-repeat 1rem/1.8rem, #b32121;
+    padding: 1rem 1rem 1rem 3.7rem;
+    color: white;
+}
+
+    .blazor-error-boundary::after {
+        content: "An error has occurred."
+    }
+
+
+.my-message {
+    text-align: right;
+    background-color: #daf1da;
+    margin: 5px;
+    padding: 5px;
+    border-radius: 5px;
+}
+
+.other-message {
+    text-align: left;
+    background-color: #f1f1f1;
+    margin: 5px;
+    padding: 5px;
+    border-radius: 5px;
+}
+
+.chat-input {
+    display: flex;
+}
+
+    .chat-input input {
+        flex: 1;
+        padding: 5px;
+        margin-right: 5px;
+    }
+
+.timestamp {
+    font-size: 0.7em;
+    color: gray;
+}
+
+ /*login-css*/
+.login-container {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    min-height: 100vh !important;
+    padding: 1rem !important;
+    /*background: linear-gradient(-45deg, #e3f2fd, #bbdefb, #c8e6c9, #fff9c4);*/
+    background-size: 400% 400% !important;
+    animation: gradientBG 12s ease infinite;
+}
+
+@keyframes gradientBG {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.login-box {
+    background: #fff;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+}
+
+h2 {
+    margin-bottom: 0.25rem;
+    font-size: 1.8rem;
+    color: #333;
+}
+
+.subtitle {
+    margin-bottom: 1.5rem;
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.form-group {
+    margin-bottom: 1.2rem;
+    text-align: left;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.6rem;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 0.95rem;
+}
+
+.password-wrapper {
+    position: relative;
+}
+
+.toggle-password {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+}
+
+.options {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.link {
+    color: #007bff;
+    text-decoration: none;
+}
+
+    .link:hover {
+        text-decoration: underline;
+    }
+
+.btn-login {
+    width: 100%;
+    padding: 0.8rem;
+    background: #4cafef;
+    border: none;
+    color: #fff;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 1rem;
+    transition: background 0.3s;
+}
+
+    .btn-login:hover {
+        background: #2196f3;
+    }
+
+.divider {
+    display: flex;
+    align-items: center;
+    margin: 1rem 0;
+    color: #aaa;
+    font-size: 0.85rem;
+}
+
+    .divider::before, .divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: #ddd;
+        margin: 0 0.5rem;
+    }
+
+.social-login {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.btn-social {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    cursor: pointer;
+    transition: transform 0.2s, background 0.3s;
+}
+
+    .btn-social img {
+        width: 22px;
+        height: 22px;
+    }
+
+    .btn-social.google:hover {
+        background: #fce8e6;
+    }
+
+    .btn-social.facebook:hover {
+        background: #e7f0ff;
+    }
+.support {
+    font-size: 0.85rem;
+    color: #555;
+}
+
+    .support a {
+        color: #007bff;
+        text-decoration: none;
+    }
+
+        .support a:hover {
+            text-decoration: underline;
+        }
+
+.error {
+    margin-top: 1rem;
+    color: red;
+    font-size: 0.9rem;
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+    .login-box {
+        padding: 1.5rem;
+        border-radius: 10px;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+}
+
+/*chat*/
+
+/*page*/
+.page {
+    display: grid;
+    grid-template-columns: 220px 1fr; /* Sidebar fixed 220px, main auto */
+    grid-template-rows: 100vh;        /* Full viewport height */
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;                 /* Prevent body scroll */
+}
+
+.sidebar {
+    width: 220px;
+    height: 100vh;
+    position: fixed;                  /* Keep it always visible */
+    top: 0;
+    left: 0;
+    z-index: 1000;
+}
+
+.layout-main {
+    /*margin-left: 220px;*/               /* Push content beside sidebar */
+    /*height: 100vh;
+    display: flex;
+    flex-direction: column;*/
+}
+
+.top-row {
+    flex-shrink: 0;                   /* Header stays fixed */
+    height: 60px;                     /* Fixed header height */
+    background: #f8f9fa;
+    border-bottom: 1px solid #ddd;
+}
+
+.form-scrollable {
+    flex-grow: 1;
+    overflow-y: auto;                 /* Make only body scrollable */
+    padding: 1rem;
+}
+/*------------------------------*/
+/* === Modal Styling === */
+.custom-modal-overlay {
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(3px);
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.custom-modal-content {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    animation: slideUp 0.3s ease-in-out;
+}
+
+/* === Avatar Styling === */
+.client-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* === Dropdown Button Fix: Always Show Selected Text === */
+.user-dropdown button,
+.client-dropdown button {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    min-height: 42px;
+    background-color: #fff !important;
+}
+
+    /* Proper alignment of name and avatar */
+    .user-dropdown button .d-flex,
+    .client-dropdown button .d-flex {
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* Selected text always visible, readable */
+    .user-dropdown button span,
+    .client-dropdown button span {
+        display: inline-block;
+        max-width: 100%;
+        color: #212529;
+        font-weight: 500;
+        white-space: normal;
+        word-break: break-word;
+    }
+
+/* === Dropdown Options === */
+.client-option:hover,
+.client-option.active {
+    background-color: #e9f2ff;
+    border-radius: 0.5rem;
+    cursor: pointer;
+}
+
+/* === Search Input === */
+input.form-control-sm {
+    border-radius: 0.4rem;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* === Scrollbar Styling === */
+.dropdown-menu::-webkit-scrollbar {
+    width: 6px;
+}
+
+.dropdown-menu::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+/* === Animation Effects === */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(15px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+.accordion-button {
+    background-color: #f8f9fa;
+    border-radius: 0.75rem;
+    transition: background-color 0.2s ease-in-out;
+}
+
+    .accordion-button:not(.collapsed) {
+        background-color: #e9f2ff;
+        color: #0d6efd;
+        box-shadow: inset 0 -1px 0 rgba(0,0,0,0.125);
+    }
+
+.accordion-item {
+    border-radius: 1rem !important;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f9fafb !important;
+}
+
+.badge {
+    font-size: 0.8rem;
+}
+.modal 
+{
+    z-index:998 !important;
+}
+.client-dropdown {
+    transition: all 0.2s ease-in-out;
+}
+/*--user registration--*/
+.registration-page {
+    min-height: 100vh;
+    overflow-y: auto;
+    background-color: #f8f9fa;
+}
+.file-upload-box {
+    border: 2px dashed #dee2e6;
+    border-radius: 12px;
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color 0.3s;
+}
+
+    .file-upload-box:hover {
+        border-color: #0d6efd;
+    }
+.registration-container {
+    width: 100%;
+    max-width: 700px;
+}
+.user-register-container {
+    background: linear-gradient(to right, #f5f7fa, #e4ebf5);
+    min-height: 100vh;
+}
+
+.profile-upload {
+    width: 200px;
+    height: 200px;
+    cursor: pointer;
+    position: relative;
+    display: inline-block;
+}
+
+    .profile-upload:hover {
+        transform: scale(1.05);
+    }
+
+.uploaded-thumb {
+    width: 200px; /* fixed width */
+    height: 200px; /* fixed height */
+    object-fit: cover;
+    border-radius: 50%;
+    border: 2px solid #0d6efd;
+}
+
+.edit-overlay {
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    background: rgba(13,110,253,0.8);
+    color: white;
+    text-align: center;
+    font-size: 0.85rem;
+    padding: 4px 0;
+    border-bottom-left-radius: 1rem;
+    border-bottom-right-radius: 1rem;
+    cursor: pointer;
+}
+
+.client-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+/*@media (max-width: 768px) {
+    .registration-container {
+        padding: 20px;
+    }
+
+    .uploaded-thumb {
+        width: 200px;
+        height: 200px;
+    }
+}*/
+.form-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100vh; /* Full viewport height */
+    overflow: hidden; /* Prevent outer scroll */
+    position: relative;
+}
+
+/* Scrollable form */
+.registration-form {
+    flex: 1 1 auto;
+    overflow-y: auto; /* Enable vertical scroll */
+    padding-bottom: 100px; /* Space for fixed buttons */
+}
+
+/* Fixed buttons at the bottom */
+.form-buttons {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width:100% !important;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: flex-start;
+    z-index: 999;
+}
+
+@media (max-width: 575.98px) {
+    .btn-elegant {
+        width: 100%;
+    }
+    .form-buttons {
+        position: fixed;
+        bottom: 70px;
+        left: 0;
+        width: 100% !important;
+        padding: 10px 20px;
+        display: flex;
+        justify-content: flex-start;
+        z-index: 9999;
+    }
+    .form-wrapper {
+        display: flex;
+        flex-direction: column;
+        height: 70vh; /* Full viewport height */
+        overflow: hidden; /* Prevent outer scroll */
+        position: relative;
+    }
+}
+    /* Desktop layout overrides */
+    @media (min-width: 768px) {
+        .registration-form {
+            overflow-y: visible;
+            padding-bottom: 20px;
+        }
+
+        .form-buttons {
+            bottom: 60px;
+            position: static;
+            box-shadow: none;
+            justify-content: flex-end !important;
+        }
+    }
+
+    .btn-elegant {
+        border-radius: 50px; /* rounded edges */
+        font-weight: 500;
+        padding: 0.6rem 1.5rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+        .btn-elegant.btn-primary {
+            background: linear-gradient(135deg, #4e9af1, #3a7bd5);
+            border: none;
+        }
+
+            .btn-elegant.btn-primary:hover {
+                background: linear-gradient(135deg, #3a7bd5, #4e9af1);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            }
+
+        .btn-elegant.btn-danger {
+            background: linear-gradient(135deg, #ff6b6b, #f06595);
+            border: none;
+        }
+
+            .btn-elegant.btn-danger:hover {
+                background: linear-gradient(135deg, #f06595, #ff6b6b);
+                transform: translateY(-2px);
+                box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            }
+
+        .btn-elegant i {
+            vertical-align: middle;
+        }
+.btn-group .btn {
+    border-radius: 6px !important;
+}
+/*table*/
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border: 0.25em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border .75s linear infinite;
+}
+
+@keyframes spinner-border {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.responsive-table-container {
+    overflow-x: auto;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+}
+
+table.user-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+    table.user-table th,
+    table.user-table td {
+        padding: 12px 16px;
+        vertical-align: middle;
+    }
+
+    table.user-table th {
+        background: #f8f9fa;
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        text-transform: uppercase;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+.sticky-actions {
+    position: sticky;
+    right: 0;
+    background: #fff;
+    z-index: 3;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.05);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+
+.loading-section {
+    text-align: center;
+    padding: 40px 0;
+    font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+    .action-buttons {
+        flex-direction: column;
+    }
+}
+.pagination-holder {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.pagination-button-holder {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+    .pagination-button-holder input[type="button"] {
+        border: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+        color: #333;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.9rem;
+        transition: all 0.25s ease-in-out;
+        cursor: pointer;
+        min-width: 38px;
+        text-align: center;
+    }
+
+        .pagination-button-holder input[type="button"]:hover {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+            box-shadow: 0 2px 6px rgba(0, 123, 255, 0.25);
+        }
+
+        .pagination-button-holder input[type="button"].active {
+            background-color: #0d6efd;
+            color: #fff;
+            border-color: #0d6efd;
+            font-weight: 600;
+            box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
+        }
+
+    .pagination-button-holder .btn {
+        border-radius: 8px;
+        padding: 6px 14px;
+        font-size: 0.9rem;
+        transition: all 0.2s ease-in-out;
+    }
+
+        .pagination-button-holder .btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+
+.pagination-holder span {
+    font-size: 0.95rem;
+    color: #555;
+}
+
+@media (max-width: 768px) {
+    .pagination-holder {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+
+    .pagination-button-holder {
+        justify-content: center;
+    }
+
+        .pagination-button-holder input[type="button"],
+        .pagination-button-holder .btn {
+            font-size: 0.85rem;
+            padding: 5px 10px;
+        }
+}
+
+/*top action bar*/
+.toolbar-container {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+/* 🔹 Search box */
+.search-box {
+    width: 250px;
+    transition: width 0.3s ease;
+}
+
+/* 🔹 Buttons - clean and elegant */
+.action-btn, .register-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 8px;
+    padding: 6px 14px;
+    transition: all 0.2s ease-in-out;
+    font-weight: 500;
+}
+
+    .action-btn:hover:not(:disabled),
+    .register-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+
+/* 🔹 Mobile Responsive Styles */
+@media (max-width: 768px) {
+    .toolbar-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .action-toolbar {
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+    }
+
+    .search-box {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+
+    .btn-text {
+        display: none;
+    }
+
+    .action-btn, .register-btn {
+        flex: 1 1 45px;
+        min-width: 45px;
+        height: 42px;
+        border-radius: 10px;
+        padding: 0;
+        font-size: 1.2rem;
+    }
+
+        .action-btn i, .register-btn i {
+            font-size: 1.25rem;
+        }
+
+    .register-btn {
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+}
+
+/* 🔹 Optional: subtle hover glow */
+@media (hover: hover) {
+    .action-btn:hover:not(:disabled),
+    .register-btn:hover:not(:disabled) {
+        filter: brightness(1.05);
+    }
+}
+.table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    background-color: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+/* 🔹 Scrollable area for the table */
+.scrollable-table {
+    max-height: 65vh; /* adjustable height for scroll area */
+    overflow-y: auto;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #ccc transparent;
+}
+
+/* 🔹 Pagination should stay visible */
+.pagination-holder {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    background: #f9f9f9;
+    padding: 10px 15px;
+    border-top: 1px solid #ddd;
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+}
+
+/* 🔹 Pagination button style */
+.pagination-button-holder input[type="button"],
+.pagination-button-holder button {
+    border: none;
+    background: #e9ecef;
+    color: #333;
+    padding: 6px 12px;
+    margin: 0 2px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.pagination-button-holder input.active {
+    background: #007bff;
+    color: #fff;
+}
+
+.pagination-button-holder input:hover:not(.active),
+.pagination-button-holder button:hover:not(:disabled) {
+    background: #d0d7dd;
+}
+.btn
+{
+
+}
+/* 🔹 Scroll behavior for mobile */
+@media (max-width: 768px) {
+    .scrollable-table {
+        max-height: 25vh;
+        overflow-x: auto;
+        overflow-y: auto;
+        padding-bottom: 1rem;
+    }
+
+    .user-table {
+        font-size: 0.85rem;
+        min-width: 750px; /* ensure table scrolls horizontally */
+    }
+
+    .pagination-holder {
+        flex-direction: column;
+        text-align: center;
+        gap: 8px;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+}
+.solid-btn {
+    border: none !important;
+    font-weight: 500;
+    transition: all 0.3s ease-in-out;
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+}
+
+    /* 🌟 Glowing Hover Effect */
+    .solid-btn:hover, .solid-btn-glow:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0 12px rgba(0, 123, 255, 0.45);
+        opacity: 0.95;
+    }
+
+/* Add special glow per color type */
+.btn-primary:hover {
+    box-shadow: 0 0 15px rgba(13, 110, 253, 0.6);
+}
+
+.btn-success:hover {
+    box-shadow: 0 0 15px rgba(25, 135, 84, 0.6);
+}
+
+.btn-secondary:hover {
+    box-shadow: 0 0 15px rgba(108, 117, 125, 0.5);
+}
+
+.btn-danger:hover {
+    box-shadow: 0 0 15px rgba(220, 53, 69, 0.6);
+}
+
+.btn-info:hover {
+    box-shadow: 0 0 15px rgba(13, 202, 240, 0.6);
+}
+
+/* Glowing animation pulse for icon buttons (edit/delete, pagination) */
+.solid-btn-glow {
+    transition: all 0.25s ease-in-out;
+}
+
+    .solid-btn-glow:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(3px);
+        box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+        transform: scale(1.05);
+    }
+
+/* Search box width responsive */
+.search-box {
+    width: 250px;
+}
+
+@media (max-width: 768px) {
+    .search-box {
+        width: 100%;
+    }
+
+    /* Convert buttons to icons only on mobile */
+    .solid-btn span {
+        display: none !important;
+    }
+
+    .toolbar-container {
+        flex-direction: column;
+        align-items: stretch !important;
+    }
+
+        .toolbar-container button {
+            flex: 1;
+            justify-content: center;
+        }
+
+    .custom-scroll {
+        max-height: 60vh;
+    }
+}
+/*
+ticketlist*/
+/* ✅ Responsive container */
+.ticket-container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 1rem;
+}
+
+/* ✅ Ensure text wraps properly */
+.ticket-info div {
+    word-wrap: break-word;
+    margin-bottom: 0.4rem;
+}
+
+/* ✅ Buttons full width on mobile */
+@media (max-width: 768px) {
+    .ticket-container {
+        overflow-y: auto;
+        max-height: 85vh; /* Limit height on mobile and make scrollable */
+        padding: 1rem;
+    }
+
+    .ticket-card {
+        padding: 1rem !important;
+        border-radius: 0.75rem;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+        font-size: 0.875rem;
+        min-width: 600px; /* Prevent table from shrinking too much */
+    }
+
+    textarea.form-control {
+        width: 100%;
+    }
+
+    h3, h5 {
+        font-size: 1.1rem;
+    }
+
+    .btn {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+}
+
+/* ✅ Table scrollable on mobile */
+.table-responsive {
+    overflow-x: auto;
+}
+
+/* ✅ Prevent textarea resizing */
+textarea {
+    resize: none !important;
+}
+
+/* ✅ Slight hover glow for buttons */
+.btn:hover {
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
+    transition: box-shadow 0.2s ease-in-out;
+}

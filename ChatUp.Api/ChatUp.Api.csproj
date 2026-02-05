@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" Version="8.1.4" />
+	  <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.18">
+		  <PrivateAssets>all</PrivateAssets>
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+	  </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ChatUp.Application\ChatUp.Application.csproj" />
+    <ProjectReference Include="..\ChatUp.Domain\ChatUp.Domain.csproj" />
+    <ProjectReference Include="..\ChatUp.Infrastructure\ChatUp.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,293 @@
+﻿@page "/"
+@page "/login"
+@layout LoginLayout
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@using ChatUp.Application.Auth.DTOs
+@using ChatUp.Domain.Entities
+@using Newtonsoft.Json
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject UserState UserState
+@inject ChatUp.Services.LinkService LinkService
+@inject IJSRuntime JS
+
+<EditForm Model="loginModel" OnValidSubmit="HandleLogin">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="login-container">
+        
+        <div class="login-box">
+            <h2 style=" color: black;">Welcome Back 👋</h2>
+            <p class="subtitle">Please sign in to continue</p>
+
+            <div class="form-group">
+                <label>Username</label>
+                <InputText @bind-Value="loginModel.Username" class="form-control" />
+                <ValidationMessage For="@(() => loginModel.Username)" />
+            </div>
+
+            <div class="form-group password-group">
+                <label>Password</label>
+                <div class="password-wrapper">
+                    <InputText @bind-Value="loginModel.Password" type="@passwordInputType" class="form-control" />
+                    <button type="button" class="toggle-password" @onclick="TogglePassword">
+                        @(passwordInputType == "password" ? "👁️" : "🙈")
+                    </button>
+                </div>
+                <ValidationMessage For="@(() => loginModel.Password)" />
+            </div>
+
+            <div class="options">
+                <label style="color: black;">
+                    <input type="checkbox" @bind="rememberMe" />
+                    Remember Me
+                </label>
+                <NavLink href="#"
+                         class="link"
+                         Match="NavLinkMatch.Prefix" @onclick="NavigateToforgotpassword">
+                    <i class="fa-solid fa-unlock-keyhole"></i>
+                    <span style="color:black !important">Forgot Password?</span>
+                </NavLink>
+            </div>
+
+            <button type="submit" class="btn-login" disabled="@isLoading">
+                @if (isLoading)
+                {
+            
+                    <span>Logging in...</span>
+                }
+                else
+                {
+                    <span>Log In</span>
+                }
+            </button>
+
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="error-box">
+         
+                    <p>@errorMessage</p>
+                </div>
+            }
+        </div>
+    </div>
+    @* Global loading overlay *@
+    @if (isLoading)
+    {
+        <div class="loading-overlay">
+            <img src="/images/login.gif" class="overlay-gif" />
+      
+        </div>
+    }
+</EditForm>
+
+@code {
+    private bool isLoading = false;
+    private LoginModel loginModel = new();
+    private string? errorMessage;
+    private bool rememberMe = false;
+    private string passwordInputType = "password";
+    private bool _restored = false;
+
+    @inject NavigationManager Nav
+    public class LoginModel
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+    [Parameter] public EventCallback OnNavigate { get; set; }
+    /* -------- nav helpers -------- */
+    private void Navigate(string url)
+    {
+        Nav.NavigateTo(url, forceLoad: false);
+        if (OnNavigate.HasDelegate)
+            OnNavigate.InvokeAsync();
+    }
+    private void NavigateToforgotpassword()
+    {
+        Navigate($"/verify-email");
+    }
+    private void TogglePassword()
+    {
+        passwordInputType = passwordInputType == "password" ? "text" : "password";
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_restored)
+        {
+            _restored = true;
+            await TryRestoreSession();
+           
+        }
+    }
+    private async Task RestoreSession(object storage)
+    {
+        string? encryptedId = null;
+        string? encryptedType = null;
+        string? encryptedUsername = null;
+         string? encryptedClientId = null;
+        var currentUrl = Navigation.Uri.ToLower();
+        if (currentUrl.Contains("/login") || currentUrl.Contains("/change-password"))
+            return;
+        if (storage is Blazored.SessionStorage.ISessionStorageService session)
+        {
+            encryptedId = await session.GetItemAsync<string>("UserId");
+            encryptedType = await session.GetItemAsync<string>("UserType");
+            encryptedUsername = await session.GetItemAsync<string>("Username");
+            encryptedClientId = await session.GetItemAsync<string>("ClientId");
+        }
+        else if (storage is Blazored.LocalStorage.ILocalStorageService local)
+        {
+            encryptedId = await local.GetItemAsync<string>("UserId");
+            encryptedType = await local.GetItemAsync<string>("UserType");
+            encryptedUsername = await local.GetItemAsync<string>("Username");
+              encryptedClientId = await local.GetItemAsync<string>("ClientId");
+        }
+
+        if (!string.IsNullOrEmpty(encryptedId))
+        {
+            // 🔓 Decrypt the stored values
+            var decryptedId = int.Parse(LinkService.Unprotect(Uri.UnescapeDataString(encryptedId)));
+            var decryptedType = int.Parse(LinkService.Unprotect(Uri.UnescapeDataString(encryptedType ?? "0")));
+            var decryptedUsername = LinkService.Unprotect(Uri.UnescapeDataString(encryptedUsername ?? string.Empty));
+
+            UserState.UserId = decryptedId;
+            UserState.UserType = decryptedType;
+            UserState.Username = decryptedUsername;
+              if (!string.IsNullOrEmpty(encryptedClientId))   // 🔵 NEW
+            {
+                UserState.ClientId = int.Parse(LinkService.Unprotect(Uri.UnescapeDataString(encryptedClientId)));
+            }
+            var token = int.Parse(LinkService.Unprotect(Uri.UnescapeDataString(encryptedId)));
+            var encodedToken = Uri.EscapeDataString(token.ToString());
+            if (!currentUrl.Contains("/dashboard"))
+            {
+                Navigation.NavigateTo($"/dashboard/{encryptedId}", true);
+            }
+        }
+    }
+
+    private async Task TryRestoreSession()
+    {
+        try
+        {
+            var sessionUser = await SessionStorage.GetItemAsync<string>("UserId");
+            var localUser = await LocalStorage.GetItemAsync<string>("UserId");
+
+            if (!string.IsNullOrEmpty(sessionUser))
+                await RestoreSession(SessionStorage);
+            else if (!string.IsNullOrEmpty(localUser))
+                await RestoreSession(LocalStorage);
+        }
+        catch
+        {
+            // Ignore JS not ready during prerender
+        }
+    }
+    private async Task HandleLogin()
+    {
+        isLoading = true;
+        errorMessage = null;
+        StateHasChanged();
+        try
+        {
+            await Task.Delay(1500);
+            var url = AppConfig.ChatUrl + "Auth/Login/login";
+            var response = await Http.PostAsJsonAsync(url, loginModel);
+
+            var content = await response.Content.ReadAsStringAsync();
+
+            // Try to deserialize the BaseResult-style response
+            var result = JsonConvert.DeserializeObject<BaseResult>(content);
+
+            if (response.IsSuccessStatusCode && result != null && result.MsgCode != "Error")
+            {
+                // ✅ Successful login (if your API also sends token in success case)
+                var loginResponse = JsonConvert.DeserializeObject<AuthResponseDto<LoginResponseDto>>(content);
+
+                if (loginResponse?.Data != null)
+                {
+                    var token = LinkService.Protect(loginResponse.Data.Id.ToString()); // 🔐 Encrypt "new" as identifier
+                    var encodedToken = Uri.EscapeDataString(token);
+                    if(loginResponse.BaseResult.firstLogin == true)
+                    {
+                        SessionStorage.SetItemAsync("runInboxIntro", "true");
+                        Navigation.NavigateTo($"/change-password/{encodedToken}", true);
+                    }
+                    else
+                    {
+                        token = loginResponse.Data.Token;
+                        var username = loginResponse.Data.Username;
+                        UserState.UserId = loginResponse.Data.Id;
+                        UserState.Username = loginResponse.Data.Username;
+                        UserState.UserType = loginResponse.Data.UserType;
+                        UserState.AvatarUrl = loginResponse.Data.AvatarUrl;
+                        UserState.ClientId = loginResponse.Data.ClientId;
+
+                        var encId = Uri.EscapeDataString(LinkService.Protect(loginResponse.Data.Id.ToString()));
+                        var encType = Uri.EscapeDataString(LinkService.Protect(loginResponse.Data.UserType.ToString()));
+                        var encUsername = Uri.EscapeDataString(LinkService.Protect(loginResponse.Data.Username));
+                        var encToken = Uri.EscapeDataString(LinkService.Protect(loginResponse.Data.Token));
+                        var encAvatar = Uri.EscapeDataString(LinkService.Protect(loginResponse.Data.AvatarUrl));                    
+                        var encClientId = Uri.EscapeDataString(LinkService.Protect(loginResponse.Data.ClientId.ToString()));
+
+                        if (rememberMe)
+                        {
+                            await LocalStorage.SetItemAsync("UserId", encId);
+                            await LocalStorage.SetItemAsync("Username", encUsername);
+                            await LocalStorage.SetItemAsync("UserType", encType);
+                            await LocalStorage.SetItemAsync("AuthToken", encToken);
+                            await LocalStorage.SetItemAsync("AvatarUrl", encAvatar);
+                            await LocalStorage.SetItemAsync("ClientId", encClientId); 
+                        }
+                        else
+                        {
+                            await SessionStorage.SetItemAsync("UserId", encId);
+                            await SessionStorage.SetItemAsync("Username", encUsername);
+                            await SessionStorage.SetItemAsync("UserType", encType);
+                            await SessionStorage.SetItemAsync("AuthToken", encToken);
+                            await SessionStorage.SetItemAsync("AvatarUrl", encAvatar);
+                            await SessionStorage.SetItemAsync("ClientId", encClientId);
+                        }
+                        var user = new UserAccount
+                        {
+                            Id = loginResponse.Data.Id,
+                            Username = loginResponse.Data.Username,
+                            UserType = loginResponse.Data.UserType
+                        };
+                        if (UserState.UserType == 5)
+                        {
+                            Navigation.NavigateTo($"/applicants");
+                        }
+                        else
+                        {
+                            Navigation.NavigateTo($"/dashboard/{encodedToken}");
+                        }
+                      
+                    }
+                   
+                }
+                else
+                {
+                    errorMessage = result?.Msg ?? "Login failed. Please try again.";
+                }
+            }
+            else
+            {
+                // ⚠️ Error message returned from API
+                errorMessage = result?.Msg ?? "Invalid credentials. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Unexpected error: {ex.Message}";
+        }
+        isLoading = false;
+        StateHasChanged();
+    }
+    
+  
+}

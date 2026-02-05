@@ -1,0 +1,66 @@
+﻿@page "/session-expired"
+@inject NavigationManager Navigation
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<div class="expired-page">
+    <div class="expired-card">
+        <div class="icon-wrapper mb-3">
+            <i class="bi bi-exclamation-triangle text-warning display-4"></i>
+        </div>
+        <h2 class="fw-bold text-danger mb-2">Session Expired</h2>
+        <p class="text-muted mb-4">
+            Your session has expired or is no longer valid.
+            Please log in again to continue.
+        </p>
+
+        <button class="btn btn-primary w-100" style="
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
+" @onclick="GoToLogin">
+            Return to Login
+        </button>
+    </div>
+</div>
+
+@code {
+    private bool _checkedSession;
+
+    private void GoToLogin()
+    {
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // 🔒 Only run once after the first render (when JS interop is available)
+        if (!firstRender || _checkedSession)
+            return;
+
+        _checkedSession = true;
+
+        try
+        {
+            var userId = await SessionStorage.GetItemAsync<string>("UserId");
+            var token = await LocalStorage.GetItemAsync<string>("AuthToken");
+
+            if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(token))
+            {
+                // ✅ User already logged in — go back to dashboard
+                Navigation.NavigateTo("/", forceLoad: true);
+            }
+            else
+            {
+                // ⏳ Wait 5s before auto-redirecting to login
+                await Task.Delay(5000);
+                Navigation.NavigateTo("/login", forceLoad: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[SessionExpired Error] {ex.Message}");
+            // Fallback: redirect to login
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+    }
+}

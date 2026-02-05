@@ -1,0 +1,956 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\DEVELOPMENT\\chatup\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\projects\\handlers\\createuserprojectassignmenthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\projects\\handlers\\createuserprojectassignmenthandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\pages\\chat\\inbox.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\pages\\chat\\inbox.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\wwwroot\\css\\site.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\wwwroot\\css\\site.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\wwwroot\\js\\chat.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\wwwroot\\js\\chat.js||{14D17961-FE51-464D-9111-C4AF11D7D99A}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\wwwroot\\css\\ticket-chat.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\wwwroot\\css\\ticket-chat.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\dtos\\ticketuploaddto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\dtos\\ticketuploaddto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\dtos\\messagedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\dtos\\messagedto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\services\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\services\\emailservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\services\\ticketnotificationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\services\\ticketnotificationservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\userregistration\\handlers\\createuserhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\userregistration\\handlers\\createuserhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\pages\\ticket\\ticket.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\pages\\ticket\\ticket.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D76CB9E0-2E00-4F85-9926-FAC1C8D4F2D0}|ChatUp.Infrastructure\\ChatUp.Infrastructure.csproj|c:\\development\\chatup\\chatup.infrastructure\\persistence\\repositories\\ticketrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D76CB9E0-2E00-4F85-9926-FAC1C8D4F2D0}|ChatUp.Infrastructure\\ChatUp.Infrastructure.csproj|solutionrelative:chatup.infrastructure\\persistence\\repositories\\ticketrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticket\\handler\\getticketbyidhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticket\\handler\\getticketbyidhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\wwwroot\\css\\dashboard.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\wwwroot\\css\\dashboard.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\pages\\dashboard\\dashboard.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\pages\\dashboard\\dashboard.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\wwwroot\\css\\otp.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\wwwroot\\css\\otp.css||{A5401142-F49D-43DB-90B1-F57BA349E55C}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticket\\handler\\updateticketstatushandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticket\\handler\\updateticketstatushandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|c:\\development\\chatup\\chatup.api\\controllers\\ticketscontroller .cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|solutionrelative:chatup.api\\controllers\\ticketscontroller .cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticket\\handler\\updatetickethandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticket\\handler\\updatetickethandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticket\\dtos\\ticketdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticket\\dtos\\ticketdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\pages\\user\\assignments.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\pages\\user\\assignments.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\userregistration\\handlers\\changepasswordhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\userregistration\\handlers\\changepasswordhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\services\\userservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\services\\userservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\app\\chatup\\appconfig.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\properties\\launchsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\pages\\ticket\\login\\login.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\pages\\ticket\\login\\login.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\shared\\navmenu.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\shared\\navmenu.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\shared\\minimallayout.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\shared\\minimallayout.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\pages\\user\\changepassword.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\pages\\user\\changepassword.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\user\\dtos\\userclientdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\user\\dtos\\userclientdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\user\\handlers\\getuserclientassignmentbyidhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\user\\handlers\\getuserclientassignmentbyidhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|c:\\development\\chatup\\chatup.api\\controllers\\projectscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|solutionrelative:chatup.api\\controllers\\projectscontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|c:\\development\\chatup\\chatup.api\\controllers\\clientcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|solutionrelative:chatup.api\\controllers\\clientcontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|c:\\development\\chatup\\chatup.api\\controllers\\usercontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{43EA45DB-834C-4ED7-89EA-2BA200623060}|ChatUp.Api\\ChatUp.Api.csproj|solutionrelative:chatup.api\\controllers\\usercontroller.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\user\\handlers\\getclientusersqueryhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\user\\handlers\\getclientusersqueryhandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\shared\\sessionexpiredmodal.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\shared\\sessionexpiredmodal.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\common\\interfaces\\iuserrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\common\\interfaces\\iuserrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D76CB9E0-2E00-4F85-9926-FAC1C8D4F2D0}|ChatUp.Infrastructure\\ChatUp.Infrastructure.csproj|c:\\development\\chatup\\chatup.infrastructure\\persistence\\repositories\\userrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D76CB9E0-2E00-4F85-9926-FAC1C8D4F2D0}|ChatUp.Infrastructure\\ChatUp.Infrastructure.csproj|solutionrelative:chatup.infrastructure\\persistence\\repositories\\userrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\user\\queries\\getclientusersquery.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\user\\queries\\getclientusersquery.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7C303719-6E1F-438C-9E5D-5202F92E73CA}|ChatUp.Domain\\ChatUp.Domain.csproj|c:\\development\\chatup\\chatup.domain\\entities\\useraccount.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7C303719-6E1F-438C-9E5D-5202F92E73CA}|ChatUp.Domain\\ChatUp.Domain.csproj|solutionrelative:chatup.domain\\entities\\useraccount.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\services\\projectassignmentservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\services\\projectassignmentservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\services\\contractexpirybackgroundservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\services\\contractexpirybackgroundservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticket\\handler\\createtickethandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticket\\handler\\createtickethandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{D76CB9E0-2E00-4F85-9926-FAC1C8D4F2D0}|ChatUp.Infrastructure\\ChatUp.Infrastructure.csproj|c:\\development\\chatup\\chatup.infrastructure\\persistence\\repositories\\projectrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{D76CB9E0-2E00-4F85-9926-FAC1C8D4F2D0}|ChatUp.Infrastructure\\ChatUp.Infrastructure.csproj|solutionrelative:chatup.infrastructure\\persistence\\repositories\\projectrepository.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\commands\\createticketcommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\commands\\createticketcommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticket\\commands\\createticketcommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticket\\commands\\createticketcommand.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\pages\\chat\\chat.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\pages\\chat\\chat.razor||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\handlers\\uploadticketfilehandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\handlers\\uploadticketfilehandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\handlers\\getticketshandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\handlers\\getticketshandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\handlers\\createtickethandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\handlers\\createtickethandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\handlers\\addticketmessagehandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\handlers\\addticketmessagehandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\handlers\\getticketuploadshandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\handlers\\getticketuploadshandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticketmessage\\dtos\\ticketdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticketmessage\\dtos\\ticketdto.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|c:\\development\\chatup\\chatup\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{AEA0AF23-DDB1-4C04-9BE8-EC4A85A05B3B}|ChatUp\\ChatUp.csproj|solutionrelative:chatup\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|c:\\development\\chatup\\chatup.application\\features\\ticket\\handler\\getticketshandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{415BF34D-F2E3-4EEA-9871-9EBB76392F5C}|ChatUp.Application\\ChatUp.Application.csproj|solutionrelative:chatup.application\\features\\ticket\\handler\\getticketshandler.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 12,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:131:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:133:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:132:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:134:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Inbox.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Chat\\Inbox.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Pages\\Chat\\Inbox.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Chat\\Inbox.razor",
+              "RelativeToolTip": "ChatUp\\Pages\\Chat\\Inbox.razor",
+              "ViewState": "AgIAAEcBAAAAAAAAAAAcwFABAAArAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-17T09:41:43.672Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "MessageDto.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\DTOs\\MessageDto.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\DTOs\\MessageDto.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\DTOs\\MessageDto.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\DTOs\\MessageDto.cs",
+              "ViewState": "AgIAAA4AAAAAAAAAAAAkwBQAAAAwAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-17T09:00:17.335Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "EmailService.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\EmailService.cs",
+              "RelativeDocumentMoniker": "ChatUp\\Services\\EmailService.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\EmailService.cs",
+              "RelativeToolTip": "ChatUp\\Services\\EmailService.cs",
+              "ViewState": "AgIAAAoAAAAAAAAAAAAiwB4AAAAgAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T07:43:34.657Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "TicketRepository.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Infrastructure\\Persistence\\Repositories\\TicketRepository.cs",
+              "RelativeDocumentMoniker": "ChatUp.Infrastructure\\Persistence\\Repositories\\TicketRepository.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Infrastructure\\Persistence\\Repositories\\TicketRepository.cs",
+              "RelativeToolTip": "ChatUp.Infrastructure\\Persistence\\Repositories\\TicketRepository.cs",
+              "ViewState": "AgIAACQAAAAAAAAAAAAvwCwAAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T06:43:07.469Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 17,
+              "Title": "TicketsController .cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\TicketsController .cs",
+              "RelativeDocumentMoniker": "ChatUp.Api\\Controllers\\TicketsController .cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\TicketsController .cs",
+              "RelativeToolTip": "ChatUp.Api\\Controllers\\TicketsController .cs",
+              "ViewState": "AgIAACAAAAAAAAAAAAAiwCsAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T08:34:52.162Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "site.css",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\site.css",
+              "RelativeDocumentMoniker": "ChatUp\\wwwroot\\css\\site.css",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\site.css",
+              "RelativeToolTip": "ChatUp\\wwwroot\\css\\site.css",
+              "ViewState": "AgIAAK4HAAAAAAAAAAAAALwHAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-12-09T09:40:52.365Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "CreateUserProjectAssignmentHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Projects\\Handlers\\CreateUserProjectAssignmentHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Projects\\Handlers\\CreateUserProjectAssignmentHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Projects\\Handlers\\CreateUserProjectAssignmentHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Projects\\Handlers\\CreateUserProjectAssignmentHandler.cs",
+              "ViewState": "AgIAAA4AAAAAAAAAAIA+wBoAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T06:45:32.874Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "chat.js",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\js\\chat.js",
+              "RelativeDocumentMoniker": "ChatUp\\wwwroot\\js\\chat.js",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\js\\chat.js",
+              "RelativeToolTip": "ChatUp\\wwwroot\\js\\chat.js",
+              "ViewState": "AgIAAAABAAAAAAAAAAAAAA4BAAAZAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001646|",
+              "WhenOpened": "2025-12-17T10:09:15.919Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "ticket-chat.css",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\ticket-chat.css",
+              "RelativeDocumentMoniker": "ChatUp\\wwwroot\\css\\ticket-chat.css",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\ticket-chat.css",
+              "RelativeToolTip": "ChatUp\\wwwroot\\css\\ticket-chat.css",
+              "ViewState": "AgIAAJsDAAAAAAAAAAAAAKsDAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-12-16T05:16:56.827Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "TicketUploadDto.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketUploadDto.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketUploadDto.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketUploadDto.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketUploadDto.cs",
+              "ViewState": "AgIAAAoAAAAAAAAAAAAkwBAAAAAmAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-17T09:38:30.968Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "Ticket.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Ticket\\Ticket.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Pages\\Ticket\\Ticket.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Ticket\\Ticket.razor",
+              "RelativeToolTip": "ChatUp\\Pages\\Ticket\\Ticket.razor",
+              "ViewState": "AgIAALoAAAAAAAAAAAAAAIEBAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-09T07:36:35.1Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "TicketNotificationService.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\TicketNotificationService.cs",
+              "RelativeDocumentMoniker": "ChatUp\\Services\\TicketNotificationService.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\TicketNotificationService.cs",
+              "RelativeToolTip": "ChatUp\\Services\\TicketNotificationService.cs",
+              "ViewState": "AgIAAA0AAAAAAAAAAAAcwBkAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T07:44:58.948Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "dashboard.css",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\dashboard.css",
+              "RelativeDocumentMoniker": "ChatUp\\wwwroot\\css\\dashboard.css",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\dashboard.css",
+              "RelativeToolTip": "ChatUp\\wwwroot\\css\\dashboard.css",
+              "ViewState": "AgIAAKgAAAAAAAAAAAAcwMEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-12-16T09:24:24.852Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "Dashboard.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Dashboard\\Dashboard.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Pages\\Dashboard\\Dashboard.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Dashboard\\Dashboard.razor",
+              "RelativeToolTip": "ChatUp\\Pages\\Dashboard\\Dashboard.razor",
+              "ViewState": "AgIAAA8AAAAAAAAAAAAAAA8AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-16T09:26:17.597Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "CreateUserHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\UserRegistration\\Handlers\\CreateUserHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\UserRegistration\\Handlers\\CreateUserHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\UserRegistration\\Handlers\\CreateUserHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\UserRegistration\\Handlers\\CreateUserHandler.cs",
+              "ViewState": "AgIAABMAAAAAAAAAAAAQwCAAAAAQAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-17T07:04:32.262Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "GetTicketByIdHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketByIdHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketByIdHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketByIdHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketByIdHandler.cs",
+              "ViewState": "AgIAAAkAAAAAAAAAAAAIwBEAAAAHAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T06:52:14.084Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "otp.css",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\otp.css",
+              "RelativeDocumentMoniker": "ChatUp\\wwwroot\\css\\otp.css",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\wwwroot\\css\\otp.css",
+              "RelativeToolTip": "ChatUp\\wwwroot\\css\\otp.css",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003000|",
+              "WhenOpened": "2025-12-16T09:30:12.394Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "UpdateTicketStatusHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketStatusHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketStatusHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketStatusHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketStatusHandler.cs",
+              "ViewState": "AgIAADUAAAAAAAAAAAAiwEAAAAAPAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-12T08:37:04.251Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 18,
+              "Title": "UpdateTicketHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Ticket\\Handler\\UpdateTicketHandler.cs",
+              "ViewState": "AgIAAC0AAAAAAAAAAAAYwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-12T08:49:49.465Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 19,
+              "Title": "TicketDto.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\DTOs\\TicketDto.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Ticket\\DTOs\\TicketDto.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\DTOs\\TicketDto.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Ticket\\DTOs\\TicketDto.cs",
+              "ViewState": "AgIAAAgAAAAAAAAAAAAwwBUAAAAQAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T07:58:03.487Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 20,
+              "Title": "Assignments.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\User\\Assignments.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Pages\\User\\Assignments.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\User\\Assignments.razor",
+              "RelativeToolTip": "ChatUp\\Pages\\User\\Assignments.razor",
+              "ViewState": "AgIAAGQCAAAAAAAAAAAiwGYCAAAhAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-09T06:34:14.146Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 27,
+              "Title": "MinimalLayout.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Shared\\MinimalLayout.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Shared\\MinimalLayout.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Shared\\MinimalLayout.razor",
+              "RelativeToolTip": "ChatUp\\Shared\\MinimalLayout.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-12T07:15:49.619Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 23,
+              "Title": "appconfig.json",
+              "DocumentMoniker": "C:\\app\\chatup\\appconfig.json",
+              "RelativeDocumentMoniker": "..\\..\\app\\chatup\\appconfig.json",
+              "ToolTip": "C:\\app\\chatup\\appconfig.json",
+              "RelativeToolTip": "..\\..\\app\\chatup\\appconfig.json",
+              "ViewState": "AgIAAAkAAAAAAAAAAAAAABMAAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-12-12T07:30:18.813Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 21,
+              "Title": "ChangePasswordHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\UserRegistration\\Handlers\\ChangePasswordHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\UserRegistration\\Handlers\\ChangePasswordHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\UserRegistration\\Handlers\\ChangePasswordHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\UserRegistration\\Handlers\\ChangePasswordHandler.cs",
+              "ViewState": "AgIAAA8AAAAAAAAAAAAswCAAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-12T07:03:40.579Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 22,
+              "Title": "UserService.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\UserService.cs",
+              "RelativeDocumentMoniker": "ChatUp\\Services\\UserService.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\UserService.cs",
+              "RelativeToolTip": "ChatUp\\Services\\UserService.cs",
+              "ViewState": "AgIAAC8AAAAAAAAAAAAiwDoAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-12T07:03:40.478Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 28,
+              "Title": "ChangePassword.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\User\\ChangePassword.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Pages\\User\\ChangePassword.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\User\\ChangePassword.razor",
+              "RelativeToolTip": "ChatUp\\Pages\\User\\ChangePassword.razor",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAXAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-12T07:13:17.081Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 24,
+              "Title": "launchSettings.json",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Properties\\launchSettings.json",
+              "RelativeDocumentMoniker": "ChatUp\\Properties\\launchSettings.json",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Properties\\launchSettings.json",
+              "RelativeToolTip": "ChatUp\\Properties\\launchSettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-12-12T07:32:42.281Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 26,
+              "Title": "NavMenu.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Shared\\NavMenu.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Shared\\NavMenu.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Shared\\NavMenu.razor",
+              "RelativeToolTip": "ChatUp\\Shared\\NavMenu.razor",
+              "ViewState": "AgIAADQAAAAAAAAAAAAAAD8AAAAxAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-12T07:11:05.728Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 25,
+              "Title": "Login.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Ticket\\LogIn\\Login.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Pages\\Ticket\\LogIn\\Login.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Ticket\\LogIn\\Login.razor",
+              "RelativeToolTip": "ChatUp\\Pages\\Ticket\\LogIn\\Login.razor",
+              "ViewState": "AgIAACEAAAAAAAAAAAAAADIAAAASAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-12T07:09:48.57Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 30,
+              "Title": "GetUserClientAssignmentByIdHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\Handlers\\GetUserClientAssignmentByIdHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\User\\Handlers\\GetUserClientAssignmentByIdHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\Handlers\\GetUserClientAssignmentByIdHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\User\\Handlers\\GetUserClientAssignmentByIdHandler.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T16:27:06.38Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 31,
+              "Title": "ProjectsController.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\ProjectsController.cs",
+              "RelativeDocumentMoniker": "ChatUp.Api\\Controllers\\ProjectsController.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\ProjectsController.cs",
+              "RelativeToolTip": "ChatUp.Api\\Controllers\\ProjectsController.cs",
+              "ViewState": "AgIAACgAAAAAAAAAAAAkwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T16:26:48.265Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 32,
+              "Title": "ClientController.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\ClientController.cs",
+              "RelativeDocumentMoniker": "ChatUp.Api\\Controllers\\ClientController.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\ClientController.cs",
+              "RelativeToolTip": "ChatUp.Api\\Controllers\\ClientController.cs",
+              "ViewState": "AgIAAD4AAAAAAAAAAAAswAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T16:26:38.265Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 33,
+              "Title": "UserController.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\UserController.cs",
+              "RelativeDocumentMoniker": "ChatUp.Api\\Controllers\\UserController.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Api\\Controllers\\UserController.cs",
+              "RelativeToolTip": "ChatUp.Api\\Controllers\\UserController.cs",
+              "ViewState": "AgIAAIMAAAAAAAAAAAAwwJEAAAAMAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:28:09.007Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 29,
+              "Title": "UserClientDto.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\DTOs\\UserClientDto.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\User\\DTOs\\UserClientDto.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\DTOs\\UserClientDto.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\User\\DTOs\\UserClientDto.cs",
+              "ViewState": "AgIAAA4AAAAAAAAAAAA9wBAAAAAFAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:26:06.534Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 37,
+              "Title": "UserRepository.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Infrastructure\\Persistence\\Repositories\\UserRepository.cs",
+              "RelativeDocumentMoniker": "ChatUp.Infrastructure\\Persistence\\Repositories\\UserRepository.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Infrastructure\\Persistence\\Repositories\\UserRepository.cs",
+              "RelativeToolTip": "ChatUp.Infrastructure\\Persistence\\Repositories\\UserRepository.cs",
+              "ViewState": "AgIAABMAAAAAAAAAAAAQwB8AAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:25:28.212Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 34,
+              "Title": "GetClientUsersQueryHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\Handlers\\GetClientUsersQueryHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\User\\Handlers\\GetClientUsersQueryHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\Handlers\\GetClientUsersQueryHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\User\\Handlers\\GetClientUsersQueryHandler.cs",
+              "ViewState": "AgIAABAAAAAAAAAAAAAAwB8AAABDAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:24:51.139Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 38,
+              "Title": "GetClientUsersQuery.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\Queries\\GetClientUsersQuery.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\User\\Queries\\GetClientUsersQuery.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\User\\Queries\\GetClientUsersQuery.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\User\\Queries\\GetClientUsersQuery.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAoAAABUAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:26:38.192Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 35,
+              "Title": "SessionExpiredModal.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Shared\\SessionExpiredModal.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Shared\\SessionExpiredModal.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Shared\\SessionExpiredModal.razor",
+              "RelativeToolTip": "ChatUp\\Shared\\SessionExpiredModal.razor",
+              "ViewState": "AgIAABgAAAAAAAAAAADgvyAAAAADAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-09T09:45:39.781Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 36,
+              "Title": "IUserRepository.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Common\\Interfaces\\IUserRepository.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Common\\Interfaces\\IUserRepository.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Common\\Interfaces\\IUserRepository.cs",
+              "RelativeToolTip": "ChatUp.Application\\Common\\Interfaces\\IUserRepository.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAuwA0AAAAIAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:27:01.471Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 39,
+              "Title": "UserAccount.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Domain\\Entities\\UserAccount.cs",
+              "RelativeDocumentMoniker": "ChatUp.Domain\\Entities\\UserAccount.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Domain\\Entities\\UserAccount.cs",
+              "RelativeToolTip": "ChatUp.Domain\\Entities\\UserAccount.cs",
+              "ViewState": "AgIAADoAAAAAAAAAAAAYwEoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:22:21.053Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 41,
+              "Title": "ContractExpiryBackgroundService.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\ContractExpiryBackgroundService.cs",
+              "RelativeDocumentMoniker": "ChatUp\\Services\\ContractExpiryBackgroundService.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\ContractExpiryBackgroundService.cs",
+              "RelativeToolTip": "ChatUp\\Services\\ContractExpiryBackgroundService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:03:08.859Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 40,
+              "Title": "ProjectAssignmentService.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\ProjectAssignmentService.cs",
+              "RelativeDocumentMoniker": "ChatUp\\Services\\ProjectAssignmentService.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Services\\ProjectAssignmentService.cs",
+              "RelativeToolTip": "ChatUp\\Services\\ProjectAssignmentService.cs",
+              "ViewState": "AgIAAAsAAAAAAAAAAAAUwBQAAAAlAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T06:35:19.486Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 44,
+              "Title": "CreateTicketCommand.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Commands\\CreateTicketCommand.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\Commands\\CreateTicketCommand.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Commands\\CreateTicketCommand.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\Commands\\CreateTicketCommand.cs",
+              "ViewState": "AgIAABgAAAAAAAAAAAAywBUAAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T08:11:06.325Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 43,
+              "Title": "ProjectRepository.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Infrastructure\\Persistence\\Repositories\\ProjectRepository.cs",
+              "RelativeDocumentMoniker": "ChatUp.Infrastructure\\Persistence\\Repositories\\ProjectRepository.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Infrastructure\\Persistence\\Repositories\\ProjectRepository.cs",
+              "RelativeToolTip": "ChatUp.Infrastructure\\Persistence\\Repositories\\ProjectRepository.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAiwAsAAAA3AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T09:01:20.177Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 42,
+              "Title": "CreateTicketHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\CreateTicketHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Ticket\\Handler\\CreateTicketHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\CreateTicketHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Ticket\\Handler\\CreateTicketHandler.cs",
+              "ViewState": "AgIAADEAAAAAAAAAAAAqwEIAAAAlAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T08:40:36.838Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 45,
+              "Title": "CreateTicketCommand.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Commands\\CreateTicketCommand.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Ticket\\Commands\\CreateTicketCommand.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Commands\\CreateTicketCommand.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Ticket\\Commands\\CreateTicketCommand.cs",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAcwA0AAAAjAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T08:36:07.256Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 46,
+              "Title": "Chat.razor",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Chat\\Chat.razor",
+              "RelativeDocumentMoniker": "ChatUp\\Pages\\Chat\\Chat.razor",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Pages\\Chat\\Chat.razor",
+              "RelativeToolTip": "ChatUp\\Pages\\Chat\\Chat.razor",
+              "ViewState": "AgIAAC0AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000759|",
+              "WhenOpened": "2025-12-09T08:45:52.353Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 48,
+              "Title": "GetTicketsHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketsHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketsHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketsHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketsHandler.cs",
+              "ViewState": "AgIAABkAAAAAAAAAAAAQwFwAAAAiAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T07:16:36.005Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 47,
+              "Title": "UploadTicketFileHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\UploadTicketFileHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\UploadTicketFileHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\UploadTicketFileHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\UploadTicketFileHandler.cs",
+              "ViewState": "AgIAADAAAAAAAAAAAAAYwDwAAAANAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T06:43:07.498Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 51,
+              "Title": "GetTicketUploadsHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketUploadsHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketUploadsHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketUploadsHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\GetTicketUploadsHandler.cs",
+              "ViewState": "AgIAABkAAAAAAAAAAAAQwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T08:42:04.045Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 50,
+              "Title": "AddTicketMessageHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\AddTicketMessageHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\AddTicketMessageHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\AddTicketMessageHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\AddTicketMessageHandler.cs",
+              "ViewState": "AgIAAEUAAAAAAAAAAAAYwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T08:42:07.358Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 49,
+              "Title": "CreateTicketHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\CreateTicketHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\CreateTicketHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\Handlers\\CreateTicketHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\Handlers\\CreateTicketHandler.cs",
+              "ViewState": "AgIAABoAAAAAAAAAAAA4wCUAAAAuAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T07:36:24.685Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 53,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Program.cs",
+              "RelativeDocumentMoniker": "ChatUp\\Program.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp\\Program.cs",
+              "RelativeToolTip": "ChatUp\\Program.cs",
+              "ViewState": "AgIAAAwAAAAAAAAAAAAAABoAAAA4AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T07:46:07.577Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 52,
+              "Title": "TicketDto.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketDto.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketDto.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketDto.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\TicketMessage\\DTOs\\TicketDto.cs",
+              "ViewState": "AgIAAA4AAAAAAAAAAIA1wBQAAAAoAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T07:49:28.481Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 54,
+              "Title": "GetTicketsHandler.cs",
+              "DocumentMoniker": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketsHandler.cs",
+              "RelativeDocumentMoniker": "ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketsHandler.cs",
+              "ToolTip": "C:\\DEVELOPMENT\\chatup\\ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketsHandler.cs",
+              "RelativeToolTip": "ChatUp.Application\\Features\\Ticket\\Handler\\GetTicketsHandler.cs",
+              "ViewState": "AgIAAEIAAAAAAAAAAAAiwEsAAAAOAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-12-09T06:52:28.358Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

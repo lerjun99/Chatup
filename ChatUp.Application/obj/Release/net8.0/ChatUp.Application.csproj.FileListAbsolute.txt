@@ -1,0 +1,16 @@
+C:\DEVELOPMENT\chatup\ChatUp.Application\bin\Release\net8.0\ChatUp.Application.deps.json
+C:\DEVELOPMENT\chatup\ChatUp.Application\bin\Release\net8.0\ChatUp.Application.dll
+C:\DEVELOPMENT\chatup\ChatUp.Application\bin\Release\net8.0\ChatUp.Application.pdb
+C:\DEVELOPMENT\chatup\ChatUp.Application\bin\Release\net8.0\ChatUp.Domain.dll
+C:\DEVELOPMENT\chatup\ChatUp.Application\bin\Release\net8.0\ChatUp.Domain.pdb
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.csproj.AssemblyReference.cache
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.AssemblyInfoInputs.cache
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.AssemblyInfo.cs
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.csproj.CoreCompileInputs.cache
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.sourcelink.json
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.A.1CCAA272.Up2Date
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.dll
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\refint\ChatUp.Application.dll
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ChatUp.Application.pdb
+C:\DEVELOPMENT\chatup\ChatUp.Application\obj\Release\net8.0\ref\ChatUp.Application.dll

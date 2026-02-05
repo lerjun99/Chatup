@@ -1,0 +1,463 @@
+﻿@using ChatUp.Application.Auth.Commands
+@using ChatUp.Application.Features.TicketMessage.DTOs
+@using ChatUp.Domain.Entities
+@using ChatUp.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@inject ChatUp.Services.LinkService LinkService
+@inject IDialogService DialogService
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+@inject UserState UserState
+@inject NavigationManager Navigation
+@inject HttpClient Http
+@inject ChatUp.Services.ChatService ChatService
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+<nav class="sidebar text-white d-flex flex-column align-items-center py-4"
+     style="width: 220px; min-height: 100vh;">
+    <img src="/images/odeccilogo.svg"
+         alt="PCL Logo"
+         class="mb-4"
+         style="width: 200px" />
+
+    <ul class="nav flex-column w-100">
+        @if (UserState.UserType is 1 or 5)
+          {
+        <li class="nav-item">
+            <a class="sidebar-link nav-link"
+               @onclick="NavigateApplicant">
+                <i class="fa-solid fa-users"></i>
+                <span style="color:white !important">Applicants</span>
+            </a>
+        </li>
+          }
+            @if (UserState.UserType != 5)
+          {
+        <li class="nav-item">
+            <NavLink  
+                     class="sidebar-link nav-link"
+                     Match="NavLinkMatch.All"
+                     @onclick="NavigateDashboard">
+                <i class="fa-solid fa-chart-simple"></i>
+                <span style="color:white !important">Dashboard</span>
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <NavLink  
+                     class="sidebar-link nav-link"
+                     Match="NavLinkMatch.All"
+                     @onclick="NavigateTicketList">
+                <i class="fa-solid fa-list"></i>
+                <span style="color:white !important">Tickets</span>
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <NavLink  
+                     class="sidebar-link nav-link"
+                     Match="NavLinkMatch.All"
+                     @onclick="NavigateInbox">
+                <i class="fa-solid fa-comment"></i>
+                <span style="color:white !important">Inbox</span>
+
+                @if (OpenTicketCount > 0)
+                {
+                    <span class="badge bg-danger ms-2">@OpenTicketCount</span>
+                }
+            </NavLink>
+        </li>
+        }
+          @if (UserState != null && UserState.UserType == 1)
+          {
+            <li class="nav-item">
+                <NavLink  
+                     class="sidebar-link nav-link"
+                     Match="NavLinkMatch.All"
+                     @onclick="NavigateContracts">
+                <i class="fa-solid fa-file-contract"></i>
+                <span style="color:white !important">Contracts</span>
+            </NavLink>
+        </li>
+    
+        <li class="nav-item">
+            <NavLink  
+                     class="sidebar-link nav-link"
+                     Match="NavLinkMatch.All"
+                     @onclick="NavigateAssign">
+                <i class="fa-solid fa-tags"></i>
+                <span style="color:white !important">Account Assignment</span>
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <NavLink  
+                     class="sidebar-link nav-link"
+                     Match="NavLinkMatch.All"
+                     @onclick="NavigateRegister">
+                <i class="fa-solid fa-address-card"></i>
+                <span style="color:white !important">Registration</span>
+            </NavLink>
+        </li>
+        }
+    </ul>
+
+    <div class="mt-auto w-100">
+        <hr class="bg-light" />
+        <ul class="nav flex-column">
+            <AuthorizeView Roles="1">
+                <li class="nav-item">
+                    <NavLink href="/usermanagement"
+                             class="sidebar-link nav-link"
+                             Match="NavLinkMatch.Prefix"
+                             @onclick="NavigateToUserManagement">
+                        <i class="fa-solid fa-gears"></i>
+                        <span style="color:white !important">User Management</span>
+                    </NavLink>
+                </li>
+            </AuthorizeView>
+
+          
+
+            <li class="nav-item">
+                <a class="sidebar-link nav-link"
+                   @onclick="NavigateToLogout">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span style="color:white !important">Log&nbsp;Out</span>
+                </a>
+            </li>
+        </ul>
+    </div>
+</nav>
+
+@inject NavigationManager Nav
+
+@code {
+    [Parameter] public EventCallback OnNavigate { get; set; }
+    private HubConnection? hubConnection;
+    /* -------- nav helpers -------- */
+    private void Navigate(string url)
+    {
+        Nav.NavigateTo(url, forceLoad: false);
+        if (OnNavigate.HasDelegate)
+            OnNavigate.InvokeAsync();
+    }
+    bool? canceled;
+    // private void NavigateDashboard() => Navigate("/dashboard");
+    private void NavigateDashboard()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/dashboard/{encodedToken}");
+        }
+    }
+    private bool _initialized = false;
+    private bool _hubStarted = false;
+    private int OpenTicketCount = 0;
+
+    // protected override async Task OnAfterRenderAsync(bool firstRender)
+    // {
+    //     if (firstRender && !_initialized)
+    //     {
+    //         _initialized = true;
+
+    //         await LoadUserStateFromSession();
+
+    //         if (UserState.UserId.HasValue && !_hubStarted)
+    //         {
+    //             await InitializeHubAndLoadCount();
+    //             _hubStarted = true;
+    //         }
+
+    //         StateHasChanged();
+    //     }
+    // }
+
+
+    private bool _firstRender = true;
+    private int? _userId;
+
+    protected override void OnInitialized()
+    {
+        // Subscribe to count changes
+        ChatService.OnOpenTicketCountChanged += count =>
+        {
+            OpenTicketCount = count;
+            InvokeAsync(StateHasChanged);
+        };
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_firstRender)
+        {
+            _firstRender = false;
+
+            // Use UserState if available
+            _userId = UserState.UserId;
+
+            // If UserState.UserId is null, get it from LocalStorage
+            if (!_userId.HasValue)
+            {
+                var savedUserId = await SessionStorage.GetItemAsync<string>("UserId");
+                if (!string.IsNullOrEmpty(savedUserId))
+                {
+                    var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(savedUserId));
+                    if (int.TryParse(decrypted, out var parsedUserId))
+                    {
+                        _userId = parsedUserId;
+                        UserState.UserId = parsedUserId; // optionally update UserState
+                    }
+                }
+            }
+
+            if (_userId.HasValue)
+            {
+              
+
+                // Initially load the count
+                await ChatService.LoadOpenTicketCount(_userId.Value);
+
+                // Listen for ticket updates
+                if (ChatService.HubConnection != null)
+                {
+                    ChatService.HubConnection.On("ReceiveTicketUpdate", async () =>
+                    {
+                        await ChatService.LoadOpenTicketCount(_userId.Value);
+                    });
+                }
+
+                StateHasChanged(); // update UI
+            }
+        }
+    }
+    public void Dispose()
+    {
+        ChatService.OnOpenTicketCountChanged -= _ => InvokeAsync(StateHasChanged);
+    }
+    private void UpdateCount(int count)
+    {
+        OpenTicketCount = count;
+        InvokeAsync(StateHasChanged);
+    }
+
+    // private async Task LoadUserStateFromSession()
+    // {
+    //     try
+    //     {
+    //         // Get user data from session storage safely
+    //         var savedUserId = await SessionStorage.GetItemAsync<string>("UserId");
+    //         var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(savedUserId));
+    //         var savedUserType = await SessionStorage.GetItemAsync<string>("UserType");
+    //         var savedUsername = await SessionStorage.GetItemAsync<string>("Username");
+    //         var savedClientId = await SessionStorage.GetItemAsync<string>("ClientId");
+
+    //         if (!string.IsNullOrEmpty(decrypted))
+    //         {
+    //             // Parse string to int safely
+    //             if (int.TryParse(decrypted, out var userId))
+    //                 UserState.UserId = userId;
+
+    //             UserState.Username = savedUsername;
+    //             UserState.UserType = int.TryParse(savedUserType, out var type) ? type : 0;
+    //             UserState.ClientId = string.IsNullOrEmpty(savedClientId) ? null : int.Parse(savedClientId);
+    //         }
+    //         else
+    //         {
+    //             Console.WriteLine("No user data in session storage.");
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"Failed to load session storage: {ex.Message}");
+    //     }
+    // }
+
+    // private async Task InitializeHubAndLoadCount()
+    // {
+    //     if (!UserState.UserId.HasValue)
+    //         return;
+
+    //     hubConnection = new HubConnectionBuilder()
+    //         .WithUrl(Navigation.ToAbsoluteUri($"/chathub?userId={UserState.UserId.Value}"))
+    //         .WithAutomaticReconnect()
+    //         .Build();
+
+    //     hubConnection.On("ReceiveTicketUpdate", async () =>
+    //     {
+    //         await LoadOpenTicketCount();
+    //         StateHasChanged();
+    //     });
+
+    //     try
+    //     {
+    //         await hubConnection.StartAsync();
+    //         await LoadOpenTicketCount(); // load immediately
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"Hub connection failed: {ex.Message}");
+    //     }
+    // }
+
+    // private async Task LoadOpenTicketCount()
+    // {
+    //     if (!UserState.UserId.HasValue)
+    //     {
+    //         OpenTicketCount = 0;
+    //         return;
+    //     }
+
+    //     try
+    //     {
+    //         string url = $"{AppConfig.ChatUrl}TicketMessage/GetTickets/GetTickets" +
+    //                      $"?userId={UserState.UserId}&includeMessages=false&page=1&pageSize=1";
+
+    //         var options = new System.Text.Json.JsonSerializerOptions
+    //         {
+    //             PropertyNameCaseInsensitive = true
+    //         };
+    //         options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+
+    //         var result = await Http.GetFromJsonAsync<TicketPagedResponse>(url, options);
+
+    //         OpenTicketCount = result?.StatusCounts
+    //                           ?.FirstOrDefault(s => s.Status == TicketStatus.Open)?.Count ?? 0;
+    //     }
+    //     catch
+    //     {
+    //         OpenTicketCount = 0;
+    //     }
+    // }
+    // private void NavigateTicketList() => Navigate("/ticketlist");
+    private void NavigateContracts() => Navigate("/contractlist");
+    private void NavigateApplicant() => Navigate("/applicants");
+    private void NavigateRegister() => Navigate("/users");
+    // private void NavigateInbox() => Navigate("/inbox");
+    private void NavigateInbox()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/inbox/{encodedToken}");
+        }
+    }
+    private void NavigateTicketList()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/ticketlist/{encodedToken}");
+        }
+    }
+    // private void NavigateAssign() => Navigate("/assignments");
+    private void NavigateAssign()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/assignments/{encodedToken}");
+        }
+    }
+    // private void NavigateChat() => Navigate($"/chat/{UserState.UserId}");
+
+    private void NavigateChat()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/chat/{encodedToken}");
+        }
+    }
+
+  
+    private async Task NavigateToUserManagement()
+    {
+        // Check if online
+        var isOnline = await JS.InvokeAsync<bool>("isOnline");
+        if (!isOnline)
+        {
+            var dialog = await DialogService.ShowWarningAsync("You are in Offline Mode! features may be unavailable until you reconnect to the internet.");
+            var msgbox = await dialog.Result;
+            Navigate("/dashboard");
+        }
+        else
+        {
+            Navigate("/usermanagement");
+        }
+    }
+    private async Task NavigateToLogout()
+    {
+        var dialog = await DialogService.ShowConfirmationAsync(
+            "Are you sure you want to log out?",
+            "Yes", "No", "Warning"
+        );
+        var result = await dialog.Result;
+
+        if (result.Cancelled) return;
+
+        try
+        {
+            var userId = UserState.UserId?.ToString();
+            if (!string.IsNullOrEmpty(userId))
+            {
+                // 🟢 Notify chat service user is offline
+                if (ChatService != null)
+                {
+                    await ChatService.SetUserOfflineAsync(UserState.UserId.Value);
+                    Console.WriteLine($"User {userId} set offline via SignalR.");
+                }
+
+                // 🟢 Call backend logout endpoint
+                var logoutCommand = new LogoutCommand { UserId = UserState.UserId.Value };
+                var response = await Http.PostAsJsonAsync(AppConfig.ChatUrl + "Auth/Logout/logout", logoutCommand);
+
+                if (!response.IsSuccessStatusCode)
+                    Console.WriteLine($"⚠ Logout API returned: {response.StatusCode}");
+            }
+
+            // 🧹 Clear both session & local storage
+            await SessionStorage.ClearAsync();
+            await LocalStorage.ClearAsync();
+
+            // 🧩 Clear UserState
+            UserState.UserId = null;
+            UserState.Username = null;
+            UserState.UserType = 0;
+
+            // 🔐 Notify Auth provider (if you’re using a custom one)
+            if (AuthStateProvider is CustomAuthStateProvider customProvider)
+                customProvider.NotifyUserLogout();
+
+            // 📴 Dispose SignalR connection
+            if (ChatService != null)
+                await ChatService.DisposeAsync();
+
+            // 🪟 Optional: JS logout notification
+            await JS.InvokeVoidAsync("console.log", "User logged out and storage cleared.");
+
+            // 🔁 Redirect to login
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Logout failed: {ex.Message}");
+            await DialogService.ShowErrorAsync("Logout failed. Please try again later.");
+        }
+    }
+
+}
+<script>
+    window.isOnline = () => navigator.onLine;
+</script>

@@ -1,0 +1,372 @@
+﻿@page "/ticketlist/{EncryptedId}"
+@using ChatUp.Domain.Entities
+@using ChatUp.Services
+@using ChatUp.Services.DTOs
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@inject TitleService TitleService
+
+<h3 class="mb-4 fw-bold text-primary">
+    <i class="bi bi-ticket-detailed me-2"></i>
+    Ticket Management
+</h3>
+
+<div class="ticket-filters card shadow-sm border-0 rounded-4 p-3 mb-4">
+    <div class="row g-3 align-items-center">
+        <!-- Search -->
+        <div class="col-md-3 col-12">
+            <input type="text"
+                   class="form-control"
+                   placeholder="🔍 Search..."
+                   @bind="searchTerm"
+                   @bind:event="oninput"
+                   @onkeydown="@HandleEnterKey" />
+        </div>
+
+        <!-- Status Filter -->
+        <div class="col-md-2 col-12">
+            <select class="form-select" @onchange="StatusChanged">
+                <option value="">All Status</option>
+                @foreach (var status in Enum.GetValues<TicketStatus>())
+                {
+                    <option value="@((int)status)" selected="@(statusFilter == (int)status)">
+                        @status
+                    </option>
+                }
+            </select>
+        </div>
+
+        <!-- Priority Filter -->
+        <div class="col-md-2 col-12">
+            <select class="form-select" @onchange="PriorityChanged">
+                <option value="">All Priority</option>
+                @foreach (var priority in Enum.GetValues<TicketPriority>())
+                {
+                    <option value="@((int)priority)" selected="@(priorityFilter == (int)priority)">
+                        @priority
+                    </option>
+                }
+            </select>
+        </div>
+
+        <!-- Buttons -->
+        <div class="col-md-5 col-12 d-flex  gap-2 " style="flex-direction: row;">
+            <button class="btn btn-secondary" @onclick="ToggleArchive">
+                <i class="fa-solid fa-box-archive"></i> @(showArchived ? "Show Active" : "Archived")
+            </button>
+
+            <button class="btn btn-primary" @onclick="SearchTickets">
+                <i class="fa-solid fa-magnifying-glass"></i> Search
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (tickets == null)
+{
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-2 text-muted">Loading tickets...</p>
+    </div>
+}
+else if (!tickets.Any())
+{
+    <div class="alert alert-warning text-center shadow-sm rounded-3">
+        No tickets found.
+    </div>
+}
+else
+{
+    <div class="table-wrapper">
+        <div class="table-responsive scrollable-table2" >
+            <table class="table table-hover align-middle user-table ">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Ticket No.</th>
+                        <th>Date Received</th>
+                        <th>Issue Title</th>
+                        <th>Client</th>
+                        <th>Project</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <th>Due Date</th>
+                        <th>SLA</th>
+                        <th class="sticky-actions">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in tickets)
+                    {
+                        var timeLeft = t.DueDate - DateTime.UtcNow;
+                        <tr class="@(t.IsArchived ? "table-secondary" : "")">
+                            <td>@t.TicketNo</td>
+                            <td>@t.DateReceived.ToString("g")</td>
+                            <td class="text-start">@t.IssueTitle</td>
+                            <td>@t.ClientName</td>
+                            <td>@t.ProjectName</td>
+                            <td>
+                                <span class="badge @(t.Status switch
+                                {
+                                    "Open" => "bg-success",
+                                    "InProgress" => "bg-info",
+                                    "Resolved" => "bg-primary",
+                                    "Closed" => "bg-secondary",
+                                    "Rejected" => "bg-danger",
+                                    _ => "bg-light text-dark"
+                                })">@t.Status</span>
+                            </td>
+                            <td>
+                                <span class="badge @(t.Priority switch
+                                {
+                                    "High" => "bg-danger",
+                                    "Medium" => "bg-warning text-dark",
+                                    "Low" => "bg-success",
+                                    _ => "bg-secondary"
+                                })">@t.Priority</span>
+                            </td>
+                            <td>@t.DueDate.ToString("g")</td>
+                            <td>
+                                @if (t.IsBreached)
+                                {
+                                    <span class="badge bg-danger">⚠ Breached</span>
+                                }
+                                else if (timeLeft.TotalHours <= 2 && timeLeft.TotalSeconds > 0)
+                                {
+                                    <span class="badge bg-warning text-dark">⏳ Near SLA</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">✅ On Track</span>
+                                }
+                            </td>
+                            <td class="sticky-actions">
+                                <div class="action-buttons">
+                                    <button class="btn btn-sm btn-info text-white rounded-pill px-3"
+                                            @onclick="() => ViewTicket(t.Id)">
+                                        <i class="fa-solid fa-eye"></i> View
+                                    </button>
+                                    <button class="btn btn-sm @(t.IsArchived ? "btn-success" : "btn-danger") rounded-pill px-3"
+                                            @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived)">
+                                        <i class="fa-solid @(t.IsArchived ? "fa-rotate-left" : "fa-trash")"></i>
+                                        @(t.IsArchived ? "Restore" : "Delete")
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ✅ Enhanced Pagination -->
+    <div class="pagination-holder ">
+        <div class="text-muted small">
+            Showing @FromPage to @ToPage of @_totalRecords entries
+        </div>
+
+        <div class="pagination-button-holder d-flex align-items-center flex-nowrap gap-1">
+            <button class="btn btn-secondary btn-sm" @onclick="PrevPage" disabled="@(!CanGoPrev)"><i class="fa-solid fa-backward"></i></button>
+            @for (int i = 1; i <= _totalPages; i++)
+            {
+                int page = i;
+                <input type="button"
+                       value=@(page)
+                       class="btn btn-sm @( _currentPage == page ?  "active" : "")"
+                       @onclick="() => SelectedPage(page)" />
+            }
+            <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(!CanGoNext)"><i class="fa-solid fa-forward"></i></button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string EncryptedId { get; set; }
+
+    [Inject]
+    public LinkService LinkService { get; set; }
+    private int UserId;
+    private List<TicketDto>? tickets;
+    private string searchTerm = string.Empty;
+    private int? statusFilter;
+    private int? priorityFilter;
+    private bool showArchived = false;
+    private bool isArchived = false;
+    private int _currentPage = 1;
+    private int _pageSize = 15;
+    private int _totalPages = 1;
+    private int _totalRecords = 0;
+
+    private int FromPage => ((_currentPage - 1) * _pageSize) + 1;
+    private int ToPage => Math.Min(_currentPage * _pageSize, _totalRecords);
+
+    private bool CanGoPrev => _currentPage > 1;
+    private bool CanGoNext => _currentPage < _totalPages;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+
+        if (string.IsNullOrEmpty(decrypted))
+        {
+            // If invalid token, redirect to error or home
+            Navigation.NavigateTo("/unauthorized");
+            return;
+        }
+
+        UserId = int.Parse(decrypted);
+
+        TitleService.SetTitle("Chat Support Page");
+        await LoadTickets();
+    }
+
+    private async Task LoadTickets()
+    {
+        var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/Query?" +
+        $"userId={UserId}" +
+        $"&page={_currentPage}" +
+        $"&pageSize={_pageSize}" +
+        $"&search={Uri.EscapeDataString(searchTerm ?? string.Empty)}" +
+        $"&statusFilter={(statusFilter.HasValue ? statusFilter.Value.ToString() : string.Empty)}" +
+        $"&priorityFilter={(priorityFilter.HasValue ? priorityFilter.Value.ToString() : string.Empty)}" +
+        $"&includeArchived={showArchived}");
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<TicketResponse>(url);
+
+            if (response != null)
+            {
+                tickets = response.Items;
+                _totalRecords = response.TotalCount;
+                _totalPages = (int)Math.Ceiling((double)_totalRecords / _pageSize);
+            }
+            else
+            {
+                tickets = new();
+                _totalRecords = 0;
+                _totalPages = 1;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error loading tickets: {ex.Message}");
+            tickets = new();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task StatusChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        statusFilter = string.IsNullOrEmpty(value) ? null : int.Parse(value);
+        _currentPage = 1;
+        await LoadTickets();
+    }
+
+    private async Task PriorityChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        priorityFilter = string.IsNullOrEmpty(value) ? null : int.Parse(value);
+        _currentPage = 1;
+        await LoadTickets();
+    }
+
+    private async Task SearchTickets()
+    {
+        _currentPage = 1;
+        await LoadTickets();
+    }
+
+    private async Task HandleEnterKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _currentPage = 1;
+            await LoadTickets();
+        }
+    }
+
+    private async Task ToggleArchive()
+    {
+        showArchived = !showArchived;
+        _currentPage = 1;
+        await LoadTickets();
+    }
+
+    private async Task PrevPage()
+    {
+        if (CanGoPrev)
+        {
+            _currentPage--;
+            await LoadTickets();
+        }
+    }
+
+    private async Task NextPage()
+    {
+        if (CanGoNext)
+        {
+            _currentPage++;
+            await LoadTickets();
+        }
+    }
+
+    private async Task SelectedPage(int page)
+    {
+        _currentPage = page;
+        await LoadTickets();
+    }
+
+    private void ViewTicket(int id)
+    {
+        var token = LinkService.Protect(id.ToString());
+        var encodedToken = Uri.EscapeDataString(token);
+        Navigation.NavigateTo($"/tickets/{encodedToken}");
+    }
+
+    private async Task DeleteOrRestoreTicket(string id, bool isArchived)
+    {
+        string action = isArchived ? "restore" : "delete";
+        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to {action} {id}?");
+        if (!confirmed) return;
+
+        string url = isArchived
+            ? $"{AppConfig.ChatUrl}Tickets/RestoreTicket/Restore/{id}"
+            : $"{AppConfig.ChatUrl}Tickets/Delete/{id}";
+
+        Console.WriteLine($"➡️ Calling: {url}");
+
+        HttpResponseMessage response;
+
+        if (isArchived)
+        {
+            // If Restore uses POST (depends on your controller)
+            response = await Http.PostAsync(url, null);
+        }
+        else
+        {
+            // Delete should use DELETE
+            response = await Http.DeleteAsync(url);
+        }
+
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadTickets();
+        }
+        else
+        {
+            Console.WriteLine($"❌ Failed: {response.StatusCode}");
+        }
+    }
+
+    // ✅ DTO for pagination response
+    public class TicketResponse
+    {
+        public List<TicketDto> Items { get; set; } = new();
+        public int TotalCount { get; set; }
+    }
+}

@@ -1,0 +1,6 @@
+@ChatupAPI_HostAddress = http://localhost:5295
+
+GET {{ChatupAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

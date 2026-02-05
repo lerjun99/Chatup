@@ -1,0 +1,96 @@
+﻿@page "/verify-email"
+@using System.ComponentModel.DataAnnotations
+@using ChatUp.Application.Features.EmailOTP.Commands
+@using ChatUp.Services
+@inject PasswordRecoveryService PasswordService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@layout LoginLayout
+
+<EditForm Model="@model" OnValidSubmit="SendOtp">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="login-container">
+        <div class="login-box">
+            <h2>Email Verification ✉️</h2>
+            <p class="subtitle">
+                Enter your email address to receive a 6-digit OTP.
+            </p>
+
+            <div class="form-group">
+                <label>Email Address</label>
+                <InputText type="email"
+                           @bind-Value="model.Email"
+                           class="form-control"
+                           placeholder="you@example.com" />
+                <ValidationMessage For="@(() => model.Email)" />
+            </div>
+
+            <button type="submit"
+                    class="btn btn-primary w-100"
+                    disabled="@loading">
+                @(loading ? "Sending OTP..." : "Send OTP")
+            </button>
+
+            @if (!string.IsNullOrEmpty(message))
+            {
+                <div class="@messageClass mt-2">@message</div>
+            }
+        </div>
+    </div>
+</EditForm>
+
+@code {
+    private VerifyEmailModel model = new();
+    private bool loading;
+    private string? message;
+    private string messageClass = "text-success";
+
+    private async Task SendOtp()
+    {
+        loading = true;
+        message = null;
+
+        try
+        {
+            // ✅ Pass email to the constructor
+            var command = new SendOtpCommand(model.Email);
+
+            var success = await PasswordService.SendOtpAsync(command);
+
+            if (success)
+            {
+                message = "✅ OTP sent successfully! Check your email.";
+                messageClass = "text-success";
+
+                // Navigate to OTP verification page after short delay
+                await Task.Delay(1000);
+                Navigation.NavigateTo($"/otp-verification?email={Uri.EscapeDataString(model.Email)}");
+
+            }
+            else
+            {
+                message = "❌ Failed to send OTP. Please check your email.";
+                messageClass = "text-danger";
+            }
+        }
+        catch (Exception ex)
+        {
+            message = $"⚠️ Error sending OTP: {ex.Message}";
+            messageClass = "text-danger";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+
+    public class VerifyEmailModel
+    {
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email address")]
+        public string Email { get; set; } = string.Empty;
+    }
+}

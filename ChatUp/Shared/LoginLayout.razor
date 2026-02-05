@@ -1,0 +1,253 @@
+﻿@inherits LayoutComponentBase
+@inject IJSRuntime JS
+
+@inject HttpClient Http
+<PageTitle>Login</PageTitle>
+
+<div class="login-wrapper">
+    <div class="login-left">
+   
+
+        <img src="/images/bg.png" class="left-bg" alt="Left background" />
+    </div>
+
+    <div class="login-right">
+        <div class="login-layout">
+            <!-- Aurora layers -->
+            <div class="aurora aurora-1"></div>
+            <div class="aurora aurora-2"></div>
+            <div class="aurora aurora-3"></div>
+
+            <!-- Falling objects -->
+            <div class="falling-container" id="falling"></div>
+
+            <!-- Login content -->
+            <div class="login-content">
+                @Body
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Reset scroll */
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden !important; /* 🔥 Prevent scrolling completely */
+    }
+
+    /* Wrapper taking full screen */
+    .login-wrapper {
+        display: flex;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* LEFT SIDE */
+    .login-left {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .left-bg {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    /* RIGHT SIDE */
+    .login-right {
+        flex: 1;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        background: #07121a;
+    }
+
+    /* Aurora background */
+    .login-layout {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    :root {
+        --aurora-blur: 50px;
+    }
+
+    .aurora {
+        position: absolute;
+        filter: blur(var(--aurora-blur));
+        mix-blend-mode: screen;
+        opacity: 0.85;
+        pointer-events: none;
+    }
+
+    /* FALLING EFFECT */
+    .falling-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 5;
+    }
+
+    .fall-wrap {
+        position: absolute;
+        top: -10%;
+        left: 0;
+        animation: drift 4s ease-in-out infinite;
+    }
+
+    .fall {
+        display: inline-block;
+        animation: fall 5s linear forwards;
+        color: rgba(255,255,255,0.9);
+        text-shadow: 0 0 6px rgba(255,255,255,0.1);
+    }
+
+    @@keyframes drift {
+        0%
+
+    {
+        transform: translateX(0px);
+    }
+
+    50% {
+        transform: translateX(30px);
+    }
+
+    100% {
+        transform: translateX(0px);
+    }
+
+    }
+
+    @@keyframes fall {
+        0%
+
+    {
+        transform: translateY(-10vh) rotate(0deg);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateY(110vh) rotate(360deg);
+        opacity: 0.15;
+    }
+
+    }
+
+    /* CONTENT */
+    .login-content {
+        z-index: 10;
+        max-width: 420px;
+        width: 100%;
+        padding: 2rem;
+        color: #fff;
+        box-sizing: border-box;
+    }
+
+    @@media (prefers-reduced-motion: reduce) {
+        .aurora, .fall-wrap, .fall
+
+    {
+        animation: none !important;
+    }
+
+    }
+    /* CONTENT */
+    .login-content {
+        z-index: 10;
+        max-width: 420px;
+        width: 100%;
+        padding: 2rem;
+        color: #fff;
+        box-sizing: border-box;
+    }
+
+    /* --------------------
+       MOBILE RESPONSIVE
+    -------------------- */
+    @@media (max-width: 768px) {
+        .login-wrapper
+
+    {
+        flex-direction: column; /* Stack vertically */
+        height: auto; /* Allow natural height */
+        min-height: 100vh;
+    }
+
+        .login-left {
+            display: none !important;
+        }
+
+    .left-bg {
+        object-fit: cover;
+    }
+
+    .login-right {
+        flex: unset;
+        height: auto;
+        padding: 2rem 1.5rem;
+    }
+
+    .login-layout {
+        height: auto;
+        padding: 1rem 0;
+    }
+
+    .login-content {
+        padding: 1.5rem;
+        max-width: 100%;
+        width: 100%;
+    }
+
+    /* Reduce motion for mobile battery */
+    .aurora {
+        opacity: 0.6;
+        filter: blur(25px);
+    }
+
+    }
+
+    /* Disable animations if user prefers reduced motion */
+    @@media (prefers-reduced-motion: reduce) {
+        .aurora, .fall-wrap, .fall
+
+    {
+        animation: none !important;
+    }
+
+    }
+</style>
+
+@code {
+    private bool _started;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+       
+        if (firstRender && !_started)
+        {
+            _started = true;
+            var shapes = new[] { "✦", "✧", "★", "☆", "◆", "◇", "○", "●", "▲", "▼", "❤", "☾" };
+            await JS.InvokeVoidAsync("startFalling", "falling", shapes, 250);
+        }
+    }
+   
+}

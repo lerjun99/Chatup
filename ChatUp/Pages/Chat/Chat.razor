@@ -1,0 +1,1045 @@
+﻿@page "/chat/{EncryptedId}"
+@using ChatUp.Application.Features.Client.DTOs
+@using ChatUp.Application.Features.Projects.DTOs
+@using ChatUp.Application.Features.Ticket.DTOs
+@using ChatUp.Application.Features.User.DTOs
+@using ChatUp.Domain.Entities
+@using ChatUp.Application.Features.Ticket.Commands
+@using ChatUp.Services
+@inject ChatUp.Services.ChatService ChatService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject HttpClient Http
+@inject TitleService TitleService
+@inject IDialogService DialogService
+@implements IDisposable
+@inject UserState UserState
+<div class="chat-container">
+
+    <div class="chat-sidebar d-none d-md-block">
+        @if (UserState != null && UserState.UserType == 1)
+        {
+            <div class="dropdown client-dropdown">
+                <button class="btn btn-light dropdown-toggle w-100 text-start d-flex align-items-center"
+                        type="button"
+                        @onclick="ToggleClientDropdown">
+                    @if (selectedClient != null)
+                    {
+                        <img src="@selectedClient.PhotoUrl" class="client-avatar me-2" />
+                        <span class="client-name">@selectedClient.ClientName</span>
+                    }
+                    else if (isAllClientsSelected)
+                    {
+                        <span class="client-name fw-semibold">All Clients</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">-- Select Client --</span>
+                    }
+                </button>
+
+                @if (isClientDropdownOpen)
+                {
+                    <div class="dropdown-menu show w-100 shadow-lg rounded-3 border-0 mt-1 p-1">
+
+                        <!-- ✅ Select All option -->
+                        <div class="dropdown-item d-flex align-items-center client-option fw-semibold text-primary"
+                             title="All Clients"
+                             @onclick="SelectAllClients">
+                            <i class="bi bi-people-fill me-2"></i>
+                            <span>All Clients</span>
+                        </div>
+
+                        <hr class="my-1" />
+
+                        @foreach (var c in clients)
+                        {
+                            <div class="dropdown-item d-flex align-items-center client-option"
+                                 title="@c.ClientName"
+                                 @onclick="() => SelectClient(c.Id)">
+                                <img src="@c.PhotoUrl" class="client-avatar me-2" />
+                                <span class="client-name">@c.ClientName</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        <!-- Users list -->
+         @if (isLoadingUsers)
+        {
+            <div class="text-center my-3">
+                <span class="spinner-border spinner-border-sm me-2"></span>Loading users...
+            </div>
+        }
+        else if (!users.Any())
+        {
+            <div class="text-center my-3 text-muted">No users found.</div>
+        }
+        else
+        {
+            @foreach (var u in users)
+            {
+                // Determine CSS classes
+                var isActive = ReceiverId == u.Id ? "active" : "";
+                var isPremium = u.UserType == 1 ? "premium-user" : ""; // Premium styling for admins
+
+                <div class="chat-user @isActive @isPremium"
+                     @onclick="() => SelectUser(u.Id)">
+                    <div class="position-relative">
+                    </div>
+                    <div class="d-flex align-items-center w-100">
+                        <div class="position-relative me-2">
+                            <img src="@u.AvatarUrl" class="chat-avatar" />
+                            <span class="status-dot @(u.IsOnline ? "online" : "offline")"></span>
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="fw-semibold">@u.Name</div>
+                            <div class="small @(u.IsOnline ? "text-primary" : "text-muted")">
+                                @(u.IsOnline ? "Active now" : GetRelativeTime(u.LogoutTime))
+                            </div>
+                        </div>
+
+                        @if (u.UnreadCount > 0)
+                        {
+                            <span class="badge bg-danger rounded-pill">@u.UnreadCount</span>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- Mobile Header -->
+    <div class="chat-header mobile-dropdown d-md-none p-2 border-bottom bg-white">
+        @if (UserState.UserType != 3)
+{
+        <div class="dropdown client-dropdown mb-2">
+            <button class="btn btn-light dropdown-toggle w-100 text-start d-flex align-items-center"
+                    type="button"
+                    @onclick="ToggleMobileClientDropdown">
+                @if (selectedClient != null)
+                {
+                    <img src="@selectedClient.PhotoUrl" class="client-avatar me-2" />
+                    <span class="client-name">@selectedClient.ClientName</span>
+                }
+                else
+                {
+                    <span class="text-muted">-- Select Client --</span>
+                }
+            </button>
+
+            @if (isMobileClientDropdownOpen)
+            {
+                <div class="dropdown-menu show w-100 shadow-lg rounded-3 border-0 mt-1 p-1">
+                    @foreach (var c in clients)
+                    {
+                        <div class="dropdown-item d-flex align-items-center client-option"
+                             title="@c.ClientName"
+                             @onclick="() => SelectClient(c.Id)">
+                            <img src="@c.PhotoUrl" class="client-avatar me-2" />
+                            <span class="client-name">@c.ClientName</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+        }
+    </div>
+
+    <!-- Chat main area -->
+    <div class="chat-main">
+        <div class="chat-header d-flex align-items-center justify-content-between">
+            <!-- Mobile dropdown -->
+            <div class="d-block d-md-none w-100 position-relative">
+                <button class="btn btn-light w-100 text-start d-flex align-items-center justify-content-between"
+                        @onclick="ToggleMobileDropdown">
+                    <img src="@selectedUser?.AvatarUrl" class="chat-avatar-sm me-2" />
+                    <span>@selectedUser?.Name</span>
+                    <span class="ms-auto">▼</span>
+                </button>
+
+                @if (isMobileDropdownOpen)
+                {
+                    <div class="mobile-dropdown-list position-absolute bg-white border w-100 mt-1 shadow">
+                        @foreach (var u in users)
+                        {
+                            <div class="mobile-dropdown-item d-flex align-items-center p-2"
+                                 @onclick="() => SelectUserMobile(u.Id)">
+                                <img src="@u.AvatarUrl" class="chat-avatar-sm me-2" />
+                                <span>@u.Name</span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Desktop header -->
+            <div class="d-none d-md-flex align-items-center">
+                <img src="@selectedUser?.AvatarUrl" class="chat-avatar-lg" />
+                <div class="ms-2">
+                    <b>@selectedUser?.Name</b>
+                    <div class="chat-status">
+                        @if (isOtherUserTyping)
+                        {
+                            <div class="typing-indicator">
+                                Is typing<span></span><span></span><span></span>
+                            </div>
+                        }
+                    </div>
+                </div>
+                <button class="btn btn-primary ms-3" @onclick="OpenNewChatModal">
+                    + New Message
+                </button>
+            </div>
+            @if (currentConversation?.IsLocked == false)
+            {
+                <button class="btn btn-danger" @onclick="CloseConversation">Close Chat</button>
+            }
+        </div>
+
+        <div class="chat-window" @ref="chatWindowRef">
+            @if (isLoadingMessages)
+            {
+                <div class="text-center my-3">
+                    <span class="spinner-border spinner-border-sm me-2"></span>Loading messages...
+                </div>
+            }
+            else if (!messages.Any())
+            {
+                <div class="text-center my-3 text-muted">No messages yet. Say hi! 👋</div>
+            }
+            else
+            {
+                @foreach (var msg in messages)
+                {
+                    <div class="chat-bubble @(msg.SenderId == UserId ? "sent" : "received")">
+                        @((MarkupString)msg.Text)
+                        <div class="chat-time">@msg.Timestamp.ToLocalTime().ToShortTimeString()</div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="chat-input-bar">
+            @if (UserState.UserType != 3)
+            {
+            <button class="btn btn-outline-secondary me-2" @onclick="AddAttachment">📎</button>
+            <button class="btn btn-outline-warning me-2" @onclick="OpenTicketModal">🎫</button>
+            }
+            <input class="chat-input"
+                   placeholder="Aa"
+                   @bind="newMessage"
+                   @bind:event="oninput"
+                   @onkeydown="HandleKeyDown"
+                   @ref="chatInputRef" 
+                   disabled="@(currentConversation?.IsLocked == true)" />
+            <button @onclick="SendMessage" class="chat-send" disabled="@(currentConversation?.IsLocked == true)">➤</button>
+        </div>
+    </div>
+</div>
+<!-- Ticket Modal -->
+@if (showTicketModal)
+{
+    <div class="modal show d-block custom-modal-overlay" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered modal-md">
+            <div class="modal-content custom-modal-content">
+                <div class="modal-header bg-modal">
+                    <h5 class="modal-title">Create Ticket</h5>
+                    <button type="button" class="btn-close " style="background-color:white" @onclick="() => showTicketModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    @* 🔹 Warning Alert shown when no client selected *@
+                    @if (!string.IsNullOrEmpty(clientValidationError))
+                    {
+                        <div class="alert alert-warning text-center mb-3">
+                            @clientValidationError
+                        </div>
+                    }
+                    <EditForm Model="@newTicket" OnValidSubmit="HandleCreateTicket">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+
+                        <div class="mb-3">
+                            <label>Issue Title</label>
+                            <InputText class="form-control" @bind-Value="newTicket.IssueTitle" />
+                        </div>
+                    @*     <div class="mb-3">
+                            <label>Client</label>
+                            <InputText class="form-control" @bind-Value="newTicket.Client" />
+                        </div> *@
+                        <div class="mb-3">
+                            <label>Project</label>
+                            <InputSelect class="form-select" @bind-Value="selectedProjectId">
+                                <option value="0">-- Select Project --</option>
+                                @foreach (var p in projects)
+                                {
+                                    <option value="@p.Id">@p.Title</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label>Concern</label>
+                            <InputText class="form-control" @bind-Value="newTicket.Concern" />
+                        </div>
+                        <div class="mb-3">
+                            <label>Status</label>
+                            <InputSelect class="form-select" @bind-Value="newTicket.Status">
+                                @foreach (var status in Enum.GetValues<TicketStatus>())
+                                {
+                                    <option value="@status">@status</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                        <label>Priority</label>
+                        <InputSelect class="form-select" @bind-Value="newTicket.Priority">
+                            @foreach (var priority in Enum.GetValues<TicketPriority>())
+                            {
+                                <option value="@priority">@priority</option>
+                            }
+                        </InputSelect>
+                        </div>
+
+                <button class="btn btn-primary">Submit</button>
+                </EditForm>
+            </div>
+        </div>
+        </div>
+    </div>
+}
+<!-- New Chat Modal -->
+@if (showNewChatModal)
+{
+    <div class="modal show d-block custom-modal-overlay" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Chat</h5>
+                    <button type="button" class="btn-close" @onclick="() => showNewChatModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <InputText class="form-control mb-2" placeholder="Conversation Name" @bind-Value="newConversationName" />
+
+                    <label>Select Participants</label>
+                    <select multiple class="form-select mb-2" @onchange="OnUsersSelected">
+                        @foreach (var u in users)
+                        {
+                            <option value="@u.Id" selected="@selectedUserIds.Contains(u.Id)">@u.Name</option>
+                        }
+                    </select>
+
+                    <div class="form-check mb-2">
+                        <input type="checkbox" class="form-check-input" @bind="isGroupChat" />
+                        <label class="form-check-label">Group Chat</label>
+                    </div>
+
+                    <button class="btn btn-primary" @onclick="CreateNewConversation">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+@code {
+    [Parameter]
+    public string EncryptedId { get; set; }
+
+    [Inject]
+    public LinkService LinkService { get; set; }
+    private int UserId;
+    [Parameter] public int ReceiverId { get; set; }
+    private bool isAllClientsSelected = false;
+    private bool showTicketModal;
+    private CreateTicketCommand newTicket = new();
+    private Task AddAttachment() => Task.CompletedTask;
+    private string clientValidationError = string.Empty;
+    private List<ChatMessage> messages = new();
+    private List<ClientDto> clients = new();
+    private List<ProjectDto> projects = new();
+    private int selectedProjectId;
+    private bool isClientDropdownOpen = false;
+    private bool isMobileClientDropdownOpen = false;
+    private void ToggleClientDropdown() => isClientDropdownOpen = !isClientDropdownOpen;
+    private void ToggleMobileClientDropdown() => isMobileClientDropdownOpen = !isMobileClientDropdownOpen;
+    private ChatConversation? currentConversation;
+
+    // New chat modal
+    private bool showNewChatModal;
+    private string newConversationName = "";
+    private bool isGroupChat = false;
+    private List<int> selectedUserIds = new();
+    private void SelectClient(int clientId)
+    {
+        // selectedClientId = clientId;
+        // selectedClient = clients.FirstOrDefault(c => c.Id == clientId);
+        // isClientDropdownOpen = false;
+        // isMobileClientDropdownOpen = false;
+        selectedClientId = clientId;
+        selectedClient = clients.FirstOrDefault(c => c.Id == clientId);
+        isClientDropdownOpen = false;
+        isMobileClientDropdownOpen = false;
+        isAllClientsSelected = false;
+        _ = LoadUsersByClient(clientId);
+        var utype = UserState.UserType;
+       
+        _ = LoadProjects(selectedUser.ClientId);
+    }
+    private void SelectAllClients()
+    {
+        selectedClient = null;
+        selectedClientId = 0; // optional, indicates "no specific client"
+        isClientDropdownOpen = false;
+        isMobileClientDropdownOpen = false;
+        isAllClientsSelected = true;
+
+        _ = LoadUsers(UserId);
+        _ = LoadAllProjects();
+    }
+    private void OnUsersSelected(ChangeEventArgs e)
+    {
+        selectedUserIds.Clear();
+
+        if (e.Value is string[] selectedValues)
+        {
+            selectedUserIds = selectedValues.Select(int.Parse).ToList();
+        }
+        else if (e.Value is string singleValue)
+        {
+            // Some browsers may send a single string when only one is selected
+            selectedUserIds.Add(int.Parse(singleValue));
+        }
+    }
+    private async Task LoadAllUsers()
+    {
+        isLoadingUsers = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}User/GetUsers").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            users = JsonSerializer.Deserialize<List<UserDto>>(rawJson, options) ?? new List<UserDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load all users: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingUsers = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAllProjects()
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Project/Get").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            projects = JsonSerializer.Deserialize<List<ProjectDto>>(rawJson, options) ?? new List<ProjectDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load all projects: {ex.Message}");
+        }
+    }
+    private async Task LoadUsersByClient(int clientId)
+    {
+        isLoadingUsers = true;
+        StateHasChanged();
+
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}User/GetUsersByClient/{clientId}").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+            users = JsonSerializer.Deserialize<List<UserDto>>(rawJson, options) ?? new List<UserDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load users by client: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingUsers = false;
+            StateHasChanged();
+        }
+    }
+
+    private int selectedClientId;
+    private ClientDto? selectedClient;
+    private string _newMessage = "";
+    private string newMessage
+    {
+        get => _newMessage;
+        set
+        {
+            if (_newMessage != value)
+            {
+                _newMessage = value;
+                _ = NotifyTyping();
+            }
+        }
+    }
+    private async Task LoadProjects(int clientId)
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Projects/GetByClient/{clientId}").ToString();
+            // var url = "https://localhost:7296/Projects/GetByClient/GetByClient/2";
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+            projects = JsonSerializer.Deserialize<List<ProjectDto>>(rawJson, options) ?? new List<ProjectDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load projects: {ex.Message}");
+        }
+    }
+    private async Task HandleCreateTicket()
+    {
+        try
+        {
+            var utype = UserState.UserType;
+            if (utype == 1 && selectedClient == null)
+            {
+                clientValidationError = "⚠ Please select a client before creating a ticket.";
+                return;
+            }
+
+            if (selectedProjectId == 0)
+            {
+                clientValidationError = "⚠ Please select a project before creating a ticket.";
+                return;
+            }
+
+            newTicket.RequestedById = ReceiverId;
+            newTicket.ClientId = selectedClient != null ? selectedClient.Id : selectedUser.ClientId;
+            newTicket.ProjectId = selectedProjectId;
+            newTicket.SupportedById = UserId;
+
+            if (newTicket.Priority == default)
+                newTicket.Priority = TicketPriority.Medium;
+
+            var res = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}Tickets/Create", newTicket);
+
+            if (res.IsSuccessStatusCode)
+            {
+                var createdTicket = await res.Content.ReadFromJsonAsync<TicketCreatedDto>();
+                if (createdTicket != null)
+                {
+                    showTicketModal = false;
+                    newTicket = new();
+                    selectedClientId = 0;
+                    selectedClient = null;
+                    selectedProjectId = 0;
+
+                    await SendChatMessage(
+                        $"🎫 New Ticket Created: " +
+                        $"<a href='/tickets/{createdTicket.Id}' class='ticket-link'>#{createdTicket.TicketNo}</a> " +
+                        $"<br/> ⏳ SLA Due: {createdTicket.DueDate.ToLocalTime():g}"
+                    );
+                }
+            }
+            else
+            {
+                Console.WriteLine("Ticket creation failed. Status: " + res.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to create ticket: {ex.Message}");
+        }
+    }
+    private CancellationTokenSource _cts;
+    private bool isLoadingUsers = true;
+    private bool isLoadingMessages = true;
+    private string? _lastPastedImage;
+    private DateTime _lastPasteTime;
+    private ElementReference chatWindowRef;
+    private bool shouldScroll = false;
+    private ElementReference chatInputRef;
+    private List<UserDto> users = new();
+    private UserDto? selectedUser;
+    private bool isMobileDropdownOpen = false;
+    private bool isOtherUserTyping = false;
+    private Timer? typingTimer;
+    private const int TypingTimeout = 2000;
+    private bool _pasteHandlerInitialized = false;
+    private int messagesLoaded = 0;
+    private const int PageSize = 20;
+    private bool allMessagesLoaded = false;
+    private void ToggleMobileDropdown() => isMobileDropdownOpen = !isMobileDropdownOpen;
+    private async Task NotifyTyping()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage))
+        {
+            await ChatService.SendTypingStatus(UserId, ReceiverId, false);
+            return;
+        }
+
+        await ChatService.SendTypingStatus(UserId, ReceiverId, true);
+
+        typingTimer?.Dispose();
+        typingTimer = new Timer(async _ =>
+        {
+            await ChatService.SendTypingStatus(UserId, ReceiverId, false);
+        }, null, TypingTimeout, Timeout.Infinite);
+    }
+
+    private void HandleTypingStatus(int senderId, int receiverId, bool isTyping)
+    {
+
+        isOtherUserTyping = isTyping;
+        InvokeAsync(StateHasChanged);
+
+    }
+    private void OnClientChanged()
+    {
+        selectedClient = clients.FirstOrDefault(c => c.Id == selectedClientId);
+    }
+    private async Task SelectUserMobile(int userId)
+    {
+        await SelectUser(userId);
+        isMobileDropdownOpen = false;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+
+            // 🔒 Decrypt token to actual user ID
+            var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+
+            if (string.IsNullOrEmpty(decrypted))
+            {
+                // If invalid token, redirect to error or home
+                Navigation.NavigateTo("/unauthorized");
+                return;
+            }
+
+            UserId = int.Parse(decrypted);
+
+            TitleService.SetTitle("Chat Support Page");
+
+            // 🔌 SignalR and data initialization
+            ChatService.OnMessageReceived += HandleIncomingMessage;
+            ChatService.OnTypingReceived += HandleTypingStatus;
+            ChatService.OnUserStatusChanged += HandleUserStatusChanged;
+
+            await ChatService.StartAsync(UserId);
+
+            await LoadUsers(UserId);
+            await LoadClient();
+
+            if (ReceiverId != 0)
+            {
+                await LoadConversation();
+            }
+            else if (users.Any())
+            {
+                ReceiverId = users.First().Id;
+                selectedUser = users.First();
+                await LoadConversation();
+            }
+            await base.OnInitializedAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to initialize chat: {ex.Message}");
+            Navigation.NavigateTo("/error");
+        }
+
+    }
+    private void HandleUserStatusChanged(int userId, bool isOnline, DateTime lastLogin)
+    {
+        var user = users.FirstOrDefault(u => u.Id == userId);
+        if (user != null)
+        {
+            user.IsOnline = isOnline;
+            user.LastLogin = lastLogin;
+            // user.LastActiveStatus = isOnline ? "Active now" : GetRelativeTime(lastLogin);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if ((firstRender || !_pasteHandlerInitialized) && chatInputRef.Context != null)
+        {
+            await JS.InvokeVoidAsync("enablePasteImage", chatInputRef,
+                DotNetObjectReference.Create(this));
+            await JS.InvokeVoidAsync("registerScrollUpEvent", chatWindowRef,
+        DotNetObjectReference.Create(this));
+
+            _pasteHandlerInitialized = true;
+            //     _cts = new CancellationTokenSource();
+            // _ = RefreshUserListPeriodically(_cts.Token);
+            // _ = Task.Run(async () =>
+            //   {
+            //       while (true)
+            //       {
+
+            //           users = await ChatService.GetUsersAsync(UserId);
+            //           InvokeAsync(StateHasChanged);
+            //           await Task.Delay(3000); // every 10 seconds
+            //       }
+            //   });
+        }
+
+        if (shouldScroll)
+        {
+            shouldScroll = false;
+            await ScrollToBottom();
+        }
+
+    }
+    private async Task RefreshUserListPeriodically(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                users = await ChatService.GetUsersAsync(UserId);
+
+                // Only re-render if users changed (avoid unnecessary UI updates)
+                await InvokeAsync(StateHasChanged);
+
+                await Task.Delay(5000, token); // refresh every 5 seconds
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            // ignore — this happens when component is disposed
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error updating users: {ex.Message}");
+        }
+    }
+    [JSInvokable]
+    public async Task ReceivePastedImage(string base64Image)
+    {
+        if (_lastPastedImage == base64Image && (DateTime.UtcNow - _lastPasteTime).TotalSeconds < 2)
+            return; // skip duplicate
+
+        _lastPastedImage = base64Image;
+        _lastPasteTime = DateTime.UtcNow;
+
+        await SendChatMessage($"<img src='{base64Image}' class='chat-image' />");
+
+        shouldScroll = true;
+        StateHasChanged();
+    }
+    private async Task OpenTicketModal()
+    {
+        var utype = UserState.UserType;
+
+        // Only validate selectedClient if UserType is 1
+        if (utype == 1 && selectedClient == null)
+        {
+            var dialog = await DialogService.ShowWarningAsync("Please select a client before creating a ticket.");
+            var msgbox = await dialog.Result;
+            return;
+        }
+
+        // ✅ Clear previous modal data
+        newTicket = new CreateTicketCommand();
+        selectedProjectId = 0;
+        clientValidationError = string.Empty;
+
+        // ✅ Reload projects from API for the selected user/client
+        if (selectedUser != null)
+            await LoadProjects(selectedUser.ClientId);
+
+        showTicketModal = true;
+    }
+   
+    private async Task LoadUsers(int? id = null)
+    {
+        isLoadingUsers = true;
+        StateHasChanged();
+        try
+        {
+            string url = id.HasValue
+                ? Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}User/GetUserById/{id.Value}").ToString()
+                : Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}User/GetUsers").ToString();
+
+            var response = await Http.GetAsync(url);
+            var rawJson = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode) return;
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            users = JsonSerializer.Deserialize<List<UserDto>>(rawJson, options) ?? new List<UserDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load users: {ex.Message}");
+        }
+         finally
+        {
+            isLoadingUsers = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadConversation(bool loadMore = false)
+    {
+            isLoadingMessages = true;
+            StateHasChanged();
+            if (loadMore && allMessagesLoaded) return;
+
+            isLoadingMessages = true;
+            StateHasChanged();
+
+            try
+            {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Messaging/GetConversation/conversation/{UserId}/{ReceiverId}?skip={messagesLoaded}&take={PageSize}");
+            var result = await Http.GetFromJsonAsync<List<ChatMessage>>(url) ?? new List<ChatMessage>();
+            currentConversation = await Http.GetFromJsonAsync<ChatConversation>($"{AppConfig.ChatUrl}Messaging/GetConversationInfo/{UserId}/{ReceiverId}");
+            if (result == null || result.Count == 0)
+            {
+                allMessagesLoaded = true;
+                return;
+            }
+
+            if (loadMore)
+            {
+                // insert at top
+                messages.InsertRange(0, result);
+            }
+            else
+            {
+                messages = result;
+                shouldScroll = true; // scroll to bottom initially
+            }
+
+            messagesLoaded += result.Count;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Failed to load conversation: {ex.Message}");
+            }
+            finally
+            {
+                isLoadingMessages = false;
+                // shouldScroll = true;
+                StateHasChanged();
+            }
+    }
+    private async Task LoadClient()
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Client/GetAll").ToString();
+            var response = await Http.GetAsync(url);
+            if (!response.IsSuccessStatusCode) return;
+
+            var rawJson = await response.Content.ReadAsStringAsync();
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+            clients = JsonSerializer.Deserialize<List<ClientDto>>(rawJson, options) ?? new List<ClientDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load clients: {ex.Message}");
+        }
+    }
+    private async Task SelectUser(int userId)
+    {
+        // ✅ Set receiver ID
+        ReceiverId = userId;
+
+        // ✅ Find and set the selected user
+        selectedUser = users.FirstOrDefault(u => u.Id == userId);
+
+        // ✅ Clear typing indicator
+        isOtherUserTyping = false;
+
+        // ✅ Reset unread message counter for this user
+        var selected = users.FirstOrDefault(u => u.Id == userId);
+        if (selected != null)
+        {
+            selected.UnreadCount = 0;
+        }
+
+        // ✅ Reset message state
+        messages.Clear();
+        messagesLoaded = 0;
+        allMessagesLoaded = false;
+
+        // ✅ Reload the conversation
+        await LoadConversation();
+
+        // ✅ Re-render UI
+        StateHasChanged();
+
+        // ✅ Optional: scroll to bottom of chat
+        await ScrollToBottom();
+    }
+    private string GetRelativeTime(DateTime? dateTime)
+    {
+        if (!dateTime.HasValue)
+            return "InActive";
+
+        var ts = DateTime.UtcNow - dateTime.Value;
+
+        if (ts.TotalSeconds < 60)
+            return "Just now";
+        if (ts.TotalMinutes < 60)
+            return $"{(int)ts.TotalMinutes} minute(s) ago";
+        if (ts.TotalHours < 24)
+            return $"{(int)ts.TotalHours} hour(s) ago";
+        if (ts.TotalDays < 7)
+            return $"{(int)ts.TotalDays} day(s) ago";
+
+        return dateTime.Value.ToString("MMM dd, yyyy");
+    }
+    private void HandleIncomingMessage(ChatMessage msg)
+    {
+        if (msg.SenderId == UserId || msg.ReceiverId == UserId)
+        {
+
+            InvokeAsync(() =>
+            {
+                if (msg.SenderId != UserId && msg.SenderId == ReceiverId)
+                {
+                    // Current active conversation → append to chat
+                    messages.Add(msg);
+                    shouldScroll = true;
+                }
+                else if (msg.SenderId != UserId)
+                {
+                    // ✅ Incoming from another user → increase unread count
+                    var user = users.FirstOrDefault(u => u.Id == msg.SenderId);
+                    if (user != null)
+                    {
+                        user.UnreadCount++;
+                    }
+                }
+
+                StateHasChanged();
+            });
+        }
+    }
+    private async Task SendChatMessage(string text)
+    {
+        if (currentConversation?.IsLocked == true || string.IsNullOrWhiteSpace(newMessage)) return;
+
+           var msg = new ChatMessage
+            {
+                SenderId = UserId,
+                ReceiverId = ReceiverId,
+                Text = text,
+                Timestamp = DateTime.UtcNow
+            };
+
+        // ✅ Immediately show the message in the UI
+        messages.Add(msg);
+        newMessage = "";
+        shouldScroll = true;
+        StateHasChanged();
+
+        // Send to SignalR
+        await ChatService.SendMessage(msg);
+        await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}Messaging/SendMessage", msg);
+    }
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage)) return;
+
+        await SendChatMessage(newMessage);
+        newMessage = "";
+
+    }
+    private async Task OpenNewChatModal()
+    {
+        newConversationName = "";
+        isGroupChat = false;
+        selectedUserIds.Clear();
+        showNewChatModal = true;
+    }
+    private async Task CreateNewConversation()
+    {
+        if (string.IsNullOrWhiteSpace(newConversationName) || !selectedUserIds.Any())
+            return;
+
+        // returns ChatConversationDto
+        var newConversation = await ChatService.CreateConversation(newConversationName, isGroupChat, selectedUserIds);
+
+        if (newConversation == null)
+            return;
+
+        // map DTO to your local ChatConversation
+        currentConversation = new ChatConversation
+        {
+            Id = newConversation.Id,
+            Name = newConversation.Name,
+            IsGroup = newConversation.IsGroup
+        };
+
+        // For 1:1 chat
+        ReceiverId = selectedUserIds.FirstOrDefault();
+
+        // Reload messages for this conversation
+        await LoadConversation();
+
+        // Close modal
+        showNewChatModal = false;
+    }
+
+    private async Task CloseConversation()
+    {
+        if (currentConversation == null) return;
+        await ChatService.CloseConversation(currentConversation.Id);
+        currentConversation.IsLocked = true;
+        StateHasChanged();
+    }
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SendMessage();
+        else await NotifyTyping();
+    }
+
+    private async Task ScrollToBottom()
+    {
+        await JS.InvokeVoidAsync("blazorScrollToBottom", chatWindowRef);
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        ChatService.OnMessageReceived -= HandleIncomingMessage;
+        ChatService.OnTypingReceived -= HandleTypingStatus;
+        ChatService.OnUserStatusChanged -= HandleUserStatusChanged;
+    }
+    [JSInvokable]
+    public async Task LoadMoreMessages()
+    {
+        if (isLoadingMessages || allMessagesLoaded) return;
+
+        await LoadConversation(loadMore: true);
+        await JS.InvokeVoidAsync("maintainScrollPosition", chatWindowRef);
+    }
+ 
+
+}

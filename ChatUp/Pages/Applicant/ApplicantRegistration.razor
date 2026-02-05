@@ -1,0 +1,166 @@
+﻿@page "/applicants/new"
+@page "/applicants/edit/{ApplicantId:int}"
+@using ChatUp.Application.Features.UserApplicant.DTOs
+@inject ChatUp.Services.ApplicantApiService Api
+@inject NavigationManager Nav
+@inject IHttpClientFactory HttpFactory
+
+<h3>@(IsEdit ? "Edit Applicant" : "Register New Applicant")</h3>
+
+<EditForm Model="@model" OnValidSubmit="Submit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label class="form-label">Full Name</label>
+        <InputText class="form-control" @bind-Value="model.ApplicantName" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">School</label>
+        <InputText class="form-control" @bind-Value="model.School" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Batch</label>
+        <InputText class="form-control" @bind-Value="model.Batch" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Email</label>
+        <InputText class="form-control" type="email" @bind-Value="model.Email" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Phone Number</label>
+        <InputText class="form-control" @bind-Value="model.PhoneNumber" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Home Address</label>
+        <InputTextArea class="form-control" @bind-Value="model.HomeAddress" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">CV Link</label>
+        <InputText class="form-control" @bind-Value="model.CvLink" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Required Hours</label>
+        <InputNumber class="form-control" @bind-Value="model.RequiredHours" />
+    </div>
+
+    <button class="btn btn-success" type="submit">@SubmitButtonText</button>
+    <button class="btn btn-secondary ms-2" type="button" @onclick="Cancel">Cancel</button>
+</EditForm>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger mt-2">@errorMessage</div>
+}
+
+@code {
+    [Parameter]
+    public int? ApplicantId { get; set; }  // Null if creating new
+
+    private CreateApplicantDto model = new();
+    private string errorMessage = string.Empty;
+    private bool IsEdit => ApplicantId.HasValue;
+    private string SubmitButtonText => IsEdit ? "Update" : "Submit";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEdit)
+        {
+            await LoadApplicant();
+        }
+    }
+
+    private async Task LoadApplicant()
+    {
+        try
+        {
+            var applicant = await Api.GetApplicantByIdAsync(ApplicantId.Value);
+            if (applicant != null)
+            {
+                // Map existing applicant to form model
+                model = new CreateApplicantDto
+                {
+                    ApplicantName = applicant.ApplicantName,
+                    School = applicant.School,
+                    Batch = applicant.Batch,
+                    Email = applicant.Email,
+                    PhoneNumber = applicant.PhoneNumber,
+                    HomeAddress = applicant.HomeAddress,
+                    CvLink = applicant.CvLink,
+                    RequiredHours = applicant.RequiredHours
+                };
+            }
+            else
+            {
+                errorMessage = "Applicant not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading applicant: {ex.Message}";
+        }
+    }
+
+    private async Task Submit()
+    {
+        errorMessage = string.Empty;
+
+        if (IsEdit)
+        {
+            var updateDto = new UpdateApplicantInfoDto
+            {
+                ApplicantName = model.ApplicantName,
+                School = model.School,
+                Batch = model.Batch,
+                Email = model.Email,
+                PhoneNumber = model.PhoneNumber,
+                HomeAddress = model.HomeAddress,
+                CvLink = model.CvLink,
+                RequiredHours = model.RequiredHours,
+                Status = model.Status,
+                Remarks = model.Remarks
+            };
+
+            var success = await Api.UpdateApplicantInfoAsync(
+                ApplicantId.Value, updateDto);
+
+            if (success)
+            {
+                Nav.NavigateTo("/applicants");
+            }
+            else
+            {
+                errorMessage = "Failed to update applicant.";
+            }
+
+            return;
+        }
+
+        // 🔹 CREATE MODE
+        model.Status = "Initial Assessment";
+
+        var result = await Api.CreateApplicantAsync(model);
+
+        if (result.Success)
+        {
+            Nav.NavigateTo("/applicants");
+        }
+        else
+        {
+            // ✅ EXACT backend message shown here
+            errorMessage = result.Error;
+        }
+    }
+
+    private void Cancel()
+    {
+        Nav.NavigateTo("/applicants");
+    }
+}

@@ -1,0 +1,69 @@
+﻿@using ChatUp.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IJSRuntime JS
+@inject SessionService SessionService
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    @if (!(context?.User?.Identity?.IsAuthenticated ?? false))
+                    {
+                        <RedirectToLogin />
+                    }
+                    else
+                    {
+                        <LayoutView Layout="@typeof(MainLayout)">
+                            <p>You are not authorized to access this page.</p>
+                        </LayoutView>
+                    }
+                </NotAuthorized>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <p role="alert">Sorry, there's nothing at this address.</p>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationStateTask { get; set; }
+
+    private AuthenticationState? context;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // ✅ Safely get auth state when it's available
+            if (AuthenticationStateTask != null)
+            {
+                context = await AuthenticationStateTask;
+            }
+
+            // ✅ Initialize JS activity tracker
+            await JS.InvokeVoidAsync("activityTracker.initialize",
+                DotNetObjectReference.Create(this));
+        }
+    }
+
+    [JSInvokable]
+    public void UpdateActivity()
+    {
+        try
+        {
+            // 🔹 Called from JS when user interacts
+            SessionService?.UpdateActivity();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating activity: {ex.Message}");
+        }
+    }
+}

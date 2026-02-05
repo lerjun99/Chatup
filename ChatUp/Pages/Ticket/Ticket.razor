@@ -1,0 +1,574 @@
+﻿@page "/tickets/{EncryptedId}"
+@using ChatUp.Application.Auth.Commands
+@using ChatUp.Application.Features.Ticket.DTOs
+@using ChatUp.Domain.Entities
+@using ChatUp.Services
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserState UserState
+@inject IDialogService DialogService
+@inject Blazored.SessionStorage.ISessionStorageService SessionStorage
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject ChatUp.Services.ChatService ChatService
+@inject ChatUp.Services.EmailService EmailService
+@if (isSendingEmail)
+{
+    <div class="email-overlay">
+        <div class="email-spinner">
+            <img src="images/email-sendings.gif" alt="Sending Email..." class="email-gif" />
+            <p>Sending emails... Please wait</p>
+        </div>
+    </div>
+}
+<h3 class="mb-4 text-primary fw-bold">
+    <i class="bi bi-ticket-detailed me-2"></i> Ticket Details
+</h3>
+
+@if (ticket == null)
+{
+    <div class="text-center text-muted py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <p><em>Loading ticket details...</em></p>
+    </div>
+}
+else
+{
+    <div class="card border-0 shadow-lg rounded-4 p-4 mb-4 bg-light">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <h5 class="fw-bold text-dark mb-3">📄 Ticket Information</h5>
+                <div><strong>Ticket No:</strong> @ticket.TicketNo</div>
+                <div><strong>Date Received:</strong> @ticket.DateReceived.ToString("g")</div>
+                <div><strong>Issue Title:</strong> @ticket.IssueTitle</div>
+                <div><strong>Concern:</strong> @ticket.Description</div>
+                <div><strong>Priority:</strong>
+                    <span class="
+                        @(selectedPriority switch
+                                      {
+                                          TicketPriority.Critical => "bg-dark text-white px-2 py-1 rounded",
+                                          TicketPriority.High => "bg-danger text-white px-2 py-1 rounded",
+                                          TicketPriority.Medium => "bg-warning text-dark px-2 py-1 rounded",
+                                          TicketPriority.Low => "bg-success text-white px-2 py-1 rounded",
+                                          _ => "bg-secondary text-white px-2 py-1 rounded"
+                                      })">
+                       @selectedPriority
+                </span>
+                </div>
+                <div><strong>Due Date:</strong> @ticket.DueDate?.ToString("g")</div>
+            </div>
+
+            <div class="col-md-6">
+                <h5 class="fw-bold text-dark mb-3">👤 Related Details</h5>
+                <div><strong>Requested By:</strong> @ticket.RequestedByName</div>
+                <div><strong>Client:</strong> @ticket.ClientName</div>
+                <div><strong>Project:</strong> @ticket.ProjectName</div>
+                <div>
+                    <strong>SLA Status:</strong>
+                    @if (ticket.IsBreached)
+                    {
+                        <span class="badge bg-danger">⚠ Breached</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-success">✅ On Track</span>
+                    }
+                </div>
+            </div>
+        </div>
+    @if ( UserState.UserType != 3)
+    {
+        <hr class="my-4" />
+
+        <div>
+            <h5 class="fw-bold text-dark mb-3">🛠 Update Ticket Status</h5>
+
+            <div class="row g-3 align-items-start">
+                <!-- 🔹 Status Dropdown -->
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Select New Status</label>
+                    <select class="form-select shadow-sm" value="@selectedStatus" @onchange="OnStatusChanged">
+                        @foreach (var status in Enum.GetValues<TicketStatus>())
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- 🔹 Remarks (Full Width) -->
+                <div class="col-12">
+                    <label class="form-label fw-semibold mt-2">Remarks (optional)</label>
+                    <textarea class="form-control shadow-sm" rows="3" style="resize: none;"
+                              placeholder="Enter remarks for this status update..."
+                              @bind=remarks></textarea>
+                </div>
+                    <!-- ✅ Conditional Email Toggle -->
+                    <div class="col-12 col-md-6 d-flex align-items-center mt-2">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="sendEmailToggle" @bind="sendEmail">
+                            <label class="form-check-label" for="sendEmailToggle">
+                                Send Email Notification: <strong>@(sendEmail ? "Yes" : "No")</strong>
+                            </label>
+                        </div>
+                    </div>
+            </div>
+
+            @if (updateMessage != null)
+            {
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle me-1"></i> @updateMessage
+                </div>
+            }
+
+            @if (ticket?.SupportedByName != null)
+            {
+                <div class="alert alert-light border mt-4 small">
+                    <i class="bi bi-clock-history me-1"></i>
+                    <strong>Last Updated By:</strong> @ticket.SupportedByName
+                    on @ticket.DueDate?.ToString("g")
+                </div>
+            }
+
+            <div class="mt-3" style="display: flex;justify-content: flex-start;gap: 10px;">
+                <button class="btn btn-secondary px-4 shadow-sm" @onclick="GoBack">
+                    <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+                </button>
+              
+                    <button class="btn btn-primary px-4 shadow-sm" @onclick="SubmitChanges">
+                        <i class="bi bi-check-circle me-1"></i> Submit Changes
+                    </button>
+                
+            </div>
+        </div>
+        }
+    </div>
+    <div class="card border-0 shadow-lg rounded-4 p-4 bg-white" style="
+        overflow: auto;
+        height: 260px;
+    ">
+        <h5 class="fw-bold text-dark mb-3">
+            <i class="bi bi-clock-history me-2 text-primary"></i> Ticket History
+        </h5>
+
+        @if (history == null)
+        {
+            <div class="text-center text-muted py-3">
+                <div class="spinner-border text-secondary mb-2" role="status"></div>
+                <p><em>Loading history...</em></p>
+            </div>
+        }
+        else if (!history.Any())
+        {
+            <div class="alert alert-light border text-center">
+                <i class="bi bi-info-circle me-1"></i> No history records found.
+            </div>
+        }
+        else
+        {
+            <ul class="timeline list-unstyled mb-0">
+                @foreach (var h in history.OrderByDescending(x => x.UpdatedAt))
+                {
+                    <li class="timeline-item mb-4">
+                        <span class="fw-bold">@h.UpdatedByName</span>
+                        <small class="text-muted ms-1">@h.UpdatedAt.ToLocalTime().ToString("g")</small>
+                        <div class="mt-1">
+                            <span>From</span>
+                            <span class="badge bg-secondary me-1">@h.OldStatus</span>
+                            <i class="bi bi-arrow-right"></i>
+                            <span>To</span>
+                            <span class="badge bg-success ms-1">@h.NewStatus</span>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(h.Remarks))
+                        {
+                            <p class="mt-1 mb-0 text-muted"><em>@h.Remarks</em></p>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    private int? sessionUserType;
+    private bool isUserLoaded = false;
+    private bool sendEmail = false;
+    private TicketPriority selectedPriority;
+    [Parameter] public int TicketId { get; set; }
+    private TicketDto? ticket;
+    private TicketStatus selectedStatus;
+    private string? updateMessage;
+    private List<TicketHistoryDto>? history;
+    private string? remarks;
+    private bool isModified = false;
+    private bool isSendingEmail = false;
+    [Parameter] public string EncryptedId { get; set; }
+    [Inject] public LinkService LinkService { get; set; }
+    private List<IBrowserFile> Uploads = [];
+    private bool sessionChecked = false;
+    [Parameter] public EventCallback OnNavigate { get; set; }
+    /* -------- nav helpers -------- */
+    private void Navigate(string url)
+    {
+        Navigation.NavigateTo(url, forceLoad: false);
+        if (OnNavigate.HasDelegate)
+            OnNavigate.InvokeAsync();
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || sessionChecked)
+            return;
+
+        sessionChecked = true;
+
+        // 🔐 Validate route param
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+
+        if (string.IsNullOrEmpty(decrypted) || !int.TryParse(decrypted, out var ticketId))
+        {
+            Navigation.NavigateTo("/unauthorized", true);
+            return;
+        }
+
+        TicketId = ticketId;
+
+        // 🔐 Validate session BEFORE loading data
+        var sessionOk = await LoadSessionUser();
+        if (!sessionOk)
+        {
+            await PerformLogoutAsync(notifyBackend: false);
+            return;
+        }
+
+        // ✅ Now safe to load data
+        await LoadTicket();
+        await LoadHistory();
+
+        StateHasChanged();
+    }
+    private async Task PerformLogoutAsync(bool notifyBackend = true)
+    {
+        try
+        {
+            if (notifyBackend && UserState.UserId.HasValue)
+            {
+                if (ChatService != null)
+                    await ChatService.SetUserOfflineAsync(UserState.UserId.Value);
+
+                var logoutCommand = new LogoutCommand { UserId = UserState.UserId.Value };
+                await Http.PostAsJsonAsync(
+                    AppConfig.ChatUrl + "Auth/Logout/logout",
+                    logoutCommand
+                );
+            }
+
+            await SessionStorage.ClearAsync();
+            await LocalStorage.ClearAsync();
+
+            UserState.UserId = null;
+            UserState.Username = null;
+            UserState.UserType = 0;
+
+            if (AuthStateProvider is CustomAuthStateProvider customProvider)
+                customProvider.NotifyUserLogout();
+
+            if (ChatService != null)
+                await ChatService.DisposeAsync();
+
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Forced logout failed: {ex.Message}");
+            Navigation.NavigateTo("/", forceLoad: true);
+        }
+    }
+    private async Task<bool> LoadSessionUser()
+    {
+        try
+        {
+            string encUserType = null;
+
+            if (await SessionStorage.ContainKeyAsync("UserType"))
+                encUserType = await SessionStorage.GetItemAsync<string>("UserType");
+            else if (await LocalStorage.ContainKeyAsync("UserType"))
+                encUserType = await LocalStorage.GetItemAsync<string>("UserType");
+
+            if (string.IsNullOrWhiteSpace(encUserType))
+                return false;
+
+            var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(encUserType));
+
+            if (!int.TryParse(decrypted, out var userType))
+                return false;
+
+            UserState.UserType = userType;
+            sessionUserType = userType;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    private async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        // if (ticket == null) return;
+
+        // // Get the new status from the dropdown
+        // if (Enum.TryParse<TicketStatus>(e.Value?.ToString(), out var newStatus))
+        // {
+        //     selectedStatus = newStatus;
+
+        //     var payload = new
+        //     {
+        //         TicketId = ticket.Id,
+        //         NewStatus = newStatus,
+        //         UpdatedBy = UserState.UserId,
+        //         UpdatedAt = DateTime.UtcNow,
+        //         remarks = remarks
+        //     };
+
+        //     try
+        //     {
+        //         var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateStatus", payload);
+        //         if (response.IsSuccessStatusCode)
+        //         {
+        //             updateMessage = $"✅ Status automatically updated to '{newStatus}'";
+        //             await LoadHistory(); // refresh ticket history
+        //         }
+        //         else
+        //         {
+        //             updateMessage = "⚠ Failed to update ticket status.";
+        //         }
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         updateMessage = $"Error updating status: {ex.Message}";
+        //     }
+
+        //     StateHasChanged();
+        // }
+        if (Enum.TryParse<TicketStatus>(e.Value?.ToString(), out var newStatus))
+        {
+            selectedStatus = newStatus;
+            isModified = true; // Mark that something changed
+            StateHasChanged();
+        }
+    }
+    private async Task SubmitChanges()
+    {
+        if (ticket == null) return;
+
+        try
+        {
+            var payload = new
+            {
+                TicketId = ticket.Id,
+                NewStatus = selectedStatus,
+                NewPriority = selectedPriority,
+                UpdatedBy = UserState.UserId,
+                UpdatedAt = DateTime.UtcNow,
+                Remarks = remarks
+            };
+
+            var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateStatus", payload);
+
+            if (response.IsSuccessStatusCode)
+            {
+                updateMessage = "✅ Changes successfully saved.";
+                isModified = false;
+
+                await LoadTicket();
+                await LoadHistory();
+
+                // Send email
+
+                StateHasChanged();
+                if (sendEmail)
+                {
+                    isSendingEmail = true;
+                    StateHasChanged();
+                    string subject = $"[Ticket Update] {ticket.IssueTitle} - Status Changed to {selectedStatus}";
+                    string body = $@"
+                            <html>
+                              <head>
+                                <meta charset='UTF-8'>
+                              </head>
+                              <body style='margin:0; padding:20px; font-family:Arial,sans-serif; background-color:#f9f9f9; color:#333;'>
+                                <table width='100%' cellpadding='0' cellspacing='0' border='0' style='max-width:600px; margin:auto; background:#ffffff; border-collapse:collapse;'>
+                                  <tr>
+                                    <td style='padding:24px;'>
+                                      <h2 style='color:#2a6ebb; margin:0 0 16px 0;'>Ticket Update Notification</h2>
+                                      <p>Dear <strong>{ticket.RequestedByName}</strong>,</p>
+                                      <p>Your ticket has been updated with the latest status.</p>
+                                      <table width='100%' cellpadding='6' cellspacing='0' border='0' style='border-collapse:collapse; margin-top:10px;'>
+                                        <tr style='background-color:#f3f6fa;'><td style='width:40%; font-weight:bold;'>Ticket Number:</td><td>{ticket.TicketNo}</td></tr>
+                                        <tr><td style='font-weight:bold;'>Issue Title:</td><td>{ticket.IssueTitle}</td></tr>
+                                        <tr style='background-color:#f3f6fa;'><td style='font-weight:bold;'>New Status:</td>
+                                          <td><span style='padding:4px 10px; border-radius:4px; background-color:#2a6ebb; color:white;'>{selectedStatus}</span></td>
+                                        </tr>
+                                        <tr><td style='font-weight:bold;'>Remarks:</td><td>{remarks}</td></tr>
+                                      </table>
+                                      <p style='margin-top:30px; color:#555;'>Best regards,<br/><strong>Odecci Support Team</strong><br/><span style='font-size:12px; color:#888;'>This is an automated message. Please do not reply directly.</span></p>
+                                    </td>
+                                  </tr>
+                                </table>
+                              </body>
+                            </html>";
+
+                    // You can use the actual client email from your ticket DTO
+                    await EmailService.SendEmailAsync(ticket.RequesterEmail, subject, body);
+                    await DialogService.ShowSuccessAsync("Email notification sent to the client!");
+                }
+                
+                if (ChatService != null)
+                {
+                    await ChatService.NotifyTicketUpdateAsync();
+                }
+                isSendingEmail = false; // hide overlay
+            }
+            else
+            {
+                updateMessage = "⚠ Failed to save one or more updates.";
+            }
+        }
+        catch (Exception ex)
+        {
+            updateMessage = $"Error: {ex.Message}";
+        }
+
+        StateHasChanged();
+    }
+    private async Task LoadTicket()
+    {
+        try
+        {
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/GetById/{TicketId}");
+            ticket = await Http.GetFromJsonAsync<TicketDto>(url);
+            
+            if (ticket == null)
+            {
+                Navigation.NavigateTo("/ticketlist");
+                return;
+            }
+
+            // ✅ Set current status
+           selectedStatus = ticket.Status;
+           selectedPriority = ticket.Priority; // initialize dropdown
+
+            // ✅ Load history next
+            await LoadHistory();
+
+            // ✅ Set remarks value
+            if (history != null && history.Any())
+            {
+                // Get the latest remark from ticket history
+                remarks = history.OrderByDescending(h => h.UpdatedAt)
+                                 .FirstOrDefault()?.Remarks ?? string.Empty;
+            }
+            else
+            {
+                // Fallback: use remark stored directly in the ticket (if applicable)
+                remarks = ticket.Concern ?? string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading ticket: {ex.Message}");
+        }
+    }
+
+    private async Task LoadHistory()
+    {
+        try
+        {
+      
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/GetHistory/{TicketId}");
+            history = await Http.GetFromJsonAsync<List<TicketHistoryDto>>(url);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading history: {ex.Message}");
+            history = new List<TicketHistoryDto>();
+        }
+    }
+
+    private async Task UpdateStatus()
+    {
+        if (ticket == null) return;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User.Identity?.Name ?? "System";
+
+        var payload = new
+        {
+            TicketId = ticket.Id,
+            NewStatus = selectedStatus,
+            UpdatedBy = UserState.UserId,
+            UpdatedAt = DateTime.UtcNow,
+            Remarks = remarks 
+        };
+
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateStatus", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                updateMessage = $"✅ Status updated to '{selectedStatus}' with remarks: {remarks}";
+                remarks = string.Empty; // clear after update
+                await LoadTicket();
+                await LoadHistory();
+            }
+            else
+            {
+                updateMessage = "⚠ Failed to update ticket status.";
+            }
+        }
+        catch (Exception ex)
+        {
+            updateMessage = $"Error: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+   private async Task OnPriorityChangedManual(ChangeEventArgs e)
+    {
+        // if (Enum.TryParse<TicketPriority>(e.Value?.ToString(), out var newPriority))
+        // {
+        //     selectedPriority = newPriority;
+
+        //     var payload = new
+        //     {
+        //         TicketId = ticket.Id,
+        //         NewPriority = selectedPriority,
+        //         UpdatedBy = UserState.UserId,
+        //         UpdatedAt = DateTime.UtcNow
+        //     };
+
+        //     await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdatePriority", payload);
+        //     updateMessage = $"✅ Priority updated to '{selectedPriority}'";
+        //     await LoadTicket();
+        //     await LoadHistory();
+        //     StateHasChanged();
+        // }
+        if (Enum.TryParse<TicketPriority>(e.Value?.ToString(), out var newPriority))
+        {
+            selectedPriority = newPriority;
+            isModified = true; // Mark that something changed
+            StateHasChanged();
+        }
+    }
+    // private void GoBack() => Navigation.NavigateTo("/ticketlist");
+
+    private void GoBack()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/ticketlist/{encodedToken}");
+        }
+    }
+}

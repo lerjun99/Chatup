@@ -1,0 +1,75 @@
+﻿.scrollable-table {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+/* Force consistent column widths */
+.fixed-table {
+    table-layout: fixed;
+    width: 100%;
+}
+
+    /* Sticky header */
+    .fixed-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #fff;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+/* Column width control */
+.col-checkbox {
+    width: 40px;
+    text-align: center;
+}
+
+.col-actions {
+    width: 180px;
+    text-align: center;
+}
+
+/* Prevent shifting when scrollbar appears */
+.scrollable-table::-webkit-scrollbar {
+    width: 10px;
+}
+.applicant-dashboard {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 220px;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    transition: transform 0.3s ease;
+}
+
+    .sidebar.visible {
+        transform: translateX(0);
+    }
+
+.sidebar-toggle {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    z-index: 999;
+}
+
+.main {
+    flex-grow: 1;
+    padding: 1.5rem;
+    background-color: #f1f5f9;
+}
+
+.card {
+    border-radius: 0.5rem;
+}
+
+.kpi {
+    padding: 1rem;
+    background-color: #fff;
+    border-radius: 0.5rem;
+    text-align: center;
+    box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+}
