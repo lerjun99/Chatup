@@ -6,7 +6,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @inject TitleService TitleService
-
+@inject IDialogService DialogService
 <h3 class="mb-4 fw-bold text-primary">
     <i class="bi bi-ticket-detailed me-2"></i>
     Ticket Management
@@ -147,7 +147,7 @@ else
                                         <i class="fa-solid fa-eye"></i> View
                                     </button>
                                     <button class="btn btn-sm @(t.IsArchived ? "btn-success" : "btn-danger") rounded-pill px-3"
-                                            @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived)">
+                                            @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived,t.Id)">
                                         <i class="fa-solid @(t.IsArchived ? "fa-rotate-left" : "fa-trash")"></i>
                                         @(t.IsArchived ? "Restore" : "Delete")
                                     </button>
@@ -328,12 +328,14 @@ else
         Navigation.NavigateTo($"/tickets/{encodedToken}");
     }
 
-    private async Task DeleteOrRestoreTicket(string id, bool isArchived)
+    private async Task DeleteOrRestoreTicket(string ticketno, bool isArchived, int id)
     {
         string action = isArchived ? "restore" : "delete";
-        bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to {action} {id}?");
-        if (!confirmed) return;
-
+        // bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to {action} {ticketno}?");
+        // if (!confirmed) return;
+        var confirmDialog = await DialogService.ShowConfirmationAsync($"Are you sure you want to {action} {ticketno}?", "Yes");
+        var result = await confirmDialog.Result;
+        if (result.Cancelled) return;
         string url = isArchived
             ? $"{AppConfig.ChatUrl}Tickets/RestoreTicket/Restore/{id}"
             : $"{AppConfig.ChatUrl}Tickets/Delete/{id}";

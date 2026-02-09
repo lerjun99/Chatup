@@ -391,7 +391,7 @@
                 model.CreatedBy = UserId;
                 model.RememberToken = "";
                 await UserService.RegisterAsync(model);
-                await DialogService.ShowSuccessAsync("User registered successfully!");
+                await DialogService.ShowWarningAsync("User registered successfully!","Success");
                 Navigation.NavigateTo("/users");
             }
 

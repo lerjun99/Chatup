@@ -36,33 +36,39 @@ else
 {
     <div class="card border-0 shadow-lg rounded-4 p-4 mb-4 bg-light">
         <div class="row g-3">
+
+            <!-- LEFT COLUMN -->
             <div class="col-md-6">
                 <h5 class="fw-bold text-dark mb-3">📄 Ticket Information</h5>
                 <div><strong>Ticket No:</strong> @ticket.TicketNo</div>
                 <div><strong>Date Received:</strong> @ticket.DateReceived.ToString("g")</div>
                 <div><strong>Issue Title:</strong> @ticket.IssueTitle</div>
-                <div><strong>Concern:</strong> @ticket.Description</div>
-                <div><strong>Priority:</strong>
+
+                <div>
+                    <strong>Priority:</strong>
                     <span class="
-                        @(selectedPriority switch
-                                      {
-                                          TicketPriority.Critical => "bg-dark text-white px-2 py-1 rounded",
-                                          TicketPriority.High => "bg-danger text-white px-2 py-1 rounded",
-                                          TicketPriority.Medium => "bg-warning text-dark px-2 py-1 rounded",
-                                          TicketPriority.Low => "bg-success text-white px-2 py-1 rounded",
-                                          _ => "bg-secondary text-white px-2 py-1 rounded"
-                                      })">
-                       @selectedPriority
-                </span>
+                    @(selectedPriority switch
+                          {
+                              TicketPriority.Critical => "bg-dark text-white px-2 py-1 rounded",
+                              TicketPriority.High => "bg-danger text-white px-2 py-1 rounded",
+                              TicketPriority.Medium => "bg-warning text-dark px-2 py-1 rounded",
+                              TicketPriority.Low => "bg-success text-white px-2 py-1 rounded",
+                              _ => "bg-secondary text-white px-2 py-1 rounded"
+                          })">
+                        @selectedPriority
+                    </span>
                 </div>
+
                 <div><strong>Due Date:</strong> @ticket.DueDate?.ToString("g")</div>
             </div>
 
+            <!-- RIGHT COLUMN -->
             <div class="col-md-6">
                 <h5 class="fw-bold text-dark mb-3">👤 Related Details</h5>
                 <div><strong>Requested By:</strong> @ticket.RequestedByName</div>
                 <div><strong>Client:</strong> @ticket.ClientName</div>
                 <div><strong>Project:</strong> @ticket.ProjectName</div>
+
                 <div>
                     <strong>SLA Status:</strong>
                     @if (ticket.IsBreached)
@@ -75,7 +81,22 @@ else
                     }
                 </div>
             </div>
+
+            <!-- FULL WIDTH CONCERN -->
+            <div class="col-12">
+                <details open class="concern-details">
+                    <summary class="fw-bold mb-2 concern-summary">
+                        📝 Concern
+                    </summary>
+
+                    <div class="formatted-text">
+                        @ticket.Description
+                    </div>
+                </details>
+            </div>
+
         </div>
+
     @if ( UserState.UserType != 3)
     {
         <hr class="my-4" />

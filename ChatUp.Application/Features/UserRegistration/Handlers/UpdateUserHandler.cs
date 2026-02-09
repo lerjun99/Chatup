@@ -30,6 +30,7 @@ namespace ChatUp.Application.Features.UserRegistration.Handlers
                     throw new InvalidOperationException("User not found.");
 
                 // ✅ Update user fields
+                entity.Username = request.Username;
                 entity.FullName = request.FullName;
                 entity.EmailAddress = request.EmailAddress;
                 entity.Role = request.Role;
