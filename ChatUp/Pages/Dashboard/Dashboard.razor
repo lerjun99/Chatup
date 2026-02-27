@@ -352,9 +352,14 @@
         UserId = int.Parse(decrypted);
 
         // Build query params
-        var query = $"?page={page}&pageSize=10";
+        UserId = int.Parse(decrypted);
+
+        // ✅ INCLUDE USER ID
+        var query = $"?userId={UserId}&page={page}&pageSize=10";
+
         if (startDate.HasValue)
             query += $"&from={startDate.Value:yyyy-MM-ddTHH:mm:ss}";
+
         if (endDate.HasValue)
             query += $"&to={endDate.Value:yyyy-MM-ddTHH:mm:ss}";
         try

@@ -33,7 +33,7 @@ namespace ChatUp.Services
             string subject = BuildSubject(ticket, type, isDeveloper: false);
             string body = BuildBody(ticket, type, remarks, isDeveloper: false);
 
-            await _email.SendEmailAsync(ticket.RequesterEmail, subject, body);
+            await _email.SendEmailAsync(ticket.ClientEmail, subject, body);
         }
 
         private async Task SendToDeveloper(TicketDto ticket, TicketNotificationType type, string? remarks)

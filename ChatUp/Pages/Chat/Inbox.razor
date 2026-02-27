@@ -1744,63 +1744,68 @@
                 SupportedById = UserId,
                 InitialMessage = newTicket.InitialMessage,
                 Status = newTicket.Status == default ? TicketStatus.Open.ToString() : newTicket.Status,
-                Priority = TicketPriority.Medium
+                Priority = newTicket.Priority
             };
 
             var res = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}Tickets/Create", payload);
 
             if (res.IsSuccessStatusCode)
             {
-                var createdTicketFromResponse = await res.Content.ReadFromJsonAsync<ChatUp.Application.Features.Ticket.DTOs.TicketDto>();
-                var selectedUser = filteredUserClients.FirstOrDefault(u => u.Id == selectedUserId);
-                // Map to Ticket.DTOs.TicketDto
-                var createdTicket = new ChatUp.Application.Features.Ticket.DTOs.TicketDto(
-                   createdTicketFromResponse.Id,
-                   createdTicketFromResponse.TicketNo,
-                   createdTicketFromResponse.DateReceived,
-                   createdTicketFromResponse.IssueTitle,
-                   createdTicketFromResponse.Concern,
-                   createdTicketFromResponse.Description,
-                   createdTicketFromResponse.RequestedById,
-                   createdTicketFromResponse.RequestedByName,
-                   createdTicketFromResponse.ClientId,
-                   createdTicketFromResponse.ClientName,
-                   createdTicketFromResponse.ProjectId,
-                   createdTicketFromResponse.ProjectName,
-                   createdTicketFromResponse.Status,
-                   createdTicketFromResponse.SupportedById,
-                   createdTicketFromResponse.SupportedByName,
-                   createdTicketFromResponse.Priority,
-                   createdTicketFromResponse.DueDate,
-                   createdTicketFromResponse.IsBreached,
-                   createdTicketFromResponse.IsArchived,
+                var createdTicketFromResponse =
+    await res.Content.ReadFromJsonAsync<ChatUp.Application.Features.Ticket.DTOs.TicketDto>();
 
-                   // 🔥 THESE MUST MATCH EXACTLY
-                   createdTicketFromResponse.RequesterEmail ?? string.Empty,
-                   createdTicketFromResponse.ClientEmail ?? string.Empty,
-                   selectedUser?.EmailAddress ?? string.Empty,     // DeveloperEmail
-                   selectedUser?.FullName ?? string.Empty          // DeveloperName
-               );
+                // Get the selected developer
+                var  clientEmail = filteredUserClients.FirstOrDefault(u => u.Id == selectedUserId);
+
+                // Get the selected client email from UI (if available)
+                var selectedUser = selectedClient?.EmailAddress ?? string.Empty;
+
+                // Map to TicketDto
+                var createdTicket = new ChatUp.Application.Features.Ticket.DTOs.TicketDto(
+                      createdTicketFromResponse.Id,
+                      createdTicketFromResponse.TicketNo,
+                      createdTicketFromResponse.DateReceived,
+                      createdTicketFromResponse.IssueTitle,
+                      createdTicketFromResponse.Concern,
+                      createdTicketFromResponse.Description,
+                      createdTicketFromResponse.RequestedById,
+                      createdTicketFromResponse.RequestedByName,
+                      createdTicketFromResponse.ClientId,
+                      createdTicketFromResponse.ClientName,
+                      createdTicketFromResponse.ProjectId,
+                      createdTicketFromResponse.ProjectName,
+                      createdTicketFromResponse.Status,
+                      createdTicketFromResponse.SupportedById,
+                      createdTicketFromResponse.SupportedByName,
+                      createdTicketFromResponse.Priority,
+                      createdTicketFromResponse.DueDate,
+                      createdTicketFromResponse.IsBreached,
+                      createdTicketFromResponse.IsArchived,
+
+                      createdTicketFromResponse.RequesterEmail ?? string.Empty,
+                      clientEmail.EmailAddress, // ✅ client email now comes from UI
+                      selectedUser
+                  );
+
+                // Reset UI form
                 showTicketModal = false;
                 newTicket = new();
                 selectedClientId = 0;
                 selectedClient = null;
                 selectedProjectId = 0;
-                await LoadTickets(true); // this now replaces the list reference
+
+                await LoadTickets(true); // refresh list
                 await InvokeAsync(StateHasChanged);
 
+                // Notify user
                 await DialogService.ShowSuccessAsync("Successfully Created a Ticket");
-                await _ticketNotificationService.SendAsync(
-                      createdTicket,
-                       TicketNotificationService.TicketNotificationType.NewTicket,
-                       createdTicket.Concern
-                   );
-                // await SendChatMessage(
-                //     $"🎫 New Ticket Created: " +
-                //     $"<a href='/tickets/{createdTicket.Id}' class='ticket-link'>#{createdTicket.TicketNo}</a> " +
-                //     $"<br/> ⏳ SLA Due: {createdTicket.DueDate?.ToLocalTime():g}"
-                // );
 
+                // Send notification
+                await _ticketNotificationService.SendAsync(
+                    createdTicket,
+                    TicketNotificationService.TicketNotificationType.NewTicket,
+                    createdTicket.Concern
+                );
             }
             else
             {

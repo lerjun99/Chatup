@@ -10,6 +10,7 @@ namespace ChatUp.Application.Features.Dashboard.Queries
 {
     public class GetDashboardQuery : IRequest<DashboardDto>
     {
+        public int UserId { get; init; }
         public DateTime? From { get; init; }
         public DateTime? To { get; init; }
         public int SlaAlertsPage { get; init; } = 1;
