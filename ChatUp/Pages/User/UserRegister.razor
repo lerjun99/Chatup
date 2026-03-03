@@ -380,7 +380,7 @@
                     ClientId = model.ClientId
                 };
                 await UserService.UpdateAsync(updateCommand);
-                await DialogService.ShowSuccessAsync("User updated successfully!");
+                await DialogService.ShowSuccessAsync("User updated successfully!","Success");
 
             }
             else
@@ -392,10 +392,11 @@
                 model.RememberToken = "";
                 await UserService.RegisterAsync(model);
                 await DialogService.ShowWarningAsync("User registered successfully!","Success");
+                ResetForm();
                 Navigation.NavigateTo("/users");
             }
 
-            ResetForm();
+          
         }
         catch (InvalidOperationException ex)
         {
