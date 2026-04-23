@@ -47,6 +47,8 @@ public class CreateTicketHandler : IRequestHandler<CreateTicketCommand, TicketCr
         await _repo.AddAsync(ticket, cancellationToken);
 
             string projectName = string.Empty;
+
+
             if (ticket.ProjectId.HasValue)
             {
                 var project = await _projectRepo.GetByIdAsync(ticket.ProjectId.Value, cancellationToken);

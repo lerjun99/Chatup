@@ -1,5 +1,6 @@
 ﻿using ChatUp.Application.Common.Interfaces;
 using ChatUp.Application.Features.TicketMessage.Commands;
+using ChatUp.Domain.Entities;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -30,11 +31,19 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
             // ✅ Soft delete
             upload.IsDeleted = true;
 
-     
+            _context.ActivityLogs.Add(new ActivityLog
+            {
+                TicketId = upload.TicketId,
+                ActorUserId = upload.UploadedById,
+                ActivityType = ActivityType.TicketUploadRemoved,
+                Summary = $"Removed {upload.FileName}",
+                OccurredAtUtc = DateTime.UtcNow
+            });
 
             await _context.SaveChangesAsync(cancellationToken);
 
             return true;
+
         }
     }
 }

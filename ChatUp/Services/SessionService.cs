@@ -23,7 +23,7 @@ namespace ChatUp.Services
 
         private readonly System.Timers.Timer _idleTimer;
         private DateTime _lastActivity;
-        private readonly TimeSpan _idleTimeout = TimeSpan.FromMinutes(15); // 🕒 15 mins timeout
+        private readonly TimeSpan _idleTimeout = TimeSpan.FromHours(1); // 🕒 15 mins timeout
         private bool _isExpired = false;
         private bool _isChecking = false;
 

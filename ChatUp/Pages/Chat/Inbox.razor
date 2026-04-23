@@ -1,4 +1,5 @@
 ﻿@page "/inbox/{EncryptedId}"
+@page "/inbox/ticket/{EncryptedId}/{TicketNo}/{Status}"
 @using ChatUp.Application.Common.Helpers
 @using ChatUp.Application.Features.Client.DTOs
 @using ChatUp.Application.Features.Projects.DTOs
@@ -438,7 +439,7 @@
                                                                 </span>
                                                             </div> *@
                                                             <div class="chat-image-wrapper">
-                                                                <img src="@($"data:{file.FileType};base64,{file.ThumbnailBase64}")"
+                                                                <img src="@GetPreviewImageSrc(file)"
                                                                      class="chat-image magnify"
                                                                      alt="@file.FileName"
                                                                      role="button" loading="lazy"
@@ -450,6 +451,7 @@
                                                                     <i class="fa-solid fa-magnifying-glass-plus"></i>
                                                                 </span>
                                                             </div>
+
                                                         }
                                                         else
                                                         {
@@ -879,7 +881,6 @@
     </div>
 }
 @code {
-
     private string? attachmentPreview;     // Base64 preview
     private IBrowserFile? attachmentFile;  // Actual image file
     private string? attachmentFileName;
@@ -892,6 +893,19 @@
             Base64 = a.Base64Content
         })
         .ToList();
+    public bool IsFromSupport { get; set; }   // true = support, false = client
+    public bool HasUnreadSupportReply { get; set; }
+    public DateTime? LastSupportReplyAt { get; set; }
+    public DateTime? LastClientMessageAt { get; set; }
+    private sealed class TicketUploadContentDto
+    {
+        public int Id { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public string FileType { get; set; } = string.Empty;
+        public string Base64Content { get; set; } = string.Empty;
+        public string? ThumbnailBase64 { get; set; }
+    }
+
     private List<AttachmentItem> NewAttachments = new();
     private class AttachmentItem
     {
@@ -901,7 +915,7 @@
     }
     private string? attachmentFileType;
     private int currentPage = 1;
-    private const int pageSize = 5;
+    private int pageSize = 5;
     private bool hasMoreTickets = true;
     private int rating = 0;
     private bool canSubmitRating = false;
@@ -988,11 +1002,31 @@
         isImageModalOpen = false;
         modalImageSrc = null;
     }
-    private void OpenImage(TicketUploadDto file)
+    private string GetPreviewImageSrc(TicketUploadDto file)
     {
-        isImageModalOpen = true;
-        modalImageSrc = $"data:{file.FileType};base64,{file.Base64Content}";
+        if (!string.IsNullOrEmpty(file.ThumbnailBase64))
+            return $"data:{file.FileType};base64,{file.ThumbnailBase64}";
+
+        return "/images/image-placeholder.png";
     }
+
+    private async Task OpenImage(TicketUploadDto file)
+    {
+        try
+        {
+            var dto = await Http.GetFromJsonAsync<TicketUploadContentDto>($"{AppConfig.ChatUrl}TicketMessage/GetUploadContent/upload/{file.Id}");
+            if (dto == null || string.IsNullOrEmpty(dto.Base64Content))
+                return;
+
+            isImageModalOpen = true;
+            modalImageSrc = $"data:{dto.FileType};base64,{dto.Base64Content}";
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load image content: {ex.Message}");
+        }
+    }
+
     private IEnumerable<UserClientDto> FilteredUserClients =>
         filteredUserClients.Where(u =>
             string.IsNullOrEmpty(userSearchText) ||
@@ -1369,8 +1403,16 @@
     string ManagerName = "Account Manager"; // or pull from logged-in user
     bool IsOnline = true; // or bind from your SignalR user status hub
     private CreateUserCommand model = new();
+    [Parameter]
+    public string TicketNo { get; set; } = string.Empty;
+    [Parameter] public string? Status { get; set; }
     protected override async Task OnInitializedAsync()
     {
+        if (string.IsNullOrWhiteSpace(EncryptedId))
+        {
+            // Prevent crash
+            return;
+        }
         var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
 
         if (string.IsNullOrEmpty(decrypted))
@@ -1390,6 +1432,11 @@
         await LoadClient();
         await LoadTickets(true);
         await base.OnInitializedAsync();
+        // 👇 AUTO LOAD TICKET IF PASSED
+        if (!string.IsNullOrWhiteSpace(TicketNo))
+        {
+            await LoadTicketFromRoute(TicketNo,Status);
+        }
         if (ReceiverId != 0)
         {
         }
@@ -1399,6 +1446,60 @@
             selectedUser = users.First();
         }
 
+    }
+    private async Task LoadTicketFromRoute(string ticketNo , string status)
+    {
+        try
+        {
+            // 1. set search box
+            SearchText = ticketNo;
+            // ✅ FIX: parse string → enum
+            if (!string.IsNullOrWhiteSpace(status) &&
+                Enum.TryParse<TicketStatus>(status, true, out var parsedStatus))
+            {
+                SelectedStatusFilter = parsedStatus;
+            }
+            else
+            {
+                SelectedStatusFilter = null;
+            }
+
+            // Reset pagination
+            currentPage = 1;
+            pageSize = 99;
+            hasMoreTickets = true;
+            Tickets.Clear();
+
+            // 2. ensure tickets are loaded
+            if (Tickets == null || !Tickets.Any())
+                await LoadTickets(true);
+
+            // 3. find ticket locally first
+            var ticket = Tickets
+                .FirstOrDefault(x =>
+                    x.TicketNo.Equals(ticketNo, StringComparison.OrdinalIgnoreCase));
+
+            // 4. if not found, fetch from API
+            if (ticket == null)
+            {
+                var url = $"{AppConfig.ChatUrl}Tickets/GetByTicketNo/{ticketNo}";
+                ticket = await Http.GetFromJsonAsync<TicketDto>(url);
+            }
+
+            if (ticket == null)
+                return;
+
+            // 5. select ticket (this triggers conversation load)
+            await SelectTicket(ticket);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"LoadTicketFromRoute error: {ex.Message}");
+        }
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+            var tick = TicketNo;        
     }
     [Parameter] public EventCallback OnNavigate { get; set; }
     private async Task ConvertToCase(int ticketId)
@@ -1447,9 +1548,9 @@
         if (UserState.UserId.HasValue)
         {
             // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var token = LinkService.Protect(SelectedTicket.Id.ToString());
             var encodedToken = Uri.EscapeDataString(token);
-            Navigate($"/tickets/{SelectedTicket.Id}");
+            Navigate($"/tickets/{encodedToken}");
         }
     }
     private async Task LoadClient()
@@ -2024,134 +2125,6 @@
             StateHasChanged();
         }
     }
-    // private async Task SendMessage()
-    // {
-    //     if (SelectedTicket == null) return;
-
-    //     if (SelectedTicket.Status is "Closed" or "Rejected")
-    //         return;
-
-    //     if (string.IsNullOrWhiteSpace(NewMessage) && !NewAttachments.Any())
-    //         return;
-
-    //     try
-    //     {
-    //         // 1️⃣ Send TEXT message first (FAST)
-    //         var messageResponse = await Http.PostAsJsonAsync(
-    //             $"{AppConfig.ChatUrl}TicketMessage/AddMessage/{SelectedTicket.Id}/messages",
-    //             new
-    //             {
-    //                 UserId = UserId,
-    //                 IsUser = true,
-    //                 Content = NewMessage ?? string.Empty
-    //             });
-
-    //         if (!messageResponse.IsSuccessStatusCode) return;
-
-    //         var newMsg = await messageResponse.Content.ReadFromJsonAsync<MessageDto>();
-    //         if (newMsg == null) return;
-
-    //         newMsg.Attachments = new List<TicketUploadDto>();
-
-    //         // // 2️⃣ Update UI immediately (NO WAITING)
-    //         // SelectedTicket.Messages ??= new();
-    //         // SelectedTicket.Messages.Add(newMsg);
-    //         // NewMessage = string.Empty;
-    //         // StateHasChanged();
-    //         // await ScrollToBottom();
-
-    //         // // 3️⃣ Upload attachments in PARALLEL (NON-BLOCKING)
-    //         // var uploadTasks = NewAttachments.Select(async attachment =>
-    //         // {
-    //         //     var thumbnailBase64 = attachment.Type.StartsWith("image/")
-    //         //         ? await ImageResizeHelper.ResizeBase64Async(attachment.Base64)
-    //         //         : attachment.Base64;
-
-    //         //     var uploadResponse = await Http.PostAsJsonAsync(
-    //         //         $"{AppConfig.ChatUrl}TicketMessage/UploadFile",
-    //         //         new
-    //         //         {
-    //         //             TicketId = SelectedTicket.Id,
-    //         //             TicketMessageId = newMsg.Id,
-    //         //             UploadedById = UserId,
-    //         //             FileName = attachment.Name,
-    //         //             FileType = attachment.Type,
-    //         //             Base64Content = thumbnailBase64
-    //         //         });
-
-    //         //     if (uploadResponse.IsSuccessStatusCode)
-    //         //     {
-    //         //         newMsg.Attachments.Add(new TicketUploadDto
-    //         //         {
-    //         //             FileName = attachment.Name,
-    //         //             FileType = attachment.Type,
-    //         //             Base64Content = thumbnailBase64,
-    //         //             ThumbnailBase64 = thumbnailBase64
-    //         //         });
-
-    //         //         await InvokeAsync(StateHasChanged);
-    //         //         await ScrollToBottom();
-    //         //     }
-    //         // });
-
-    //         // await Task.WhenAll(uploadTasks);
-
-    //         // // 4️⃣ SignalR – send LIGHT message only
-    //         // if (ChatService.IsConnected)
-    //         //     await ChatService.SendMessageInbox(newMsg);
-
-    //         // NewAttachments.Clear();
-    //          // 2️⃣ Upload attachments (sequentially or parallel, but complete before SignalR)
-    //     foreach (var attachment in NewAttachments)
-    //     {
-    //         var thumbnailBase64 = attachment.Type.StartsWith("image/")
-    //             ? await ImageResizeHelper.ResizeBase64Async(attachment.Base64)
-    //             : attachment.Base64;
-
-    //         var uploadResponse = await Http.PostAsJsonAsync(
-    //             $"{AppConfig.ChatUrl}TicketMessage/UploadFile",
-    //             new
-    //             {
-    //                 TicketId = SelectedTicket.Id,
-    //                 TicketMessageId = newMsg.Id,
-    //                 UploadedById = UserId,
-    //                 FileName = attachment.Name,
-    //                 FileType = attachment.Type,
-    //                 Base64Content = thumbnailBase64
-    //             });
-
-    //         if (uploadResponse.IsSuccessStatusCode)
-    //         {
-    //             newMsg.Attachments.Add(new TicketUploadDto
-    //             {
-    //                 FileName = attachment.Name,
-    //                 FileType = attachment.Type,
-    //                 Base64Content = thumbnailBase64,
-    //                 ThumbnailBase64 = thumbnailBase64
-    //             });
-    //         }
-    //     }
-
-    //     // 3️⃣ Update local UI
-    //     SelectedTicket.Messages ??= new();
-    //     SelectedTicket.Messages.Add(newMsg);
-
-    //     NewMessage = string.Empty;
-    //     NewAttachments.Clear();
-
-    //     StateHasChanged();
-    //     await ScrollToBottom();
-
-    //     // 4️⃣ Send via SignalR (now includes attachments)
-    //     if (ChatService.IsConnected)
-    //         await ChatService.SendMessageInbox(newMsg);
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         Console.WriteLine($"SendMessage error: {ex.Message}");
-    //     }
-
-    // }
     private async Task SendMessage()
     {
         if (SelectedTicket == null || SelectedTicket.Status is "Closed" or "Rejected")
@@ -2159,7 +2132,7 @@
 
         if (string.IsNullOrWhiteSpace(NewMessage) && !NewAttachments.Any())
             return;
-
+        IsFromSupport = UserState.UserType == 2 ? false: true;
         // ------------------- Optimistic UI -------------------
         // 1. Update internal timestamp
         SelectedTicket.ResponseTimeSeconds  = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -2182,7 +2155,7 @@
             var request = new AddMessageRequest
             {
                 UserId = UserId,
-                IsUser = true,
+                IsUser = IsFromSupport,
                 Content = NewMessage,
                 Attachments = attachmentsDto
             };
@@ -2488,20 +2461,24 @@
     [JSInvokable]
     private async Task DownloadAttachment(TicketUploadDto file)
     {
-        var fileBytes = Convert.FromBase64String(file.Base64Content);
-        var fileName = file.FileName;
-
-        using var memoryStream = new MemoryStream(fileBytes);
-        var streamRef = new DotNetStreamReference(memoryStream);
-
         try
         {
-            // Await the JS call so that Blazor finishes sending the stream before disposing
+            var dto = await Http.GetFromJsonAsync<TicketUploadContentDto>($"{AppConfig.ChatUrl}TicketMessage/GetUploadContent/upload/{file.Id}");
+            if (dto == null || string.IsNullOrEmpty(dto.Base64Content))
+                return;
+
+            var fileBytes = Convert.FromBase64String(dto.Base64Content);
+            var fileName = dto.FileName;
+
+            using var memoryStream = new MemoryStream(fileBytes);
+            var streamRef = new DotNetStreamReference(memoryStream);
+
             await JS.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
         }
-        finally
+        catch (Exception ex)
         {
-            memoryStream.Dispose(); // Dispose AFTER JS finishes
+            Console.WriteLine($"Download failed: {ex.Message}");
         }
     }
+
 }

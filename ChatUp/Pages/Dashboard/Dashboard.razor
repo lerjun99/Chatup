@@ -266,12 +266,57 @@
                     </div>
                 </div>
                 }
+
+                <!-- Recent Activity -->
+                <div class="card mb-4">
+                    <h3>Recent Activity (last 3 months by default)</h3>
+
+                    @if (isLoadingActivity)
+                    {
+                        <div class="text-center py-3">
+                            <i class="fa fa-spinner fa-spin"></i> Loading activity...
+                        </div>
+                    }
+                    else if (_activity?.Items == null || !_activity.Items.Any())
+                    {
+                        <div class="text-muted py-2">No activity found for the selected date range.</div>
+                    }
+                    else
+                    {
+                        <div style="overflow:auto; max-height:300px;">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th style="width:170px;">Time</th>
+                                        <th style="width:180px;">Actor</th>
+                                        <th style="width:160px;">Type</th>
+                                        <th style="width:140px;">Ticket</th>
+                                        <th>Summary</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var a in _activity.Items)
+                                    {
+                                        <tr>
+                                            <td>@a.OccurredAtUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</td>
+                                            <td>@a.ActorName</td>
+                                            <td>@a.ActivityType</td>
+                                            <td>@(string.IsNullOrWhiteSpace(a.TicketNo) ? "-" : a.TicketNo)</td>
+                                            <td>@a.Summary</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
             }
         </section>
     </main>
 </div>
 <button class="mobile-menu-btn" @onclick="ToggleSidebar">Menu</button>
 @code {
+
     private bool sidebarVisible = false;
     [Parameter]
     public string EncryptedId { get; set; }
@@ -303,9 +348,15 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadDashboardAsync(_currentPage);
+        await LoadActivityAsync(1);
     }
-    private DateTime FilterStartDate { get; set; } = DateTime.UtcNow.Date;
+
+    private DateTime FilterStartDate { get; set; } = DateTime.UtcNow.Date.AddMonths(-3);
     private DateTime FilterEndDate { get; set; } = DateTime.UtcNow.Date;
+
+    private ChatUp.Application.Features.Activity.DTOs.ActivityPagedResponse? _activity;
+    private bool isLoadingActivity;
+
 
     private async Task ApplyFilter()
     {
@@ -343,6 +394,7 @@
         StateHasChanged(); // Immediately show spinner
         TitleService.SetTitle("Admin Dashboard");
 
+
         var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
         if (string.IsNullOrEmpty(decrypted))
         {
@@ -372,6 +424,8 @@
                 _totalPages = response.TotalPages;
                 _totalRecords = response.TotalRecords;
             }
+
+            await LoadActivityAsync(1, startDate, endDate);
         }
         finally
         {
@@ -379,6 +433,32 @@
             StateHasChanged(); // Refresh UI after loading
         }
     }
+
+    private async Task LoadActivityAsync(int page, DateTime? startDate = null, DateTime? endDate = null)
+    {
+        isLoadingActivity = true;
+        StateHasChanged();
+
+        var query = $"?userId={UserId}&page={page}&pageSize=50";
+
+        if (startDate.HasValue)
+            query += $"&from={startDate.Value:yyyy-MM-ddTHH:mm:ss}";
+
+        if (endDate.HasValue)
+            query += $"&to={endDate.Value:yyyy-MM-ddTHH:mm:ss}";
+
+        try
+        {
+            var url = $"{AppConfig.ChatUrl}Dashboard/GetActivity{query}";
+            _activity = await Http.GetFromJsonAsync<ChatUp.Application.Features.Activity.DTOs.ActivityPagedResponse>(url);
+        }
+        finally
+        {
+            isLoadingActivity = false;
+            StateHasChanged();
+        }
+    }
+
 
     // Pagination helpers
     private bool CanGoPrev => _currentPage > 1;

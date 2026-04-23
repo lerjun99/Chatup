@@ -32,8 +32,10 @@ namespace ChatUp.Infrastructure.Persistence
         public DbSet<TicketInteraction> TicketInteractions { get; set; }
         public DbSet<TicketRating> TicketRatings { get; set; }
         public DbSet<TicketUpload> TicketUploads { get; set; }
+        public DbSet<ActivityLog> ActivityLogs { get; set; }
         public DbSet<EmailOtp> EmailOtp { get; set; }
         public DbSet<Applicant> Applicants { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -281,7 +283,32 @@ namespace ChatUp.Infrastructure.Persistence
                 .WithMany(t => t.History) // if you have collection in Ticket
                 .HasForeignKey(th => th.TicketId)
                 .IsRequired(); // or .IsRequired(false) if optional
+
+            modelBuilder.Entity<ActivityLog>(b =>
+            {
+                b.HasKey(x => x.Id);
+                b.HasIndex(x => x.OccurredAtUtc);
+                b.HasIndex(x => new { x.TicketId, x.OccurredAtUtc });
+                b.HasIndex(x => new { x.ActorUserId, x.OccurredAtUtc });
+
+                b.HasOne(x => x.Ticket)
+                    .WithMany()
+                    .HasForeignKey(x => x.TicketId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                b.HasOne(x => x.ActorUser)
+                    .WithMany()
+                    .HasForeignKey(x => x.ActorUserId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                b.Property(x => x.Summary)
+                    .HasMaxLength(300);
+
+                b.Property(x => x.DetailsJson)
+                    .HasColumnType("nvarchar(max)");
+            });
             modelBuilder.Entity<Applicant>(entity =>
+
             {
                 entity.Property(x => x.ApplicantName)
                       .HasMaxLength(150);

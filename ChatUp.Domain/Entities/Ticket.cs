@@ -45,6 +45,10 @@ namespace ChatUp.Domain.Entities
         public DateTime? DateUpdated { get; set; }
 
         public int? UpdatedBy { get; set; }
+
+        public bool HasUnreadSupportReply { get; set; }
+        public DateTime? LastSupportReplyAt { get; set; }
+        public DateTime? LastClientMessageAt { get; set; }
         // 🕓 Audit trail
         public ICollection<TicketHistory> History { get; set; } = new List<TicketHistory>();
         public ICollection<TicketUpload> TicketUploads { get; set; } = new List<TicketUpload>();

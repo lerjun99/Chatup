@@ -21,10 +21,11 @@ namespace ChatUp.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<DashboardDto>> GetDashboard([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        public async Task<ActionResult<DashboardDto>> GetDashboard([FromQuery] int userId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             var query = new GetDashboardQuery
             {
+                UserId = userId,
                 From = from,
                 To = to,
                 SlaAlertsPage = page,
@@ -34,5 +35,21 @@ namespace ChatUp.Api.Controllers
             var result = await _mediator.Send(query);
             return Ok(result);
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetActivity([FromQuery] int userId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+        {
+            var result = await _mediator.Send(new ChatUp.Application.Features.Activity.Queries.GetActivityLogsQuery
+            {
+                UserId = userId,
+                From = from,
+                To = to,
+                Page = page,
+                PageSize = pageSize
+            });
+
+            return Ok(result);
+        }
+
     }
 }

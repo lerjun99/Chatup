@@ -23,7 +23,7 @@
          style="width: 200px" />
 
     <ul class="nav flex-column w-100">
-        @if (UserState.UserType is 1 or 5)
+      @*   @if (UserState.UserType is 1 or 5)
           {
         <li class="nav-item">
             <a class="sidebar-link nav-link"
@@ -32,7 +32,7 @@
                 <span style="color:white !important">Applicants</span>
             </a>
         </li>
-          }
+          } *@
             @if (UserState.UserType != 5)
           {
         <li class="nav-item">

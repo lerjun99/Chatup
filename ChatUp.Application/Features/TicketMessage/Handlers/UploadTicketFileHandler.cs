@@ -56,9 +56,20 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                 };
 
                 _context.TicketUploads.Add(upload);
+
+                _context.ActivityLogs.Add(new ActivityLog
+                {
+                    TicketId = upload.TicketId,
+                    ActorUserId = upload.UploadedById,
+                    ActivityType = ActivityType.TicketUploadAdded,
+                    Summary = $"Uploaded {upload.FileName}",
+                    OccurredAtUtc = upload.DateUploaded
+                });
+
                 await _context.SaveChangesAsync(cancellationToken);
 
                 return upload.Id;
+
             }
             catch (DbUpdateException dbEx)
             {

@@ -84,12 +84,13 @@ namespace ChatUp.Api.Controllers
             await _mediator.Send(new DeleteTicketCommand(id));
             return NoContent();
         }
-        [HttpGet("{ticketId:int}")]
+        [HttpGet("GetHistory/{ticketId:int}")]
         public async Task<IActionResult> GetHistory(int ticketId)
         {
             var result = await _mediator.Send(new GetTicketHistoryQuery(ticketId));
             return Ok(result);
         }
+
 
         [HttpPut]
         public async Task<IActionResult> UpdateStatus([FromBody] UpdateTicketStatusCommand cmd)

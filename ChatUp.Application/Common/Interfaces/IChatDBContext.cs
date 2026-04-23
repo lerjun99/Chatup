@@ -29,6 +29,7 @@ public interface IChatDBContext
     DbSet<TicketInteraction> TicketInteractions { get; set; }
     DbSet<TicketRating> TicketRatings { get; set; }
     DbSet<TicketUpload> TicketUploads { get; set; }
+    DbSet<ActivityLog> ActivityLogs { get; set; }
     DbSet<EmailOtp> EmailOtp { get; set; }
     DbSet<Applicant> Applicants { get; set; }
     DbSet<T> Set<T>() where T : class;

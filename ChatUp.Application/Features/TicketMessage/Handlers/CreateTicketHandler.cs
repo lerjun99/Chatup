@@ -47,6 +47,18 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                 _context.Tickets.Add(ticket);
                 await _context.SaveChangesAsync(cancellationToken);
 
+                _context.ActivityLogs.Add(new ActivityLog
+                {
+                    TicketId = ticket.Id,
+                    ActorUserId = request.RequestedById,
+                    ActivityType = ActivityType.TicketCreated,
+                    Summary = $"Ticket created: {ticket.IssueTitle}",
+                    OccurredAtUtc = ticket.DateReceived
+                });
+
+                await _context.SaveChangesAsync(cancellationToken);
+
+
                 if (!string.IsNullOrWhiteSpace(request.InitialMessage))
                 {
                     var msg = new Domain.Entities.TicketMessage

@@ -65,10 +65,35 @@ namespace ChatUp.Application.Features.Ticket.Handler
                 Remarks = request.Remarks ?? "Ticket updated"
             });
 
+            if (oldStatus != ticket.Status)
+            {
+                _db.ActivityLogs.Add(new ActivityLog
+                {
+                    TicketId = ticket.Id,
+                    ActorUserId = request.UpdatedBy,
+                    ActivityType = ActivityType.TicketStatusChanged,
+                    Summary = $"Status changed: {oldStatus} → {ticket.Status}",
+                    OccurredAtUtc = request.UpdatedAt
+                });
+            }
+
+            if (oldPriority != ticket.Priority)
+            {
+                _db.ActivityLogs.Add(new ActivityLog
+                {
+                    TicketId = ticket.Id,
+                    ActorUserId = request.UpdatedBy,
+                    ActivityType = ActivityType.TicketPriorityChanged,
+                    Summary = $"Priority changed: {oldPriority} → {ticket.Priority}",
+                    OccurredAtUtc = request.UpdatedAt
+                });
+            }
+
             await _db.SaveChangesAsync(cancellationToken);
             await _chatHub.NotifyTicketUpdated();
 
             return true;
+
         }
     }
 }

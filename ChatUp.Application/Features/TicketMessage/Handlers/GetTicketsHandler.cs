@@ -229,16 +229,19 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                     IsCase = m.IsCase,
                     SenderId = m.SenderId,
                     DateCreated = m.DateCreated,
-                    SenderAvatar = m.Sender.Uploads.Select(u => u.Base64Content).FirstOrDefault() ?? "images/default.png",
-                    Attachments = m.TicketUploads.Select(u => new TicketUploadDto
-                    {
-                        Id = u.Id,
-                        FileName = u.FileName,
-                        FileType = u.FileType,
-                        Base64Content = u.Base64Content,
-                        UploadedById = u.UploadedById
+                    SenderAvatar = "images/default.png",
+                    Attachments = m.TicketUploads
+                        .Where(u => !u.IsDeleted)
+                        .Select(u => new TicketUploadDto
+                        {
+                            Id = u.Id,
+                            FileName = u.FileName,
+                            FileType = u.FileType,
+                            Base64Content = string.Empty,
+                            ThumbnailBase64 = u.ThumbnailBase64,
+                            UploadedById = u.UploadedById
+                        }).ToList()
 
-                    }).ToList()
                 })
                 .ToListAsync(ct);
 

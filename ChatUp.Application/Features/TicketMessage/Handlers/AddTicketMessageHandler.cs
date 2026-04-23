@@ -19,15 +19,20 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
         private readonly IChatDBContext _context;
         private readonly IMapper _mapper;
         private readonly IChatHubContext _chatHub; // Not IHubContext<ChatHub>
-
-        public AddTicketMessageHandler(IChatDBContext context, IMapper mapper, IChatHubContext chatHub)
+        private readonly IEmailService _emailService;
+        public AddTicketMessageHandler(IChatDBContext context, IMapper mapper, IChatHubContext chatHub, IEmailService emailService)
         {
             _context = context;
             _mapper = mapper;
             _chatHub = chatHub;
+            _emailService = emailService;
         }
-        public async Task<MessageDto> Handle(AddTicketMessageCommand request, CancellationToken cancellationToken)
+  
+              public async Task<MessageDto> Handle(AddTicketMessageCommand request, CancellationToken cancellationToken)
         {
+            // -------------------------------
+            // 1. CREATE MESSAGE
+            // -------------------------------
             var message = new ChatUp.Domain.Entities.TicketMessage
             {
                 TicketId = request.TicketId,
@@ -40,7 +45,23 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
             _context.TicketMessages.Add(message);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // Attachments
+            // -------------------------------
+            // 2. ACTIVITY LOG (MESSAGE)
+            // -------------------------------
+            _context.ActivityLogs.Add(new ActivityLog
+            {
+                TicketId = message.TicketId,
+                ActorUserId = request.SenderId,
+                ActivityType = ActivityType.TicketMessageSent,
+                Summary = string.IsNullOrWhiteSpace(request.Content)
+                    ? "Sent an attachment"
+                    : "Sent a message",
+                OccurredAtUtc = message.DateCreated ?? DateTime.UtcNow
+            });
+
+            // -------------------------------
+            // 3. ATTACHMENTS
+            // -------------------------------
             if (request.Attachments?.Any() == true)
             {
                 foreach (var file in request.Attachments)
@@ -63,12 +84,91 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                         ThumbnailBase64 = thumbnail,
                         DateUploaded = DateTime.UtcNow
                     });
+
+                    _context.ActivityLogs.Add(new ActivityLog
+                    {
+                        TicketId = message.TicketId,
+                        ActorUserId = request.SenderId,
+                        ActivityType = ActivityType.TicketUploadAdded,
+                        Summary = $"Uploaded {file.FileName}",
+                        OccurredAtUtc = DateTime.UtcNow
+                    });
                 }
 
                 await _context.SaveChangesAsync(cancellationToken);
             }
 
-            // 🔁 Update or create interaction
+            // -------------------------------
+            // 4. RESPONSE TRACKING + EMAIL
+            // -------------------------------
+            var ticket = await _context.Tickets
+                .FirstOrDefaultAsync(t => t.Id == request.TicketId, cancellationToken);
+
+            if (ticket != null)
+            {
+                bool isSupport = !request.IsUser;
+
+                if (isSupport)
+                {
+                    ticket.LastSupportReplyAt = message.DateCreated;
+
+                    // ✅ Prevent duplicate email spam
+                    if (!ticket.HasUnreadSupportReply)
+                    {
+                        ticket.HasUnreadSupportReply = true;
+
+                        // 🔍 Get client email from Users table
+                        var clientEmail = await _context.UserAccounts
+                            .Where(u => u.Id == ticket.RequestedById)
+                            .Select(u => u.EmailAddress)
+                            .FirstOrDefaultAsync(cancellationToken);
+                        var emailBody = $@"
+                        <div style='font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 20px;'>
+                            <div style='max-width: 500px; margin: auto; background: #ffffff; border-radius: 10px; padding: 20px; text-align: center;'>
+
+                                <h2 style='color: #1877f2;'>ChatUp</h2>
+
+                                <p><strong>{message.Sender?.FullName ?? "Support"}</strong> responded to your ticket</p>
+
+                                <p style='font-size:12px;color:#999;'>{DateTime.Now:MMM dd, hh:mm tt}</p>
+
+                                <div style='background:#f1f3f5;padding:15px;border-radius:8px;margin:20px 0;'>
+                                    {message.Content}
+                                </div>
+
+                                <a href='https://portal.odeccisolutions.com/'
+                                   style='background:#1877f2;color:#fff;padding:12px 20px;border-radius:6px;text-decoration:none;'>
+                                   View Message
+                                </a>
+
+                            </div>
+                        </div>";
+                        if (!string.IsNullOrEmpty(clientEmail))
+                        {
+                            await _emailService.SendEmailAsync(
+                            clientEmail,
+                            $"Ticket #{ticket.TicketNo} Updated",
+                            emailBody,
+                            true
+                        );
+                        }
+                       }
+                }
+                else
+                {
+                    // Client message
+                    ticket.LastClientMessageAt = message.DateCreated;
+
+                    // Optional: reset flag when client replies
+                    ticket.HasUnreadSupportReply = false;
+                }
+
+                await _context.SaveChangesAsync(cancellationToken);
+            }
+
+            // -------------------------------
+            // 5. INTERACTION TRACKING
+            // -------------------------------
             var interaction = await _context.TicketInteractions
                 .FirstOrDefaultAsync(i =>
                     i.TicketId == request.TicketId &&
@@ -82,7 +182,7 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                 {
                     TicketId = request.TicketId,
                     SenderId = request.SenderId,
-                    ReceiverId = request.SenderId,      // user receives
+                    ReceiverId = request.SenderId,
                     LastMessageTime = message.DateCreated ?? DateTime.UtcNow,
                     TicketMessage = message
                 };
@@ -97,7 +197,9 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
 
             await _context.SaveChangesAsync(cancellationToken);
 
-            // ✅ FULL DTO (matches LoadTicketConversation)
+            // -------------------------------
+            // 6. MAP DTO
+            // -------------------------------
             var dto = await _context.TicketMessages
                 .AsNoTracking()
                 .Where(m => m.Id == message.Id)
@@ -127,13 +229,14 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                 })
                 .FirstAsync(cancellationToken);
 
-            // ✅ Broadcast AFTER everything is ready
+            // -------------------------------
+            // 7. REAL-TIME BROADCAST
+            // -------------------------------
             await _chatHub.SendTicketMessageToConversation(
                 message.TicketId,
                 dto);
 
             return dto;
-
         }
     }
 }

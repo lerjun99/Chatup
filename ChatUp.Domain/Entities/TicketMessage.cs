@@ -19,9 +19,7 @@ namespace ChatUp.Domain.Entities
         public bool IsUser { get; set; }   // True = client/user, False = support agent
         public bool IsCase { get; set; }   // True = client/user, False = support agent
         public string Content { get; set; } = string.Empty;
-
         public DateTime? DateCreated { get; set; } = DateTime.UtcNow;
-
         public List<TicketInteraction> Interactions { get; set; } = new();
         public virtual ICollection<TicketUpload> TicketUploads { get; set; } = new List<TicketUpload>();
     }

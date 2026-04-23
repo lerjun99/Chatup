@@ -32,7 +32,7 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
             // =============================
             // BASE QUERY (USER + DATE FILTER)
             // =============================
-            IQueryable<ChatUp.Domain.Entities.Ticket> ticketsQuery = _db.Tickets.AsNoTracking();
+            IQueryable<ChatUp.Domain.Entities.Ticket> ticketsQuery = _db.Tickets.AsNoTracking().Where(a=>a.IsArchived == false);
 
             ticketsQuery = await ApplyUserFilterAsync(
                 ticketsQuery,
@@ -269,7 +269,7 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
                 return query.Where(_ => false);
 
             var user = await _userRepo.Query()
-                .Where(u => u.Id == userId)
+                .Where(u => u.Id == userId )
                 .Select(u => new
                 {
                     u.Id,

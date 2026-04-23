@@ -12,6 +12,7 @@
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @inject ChatUp.Services.ChatService ChatService
 @inject ChatUp.Services.EmailService EmailService
+@using Chat
 @if (isSendingEmail)
 {
     <div class="email-overlay">
@@ -158,6 +159,10 @@ else
                     <button class="btn btn-primary px-4 shadow-sm" @onclick="SubmitChanges">
                         <i class="bi bi-check-circle me-1"></i> Submit Changes
                     </button>
+                    <button class="btn btn-primary"
+                            @onclick="() => OpenInbox(ticket.TicketNo)">
+                        Open in Inbox
+                    </button>
                 
             </div>
         </div>
@@ -209,7 +214,6 @@ else
         }
     </div>
 }
-
 @code {
     private int? sessionUserType;
     private bool isUserLoaded = false;
@@ -228,12 +232,25 @@ else
     private List<IBrowserFile> Uploads = [];
     private bool sessionChecked = false;
     [Parameter] public EventCallback OnNavigate { get; set; }
+    private bool showInbox = false;
+    private string? selectedTicketNo;
     /* -------- nav helpers -------- */
     private void Navigate(string url)
     {
         Navigation.NavigateTo(url, forceLoad: false);
         if (OnNavigate.HasDelegate)
             OnNavigate.InvokeAsync();
+    }
+    private void OpenInbox(string ticketNo)
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigation.NavigateTo($"/inbox/ticket/{encodedToken}/{ticketNo}/{ticket.Status}");
+        }
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -505,7 +522,7 @@ else
         try
         {
       
-            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/GetHistory/{TicketId}");
+            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/GetHistory/GetHistory/{TicketId}");
             history = await Http.GetFromJsonAsync<List<TicketHistoryDto>>(url);
         }
         catch (Exception ex)

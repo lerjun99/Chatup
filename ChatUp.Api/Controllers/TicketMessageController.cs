@@ -3,6 +3,8 @@ using ChatUp.Application.Common.Helpers;
 using ChatUp.Application.Features.TicketMessage.Commands;
 using ChatUp.Application.Features.TicketMessage.DTOs;
 using ChatUp.Application.Features.TicketMessage.Queries;
+
+
 using ChatUp.Application.Tickets.Commands.DeleteTicket;
 using ChatUp.Application.Tickets.Commands.UpdateTicket;
 using ChatUp.Domain.Entities;
@@ -169,8 +171,26 @@ namespace ChatUp.Api.Controllers
             var items = await _mediator.Send(new GetTicketUploadsQuery(ticketId));
             return Ok(items);
         }
+
+        [HttpGet("upload/{uploadId:int}")]
+        public async Task<ActionResult<TicketUploadContentDto>> GetUploadContent(int uploadId)
+        {
+            var dto = await _mediator.Send(new GetTicketUploadContentQuery(uploadId, ThumbnailOnly: false));
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
+        [HttpGet("upload/{uploadId:int}/thumbnail")]
+        public async Task<ActionResult<TicketUploadContentDto>> GetUploadThumbnail(int uploadId)
+        {
+            var dto = await _mediator.Send(new GetTicketUploadContentQuery(uploadId, ThumbnailOnly: true));
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
         public record CreateTicketRequest(string IssueTitle, int ProjectId, int? ClientId, int RequestedById, DateTime DueDate, string InitialMessage);
 
 
     }
 }
+

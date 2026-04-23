@@ -76,16 +76,13 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                     m.Content,
                     m.DateCreated,
                     m.IsCase,
-                    SenderFullName = m.Sender.FullName,
-                    SenderAvatarBase64 = m.Sender.Uploads
-                      .OrderByDescending(u => u.Id)
-                      .Select(u => u.Base64Content)
-                      .FirstOrDefault()
+                    SenderFullName = m.Sender.FullName
                 })
                 .ToDictionaryAsync(x => x.Id, ct);
 
             // ───────────────────────────────────────────────
-            // 3. Fetch ALL relevant attachments in ONE query
+            // 3. Fetch ALL relevant attachments in ONE query (metadata only)
+            //    Base64 payload is fetched on-demand via API endpoints.
             // ───────────────────────────────────────────────
             var allAttachments = await _context.TicketUploads
                 .AsNoTracking()
@@ -97,13 +94,12 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                     u.TicketMessageId,
                     u.FileName,
                     u.FileType,
-                    u.Base64Content,
-                    u.ThumbnailBase64,
                     u.IsDeleted,
                     u.DateUploaded,
                     u.UploadedById
                 })
                 .ToListAsync(ct);
+
 
             // Split in memory (small dataset → acceptable)
             var msgAttachments = allAttachments
@@ -116,10 +112,9 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                         Id = a.Id,
                         FileName = a.FileName,
                         FileType = a.FileType,
-                        Base64Content = a.Base64Content,
-                        ThumbnailBase64 = a.ThumbnailBase64,
                         UploadedById = a.UploadedById
                     }).ToList());
+
 
             var removedFileNamesByMsg = allAttachments
                 .Where(a => a.TicketMessageId.HasValue && messageIds.Contains(a.TicketMessageId.Value) && a.IsDeleted)
@@ -133,6 +128,20 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
             // ───────────────────────────────────────────────
             // 4. Build MessageDto list (newest → oldest)
             // ───────────────────────────────────────────────
+            var senderIds = messageKeys.Select(k => k.SenderId).Distinct().ToList();
+
+            var userAvatars = await _context.UploadedFile
+                .AsNoTracking()
+                .Where(f => senderIds.Contains(f.UserAccountId ?? 0)
+                         && f.FileType == "ProfileImg")
+                .GroupBy(f => f.UserAccountId)
+                .Select(g => new
+                {
+                    UserId = g.Key,
+                    // Get latest image (adjust if you have DateCreated)
+                    FilePath = g.OrderByDescending(x => x.Id).Select(x => x.Base64Content).FirstOrDefault()
+                })
+                .ToDictionaryAsync(x => x.UserId, x => x.FilePath, ct);
             var messagesDto = new List<MessageDto>(messageKeys.Count + (orphanUploads.Any() && page == 1 ? 1 : 0));
 
             foreach (var key in messageKeys)
@@ -153,7 +162,9 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                     SenderName = msgData.SenderFullName ?? "Unknown",
                     IsUser = msgData.IsUser,
                     Content = content,
-                    SenderAvatar = msgData.SenderAvatarBase64 ?? "images/default.png",
+                    SenderAvatar = userAvatars.TryGetValue(msgData.SenderId, out var avatar)
+                                ? $"{avatar}"
+                                : "images/default.png",
                     DateCreated = msgData.DateCreated,
                     IsCase = msgData.IsCase,
                     Attachments = msgAttachments.GetValueOrDefault(key.Id, new List<TicketUploadDto>())
@@ -185,9 +196,9 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                         Id = u.Id,
                         FileName = u.FileName,
                         FileType = u.FileType,
-                        Base64Content = u.Base64Content,
-                        ThumbnailBase64 = u.ThumbnailBase64
+                        UploadedById = u.UploadedById
                     }).ToList()
+
                 };
 
                 messagesDto.Insert(0, systemMsg);
