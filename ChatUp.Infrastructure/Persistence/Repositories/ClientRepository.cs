@@ -20,7 +20,11 @@ namespace ChatUp.Infrastructure.Persistence.Repositories
 
         public async Task<IEnumerable<Client>> GetAllAsync()
         {
-            return await _context.Client.AsNoTracking().ToListAsync();
+            return await _context.Client
+            .Where(a => a.IsActive == 0)
+            .OrderBy(a => a.ClientName) // alphabetical (A-Z)
+            .AsNoTracking()
+            .ToListAsync();
         }
 
         public async Task<Client?> GetByIdAsync(int id)

@@ -65,7 +65,7 @@ namespace ChatUp.Application.Features.Client.Handlers
                     });
             }
 
-            return await query.ToListAsync(cancellationToken);
+            return await query.OrderBy(a=>a.ClientName).ToListAsync(cancellationToken);
         }
     }
 }

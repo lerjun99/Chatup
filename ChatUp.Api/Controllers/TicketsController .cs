@@ -52,6 +52,7 @@ namespace ChatUp.Api.Controllers
               [FromQuery] string? search,
               [FromQuery] int? statusFilter,
               [FromQuery] int? priorityFilter,
+              [FromQuery] int? projectFilter, // ✅ ADD
               [FromQuery] bool includeArchived = false,
               [FromQuery] int page = 1,
               [FromQuery] int pageSize = 10)
@@ -61,6 +62,7 @@ namespace ChatUp.Api.Controllers
                 search,
                 (TicketStatus?)statusFilter,
                 (TicketPriority?)priorityFilter,
+                 projectFilter, // ✅ PASS
                 includeArchived,
                 page,
                 pageSize

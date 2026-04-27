@@ -21,11 +21,12 @@ namespace ChatUp.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<DashboardDto>> GetDashboard([FromQuery] int userId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+        public async Task<ActionResult<DashboardDto>> GetDashboard([FromQuery] int userId, [FromQuery] int? projectId, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             var query = new GetDashboardQuery
             {
                 UserId = userId,
+                ProjectId = projectId,
                 From = from,
                 To = to,
                 SlaAlertsPage = page,

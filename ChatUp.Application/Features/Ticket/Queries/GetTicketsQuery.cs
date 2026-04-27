@@ -12,6 +12,7 @@ public record GetTicketsQuery(
     string? Search,
     TicketStatus? StatusFilter,
     TicketPriority? PriorityFilter,
+    int? ProjectFilter,   // ✅ ADD THIS
     bool IncludeArchived,
     int Page,
     int PageSize

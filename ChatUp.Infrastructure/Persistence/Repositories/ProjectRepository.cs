@@ -23,6 +23,7 @@ namespace ChatUp.Infrastructure.Persistence.Repositories
                  .ThenInclude(up => up.UserAccount) // <-- include the UserAccount here
                   .ThenInclude(u => u.Uploads) // <-- include uploads
              .Where(p => !p.DeleteFlag)
+             .OrderBy(a => a.Title)
              .ToListAsync(cancellationToken);
         }
 

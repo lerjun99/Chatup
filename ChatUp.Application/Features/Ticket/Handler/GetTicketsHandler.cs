@@ -34,12 +34,21 @@ public class GetTicketsHandler : IRequestHandler<GetTicketsQuery, PaginatedRespo
 
         // 2️⃣ Search filter
         if (!string.IsNullOrWhiteSpace(request.Search))
-            query = query.Where(t => t.IssueTitle.Contains(request.Search) || t.TicketNo.Contains(request.Search));
+            query = query.Where(t =>
+                t.IssueTitle.Contains(request.Search) ||
+                t.TicketNo.Contains(request.Search) ||
+                t.Project.Title.Contains(request.Search)); // ✅ Enhanced
 
         // 3️⃣ Status filter
         if (request.StatusFilter.HasValue)
             query = query.Where(t => t.Status == request.StatusFilter.Value);
-
+        // 4.5️⃣ Project filter
+        if (request.ProjectFilter.HasValue)
+        {
+            query = query.Where(t =>
+                t.ProjectId.HasValue &&
+                t.ProjectId.Value == request.ProjectFilter.Value);
+        }
         // 4️⃣ Priority filter
         if (request.PriorityFilter.HasValue)
             query = query.Where(t => t.Priority == request.PriorityFilter.Value);

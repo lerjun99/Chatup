@@ -101,6 +101,16 @@ namespace ChatUp.Api.Controllers
 
             return Ok(new { message = "Assignment deleted successfully." });
         }
+        [HttpGet("by-user/{userId}")]
+        public async Task<IActionResult> GetProjectsByUser(int userId)
+        {
+            var result = await _mediator.Send(new GetProjectsByUserQuery
+            {
+                UserId = userId
+            });
+
+            return Ok(result);
+        }
 
     }
 }

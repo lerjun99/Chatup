@@ -44,7 +44,14 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
 
             if (request.To.HasValue)
                 ticketsQuery = ticketsQuery.Where(t => t.DateReceived <= request.To.Value);
-
+            // =============================
+            // PROJECT FILTER
+            // =============================
+            if (request.ProjectId.HasValue && request.ProjectId > 0)
+            {
+                ticketsQuery = ticketsQuery
+                    .Where(t => t.ProjectId == request.ProjectId);
+            }
             // =============================
             // 1️⃣ TICKET COUNTS
             // =============================

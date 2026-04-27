@@ -13,6 +13,31 @@
 @inject ChatUp.Services.ChatService ChatService
 @inject ChatUp.Services.EmailService EmailService
 @using Chat
+<style>
+    .priority-critical {
+        background-color: #212529 !important;
+        color: #fff !important;
+        border-color: #212529 !important;
+    }
+
+    .priority-high {
+        background-color: #dc3545 !important;
+        color: #fff !important;
+        border-color: #dc3545 !important;
+    }
+
+    .priority-medium {
+        background-color: #ffc107 !important;
+        color: #000 !important;
+        border-color: #ffc107 !important;
+    }
+
+    .priority-low {
+        background-color: #198754 !important;
+        color: #fff !important;
+        border-color: #198754 !important;
+    }
+</style>
 @if (isSendingEmail)
 {
     <div class="email-overlay">
@@ -35,183 +60,181 @@
 }
 else
 {
-    <div class="card border-0 shadow-lg rounded-4 p-4 mb-4 bg-light">
+    <div class="main-ticket-container">
+    <div class="card border-0 shadow-lg rounded-4 p-3 p-md-4 mb-4 bg-light">
         <div class="row g-3">
 
             <!-- LEFT COLUMN -->
-            <div class="col-md-6">
-                <h5 class="fw-bold text-dark mb-3">📄 Ticket Information</h5>
-                <div><strong>Ticket No:</strong> @ticket.TicketNo</div>
-                <div><strong>Date Received:</strong> @ticket.DateReceived.ToString("g")</div>
-                <div><strong>Issue Title:</strong> @ticket.IssueTitle</div>
+            <div class="col-12 col-lg-6">
+                <h6 class="fw-bold text-dark mb-2">📄 Ticket Information</h6>
 
-                <div>
-                    <strong>Priority:</strong>
-                    <span class="
-                    @(selectedPriority switch
-                          {
-                              TicketPriority.Critical => "bg-dark text-white px-2 py-1 rounded",
-                              TicketPriority.High => "bg-danger text-white px-2 py-1 rounded",
-                              TicketPriority.Medium => "bg-warning text-dark px-2 py-1 rounded",
-                              TicketPriority.Low => "bg-success text-white px-2 py-1 rounded",
-                              _ => "bg-secondary text-white px-2 py-1 rounded"
-                          })">
-                        @selectedPriority
-                    </span>
-                </div>
+                <div class="small"><strong>Ticket No:</strong> @ticket.TicketNo</div>
+                <div class="small"><strong>Date:</strong> @ticket.DateReceived.ToString("g")</div>
+                <div class="small"><strong>Title:</strong> @ticket.IssueTitle</div>
 
-                <div><strong>Due Date:</strong> @ticket.DueDate?.ToString("g")</div>
+                    <div class="mt-1 small">
+                        <strong>Priority:</strong>
+
+                        @if (UserState.UserType == 3)
+                        {
+                            <!-- 🔒 Read-only -->
+                            <span class="@GetPriorityClass(selectedPriority)">
+                                @selectedPriority
+                            </span>
+                        }
+                        else
+                        {
+                            <select class="form-select form-select-sm d-inline-block w-auto ms-2 @GetPriorityDropdownClass(selectedPriority)"
+                                    @onchange="OnPriorityChangedManual">
+
+                                @foreach (var priority in Enum.GetValues<TicketPriority>())
+                                {
+                                    <option value="@priority" selected="@(priority == selectedPriority)">
+                                        @priority
+                                    </option>
+                                }
+                            </select>
+                        }
+                    </div>
+
+                <div class="small"><strong>Due:</strong> @ticket.DueDate?.ToString("g")</div>
             </div>
 
             <!-- RIGHT COLUMN -->
-            <div class="col-md-6">
-                <h5 class="fw-bold text-dark mb-3">👤 Related Details</h5>
-                <div><strong>Requested By:</strong> @ticket.RequestedByName</div>
-                <div><strong>Client:</strong> @ticket.ClientName</div>
-                <div><strong>Project:</strong> @ticket.ProjectName</div>
+            <div class="col-12 col-lg-6">
+                <h6 class="fw-bold text-dark mb-2">👤 Related Details</h6>
 
-                <div>
-                    <strong>SLA Status:</strong>
+                <div class="small"><strong>Requested By:</strong> @ticket.RequestedByName</div>
+                <div class="small"><strong>Client:</strong> @ticket.ClientName</div>
+                <div class="small"><strong>Project:</strong> @ticket.ProjectName</div>
+
+                <div class="mt-1 small">
+                    <strong>SLA:</strong>
                     @if (ticket.IsBreached)
                     {
-                        <span class="badge bg-danger">⚠ Breached</span>
+                        <span class="badge bg-danger">Breached</span>
                     }
                     else
                     {
-                        <span class="badge bg-success">✅ On Track</span>
+                        <span class="badge bg-success">On Track</span>
                     }
                 </div>
             </div>
 
-            <!-- FULL WIDTH CONCERN -->
+            <!-- CONCERN -->
             <div class="col-12">
                 <details open class="concern-details">
-                    <summary class="fw-bold mb-2 concern-summary">
-                        📝 Concern
-                    </summary>
-
-                    <div class="formatted-text">
+                    <summary class="fw-semibold mb-2">📝 Concern</summary>
+                    <div class="formatted-text small">
                         @ticket.Description
                     </div>
                 </details>
             </div>
-
         </div>
 
-    @if ( UserState.UserType != 3)
-    {
-        <hr class="my-4" />
+        @if (UserState.UserType != 3)
+        {
+                <div class="row g-2 align-items-end">
 
-        <div>
-            <h5 class="fw-bold text-dark mb-3">🛠 Update Ticket Status</h5>
+                    <!-- STATUS -->
+                    <div class="col-5 col-md-2">
+                        <label class="form-label small mb-1">Status</label>
+                        <select class="form-select form-select-sm"
+                                value="@selectedStatus"
+                                @onchange="OnStatusChanged">
+                            @foreach (var status in Enum.GetValues<TicketStatus>())
+                            {
+                                <option value="@status">@status</option>
+                            }
+                        </select>
+                    </div>
 
-            <div class="row g-3 align-items-start">
-                <!-- 🔹 Status Dropdown -->
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">Select New Status</label>
-                    <select class="form-select shadow-sm" value="@selectedStatus" @onchange="OnStatusChanged">
-                        @foreach (var status in Enum.GetValues<TicketStatus>())
-                        {
-                            <option value="@status">@status</option>
-                        }
-                    </select>
-                </div>
+                    <!-- EMAIL TOGGLE -->
+                    <div class="col-12 col-md-6">
+                        @* <label class="form-label small mb-1">Email Notification</label> *@
 
-                <!-- 🔹 Remarks (Full Width) -->
-                <div class="col-12">
-                    <label class="form-label fw-semibold mt-2">Remarks (optional)</label>
-                    <textarea class="form-control shadow-sm" rows="3" style="resize: none;"
-                              placeholder="Enter remarks for this status update..."
-                              @bind=remarks></textarea>
-                </div>
-                    <!-- ✅ Conditional Email Toggle -->
-                    <div class="col-12 col-md-6 d-flex align-items-center mt-2">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" role="switch" id="sendEmailToggle" @bind="sendEmail">
-                            <label class="form-check-label" for="sendEmailToggle">
-                                Send Email Notification: <strong>@(sendEmail ? "Yes" : "No")</strong>
+                        <div class="form-check form-switch d-flex align-items-center"
+                             style="height: 31px;">
+                            <!-- match select height -->
+
+                            <input class="form-check-input me-2"
+                                   type="checkbox"
+                                   @bind="sendEmail">
+
+                            <label class="form-check-label small m-0">
+                                Email: <strong>@(sendEmail ? "Yes" : "No")</strong>
                             </label>
                         </div>
                     </div>
-            </div>
 
-            @if (updateMessage != null)
-            {
-                <div class="alert alert-info mt-3">
-                    <i class="bi bi-info-circle me-1"></i> @updateMessage
+                    <!-- REMARKS -->
+                    <div class="col-12">
+                        <label class="form-label small">Remarks</label>
+                        <textarea class="form-control form-control-sm"
+                                  rows="3"
+                                  @bind="remarks"></textarea>
+                    </div>
+
                 </div>
-            }
 
-            @if (ticket?.SupportedByName != null)
-            {
-                <div class="alert alert-light border mt-4 small">
-                    <i class="bi bi-clock-history me-1"></i>
-                    <strong>Last Updated By:</strong> @ticket.SupportedByName
-                    on @ticket.DueDate?.ToString("g")
-                </div>
-            }
-
-            <div class="mt-3" style="display: flex;justify-content: flex-start;gap: 10px;">
-                <button class="btn btn-secondary px-4 shadow-sm" @onclick="GoBack">
-                    <i class="bi bi-arrow-left-circle me-1"></i> Back to List
+            <!-- ACTION BUTTONS -->
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                <button class="btn btn-secondary btn-sm" @onclick="GoBack">
+                    ← Back
                 </button>
-              
-                    <button class="btn btn-primary px-4 shadow-sm" @onclick="SubmitChanges">
-                        <i class="bi bi-check-circle me-1"></i> Submit Changes
-                    </button>
-                    <button class="btn btn-primary"
-                            @onclick="() => OpenInbox(ticket.TicketNo)">
-                        Open in Inbox
-                    </button>
-                
+
+                <button class="btn btn-primary btn-sm" @onclick="SubmitChanges">
+                    Save
+                </button>
+
+                <button class="btn btn-outline-primary btn-sm"
+                        @onclick="() => OpenInbox(ticket.TicketNo)">
+                    Inbox
+                </button>
             </div>
-        </div>
         }
     </div>
-    <div class="card border-0 shadow-lg rounded-4 p-4 bg-white" style="
-        overflow: auto;
-        height: 260px;
-    ">
-        <h5 class="fw-bold text-dark mb-3">
-            <i class="bi bi-clock-history me-2 text-primary"></i> Ticket History
-        </h5>
 
-        @if (history == null)
-        {
-            <div class="text-center text-muted py-3">
-                <div class="spinner-border text-secondary mb-2" role="status"></div>
-                <p><em>Loading history...</em></p>
-            </div>
-        }
-        else if (!history.Any())
-        {
-            <div class="alert alert-light border text-center">
-                <i class="bi bi-info-circle me-1"></i> No history records found.
-            </div>
-        }
-        else
-        {
-            <ul class="timeline list-unstyled mb-0">
+    <!-- HISTORY -->
+    <div class="card border-0 shadow-lg rounded-4 p-3 p-md-4 bg-white">
+        <h6 class="fw-bold mb-3">🕒 History</h6>
+
+        <div class="history-container">
+            @if (history == null)
+            {
+                <div class="text-center small text-muted">Loading...</div>
+            }
+            else if (!history.Any())
+            {
+                <div class="text-center small text-muted">No records</div>
+            }
+            else
+            {
                 @foreach (var h in history.OrderByDescending(x => x.UpdatedAt))
                 {
-                    <li class="timeline-item mb-4">
-                        <span class="fw-bold">@h.UpdatedByName</span>
-                        <small class="text-muted ms-1">@h.UpdatedAt.ToLocalTime().ToString("g")</small>
-                        <div class="mt-1">
-                            <span>From</span>
-                            <span class="badge bg-secondary me-1">@h.OldStatus</span>
-                            <i class="bi bi-arrow-right"></i>
-                            <span>To</span>
-                            <span class="badge bg-success ms-1">@h.NewStatus</span>
+                    <div class="history-item">
+                        <div class="fw-semibold small">@h.UpdatedByName</div>
+                        <div class="text-muted small">
+                            @h.UpdatedAt.ToLocalTime().ToString("g")
                         </div>
+
+                        <div class="small mt-1">
+                            <span class="badge bg-secondary">@h.OldStatus</span>
+                            →
+                            <span class="badge bg-success">@h.NewStatus</span>
+                        </div>
+
                         @if (!string.IsNullOrWhiteSpace(h.Remarks))
                         {
-                            <p class="mt-1 mb-0 text-muted"><em>@h.Remarks</em></p>
+                            <div class="small text-muted mt-1">
+                                <em>@h.Remarks</em>
+                            </div>
                         }
-                    </li>
+                    </div>
                 }
-            </ul>
-        }
+            }
+        </div>
+    </div>
     </div>
 }
 @code {
@@ -251,6 +274,17 @@ else
             var encodedToken = Uri.EscapeDataString(token);
             Navigation.NavigateTo($"/inbox/ticket/{encodedToken}/{ticketNo}/{ticket.Status}");
         }
+    }
+    private string GetPriorityClass(TicketPriority priority)
+    {
+        return priority switch
+        {
+            TicketPriority.Critical => "badge bg-dark",
+            TicketPriority.High => "badge bg-danger",
+            TicketPriority.Medium => "badge bg-warning text-dark",
+            TicketPriority.Low => "badge bg-success",
+            _ => "badge bg-secondary"
+        };
     }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -597,7 +631,17 @@ else
         }
     }
     // private void GoBack() => Navigation.NavigateTo("/ticketlist");
-
+    private string GetPriorityDropdownClass(TicketPriority priority)
+    {
+        return priority switch
+        {
+            TicketPriority.Critical => "priority-critical",
+            TicketPriority.High => "priority-high",
+            TicketPriority.Medium => "priority-medium",
+            TicketPriority.Low => "priority-low",
+            _ => "priority-default"
+        };
+    }
     private void GoBack()
     {
         if (UserState.UserId.HasValue)

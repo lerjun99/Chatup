@@ -13,9 +13,10 @@
 </h3>
 
 <div class="ticket-filters card shadow-sm border-0 rounded-4 p-3 mb-4">
-    <div class="row g-3 align-items-center">
+    <div class="row g-2 align-items-center flex-nowrap">
+    
         <!-- Search -->
-        <div class="col-md-3 col-12">
+        <div class="col-md-3">
             <input type="text"
                    class="form-control"
                    placeholder="🔍 Search..."
@@ -24,8 +25,8 @@
                    @onkeydown="@HandleEnterKey" />
         </div>
 
-        <!-- Status Filter -->
-        <div class="col-md-2 col-12">
+        <!-- Status -->
+        <div class="col-md-2">
             <select class="form-select" @onchange="StatusChanged">
                 <option value="">All Status</option>
                 @foreach (var status in Enum.GetValues<TicketStatus>())
@@ -37,8 +38,8 @@
             </select>
         </div>
 
-        <!-- Priority Filter -->
-        <div class="col-md-2 col-12">
+        <!-- Priority -->
+        <div class="col-md-2">
             <select class="form-select" @onchange="PriorityChanged">
                 <option value="">All Priority</option>
                 @foreach (var priority in Enum.GetValues<TicketPriority>())
@@ -50,16 +51,42 @@
             </select>
         </div>
 
+        <!-- Project Autocomplete -->
+        <div class="col-md-3 position-relative">
+            <input type="text"
+                   class="form-control"
+                   placeholder="🔍 Project..."
+                   value="@projectSearch"
+                   @oninput="OnProjectInput"
+                   @onfocus="() => showProjectDropdown = true"
+                   @onblur="HideProjectDropdown" />
+
+            @if (showProjectDropdown && filteredProjects.Any())
+            {
+                <ul class="list-group position-absolute w-100 shadow-sm"
+                    style="z-index:1000; max-height:200px; overflow:auto;">
+                    @foreach (var proj in filteredProjects)
+                    {
+                        <li class="list-group-item list-group-item-action"
+                            @onclick="() => SelectProject(proj)">
+                            @proj.title
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
         <!-- Buttons -->
-        <div class="col-md-5 col-12 d-flex  gap-2 " style="flex-direction: row;">
-            <button class="btn btn-secondary" @onclick="ToggleArchive">
+        <div class="col-md-2 d-flex gap-2">
+            <button class="btn btn-secondary w-100" @onclick="ToggleArchive">
                 <i class="fa-solid fa-box-archive"></i> @(showArchived ? "Show Active" : "Archived")
             </button>
 
-            <button class="btn btn-primary" @onclick="SearchTickets">
+            <button class="btn btn-primary w-100" @onclick="SearchTickets">
                 <i class="fa-solid fa-magnifying-glass"></i> Search
             </button>
         </div>
+        
     </div>
 </div>
 
@@ -204,7 +231,17 @@ else
 
     private bool CanGoPrev => _currentPage > 1;
     private bool CanGoNext => _currentPage < _totalPages;
+    private List<ProjectDto> allProjects = new();
+    private List<ProjectDto> filteredProjects = new();
 
+    private string projectSearch = string.Empty;
+    private int? projectFilter = null;
+    private bool showProjectDropdown = false;
+    public class ProjectDto
+    {
+        public int Id { get; set; }
+        public string title { get; set; }
+    }
     protected override async Task OnInitializedAsync()
     {
         var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
@@ -220,8 +257,65 @@ else
 
         TitleService.SetTitle("Chat Support Page");
         await LoadTickets();
+        await LoadProjects();   // ✅ ADD THIS
+    }
+    private async Task LoadProjects()
+    {
+        try
+        {
+            var url = $"{AppConfig.ChatUrl}Projects/GetProjectsByUser/by-user/{UserId}";
+            // var url = $"{AppConfig.ChatUrl}Projects/Get";
+            var response = await Http.GetFromJsonAsync<List<ProjectDto>>(url);
+
+            if (response != null)
+            {
+                allProjects = response;
+                filteredProjects = allProjects;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error loading projects: {ex.Message}");
+        }
     }
 
+    private void FilterProjects()
+    {
+        if (string.IsNullOrWhiteSpace(projectSearch))
+        {
+            filteredProjects = allProjects;
+        }
+        else
+        {
+            filteredProjects = allProjects
+                .Where(p => p.title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+    private void OnProjectInput(ChangeEventArgs e)
+    {
+        projectSearch = e.Value?.ToString() ?? string.Empty;
+        showProjectDropdown = true;
+
+        filteredProjects = allProjects
+            .Where(p => p.title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+    private async Task SelectProject(ProjectDto proj)
+    {
+        projectSearch = proj.title;
+        projectFilter = proj.Id;
+
+        showProjectDropdown = false;
+
+        _currentPage = 1;
+        await LoadTickets(); // auto search after selection
+    }
+    private async Task HideProjectDropdown()
+    {
+        await Task.Delay(150); // allow click before closing
+        showProjectDropdown = false;
+    }
     private async Task LoadTickets()
     {
         var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/Query?" +
@@ -231,6 +325,7 @@ else
         $"&search={Uri.EscapeDataString(searchTerm ?? string.Empty)}" +
         $"&statusFilter={(statusFilter.HasValue ? statusFilter.Value.ToString() : string.Empty)}" +
         $"&priorityFilter={(priorityFilter.HasValue ? priorityFilter.Value.ToString() : string.Empty)}" +
+        $"&projectFilter={(projectFilter.HasValue ? projectFilter.Value.ToString() : "")}" +
         $"&includeArchived={showArchived}");
 
         try

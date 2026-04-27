@@ -31,7 +31,7 @@ namespace ChatUp.Application.Features.Projects.Handlers
                 TeamName = p.Team?.TeamName,
                 Title = p.Title,
                 Description = p.Description
-            }).ToList();
+            }).OrderBy(p => p.Title).ToList();
         }
     }
 }

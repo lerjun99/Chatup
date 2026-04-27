@@ -15,5 +15,6 @@ namespace ChatUp.Application.Features.Dashboard.Queries
         public DateTime? To { get; init; }
         public int SlaAlertsPage { get; init; } = 1;
         public int SlaAlertsPageSize { get; init; } = 10;
+        public int? ProjectId { get; init; }
     }
 }

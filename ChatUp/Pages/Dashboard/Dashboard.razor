@@ -28,13 +28,36 @@
     </aside>
 
     <main class="main">
-        <header class="d-flex justify-content-between align-items-center mb-3">
+        <header class="d-flex justify-content-between align-items-center">
             <div>
                 <h2>Support & Ticket Operations</h2>
                 <div class="muted">Overview & productivity</div>
             </div>
+           
+            <div class="d-flex align-items-center gap-2" >
+                <div class="col position-relative">
+                    <input type="text" style="min-width:300px"
+                           class="form-control"
+                           placeholder="🔍 Project..."
+                           value="@projectSearch"
+                           @oninput="OnProjectInput"
+                           @onfocus="() => showProjectDropdown = true"
+                           @onblur="HideProjectDropdown" />
 
-            <div class="d-flex align-items-center gap-2">
+                    @if (showProjectDropdown && filteredProjects.Any())
+                    {
+                        <ul class="list-group position-absolute w-100 shadow-sm"
+                            style="z-index:1000; max-height:200px; overflow:auto;">
+                            @foreach (var proj in filteredProjects)
+                            {
+                                <li class="list-group-item list-group-item-action"
+                                    @onclick="() => SelectProject(proj)">
+                                    @proj.Title
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
                 <input type="date" @bind="FilterStartDate" class="form-control form-control-sm" />
                 <input type="date" @bind="FilterEndDate" class="form-control form-control-sm" />
 
@@ -91,7 +114,7 @@
                 </div>
 
                 <!-- Status & SLA Donut -->
-                <div class="grid grid-2 mb-4">
+              @*   <div class="grid grid-2 mb-4">
                     <div class="card">
                         <h3>Tickets by Status</h3>
                         <div class="d-flex gap-3 mt-2">
@@ -158,10 +181,32 @@
                         </div>
                     </div>
 
-                    <!-- SLA Alerts -->
+                   
+                </div> *@
+                 <div class="grid grid-2 mb-4">
                     <div class="card">
+                        <h3>Tickets by Status</h3>
+
+                        <div class="bargraph-wrapper">
+                            <div class="bargraph-yaxis">
+                                <div>@MaxTickets</div>
+                                <div>@(MaxTickets / 2)</div>
+                                <div>0</div>
+                            </div>
+
+                            <div class="bargraph">
+                                @RenderBar("Open", _Dashboard.TicketCounts.Open, "#3b82f6")
+                                @RenderBar("In Progress", _Dashboard.TicketCounts.InProgress, "#22c55e")
+                                @RenderBar("Closed", _Dashboard.TicketCounts.Closed, "#f97316")
+                                @RenderBar("Rejected", _Dashboard.TicketCounts.Rejected, "#ef4444")
+                                @RenderBar("Critical", _Dashboard.TicketCounts.Critical, "#7e22ce")
+                            </div>
+                        </div>
+                    </div>
+                <!-- SLA Alerts -->
+                    <div class="card" style="overflow:auto; max-height:300px">
                         <h3>SLA Alerts</h3>
-                        <table class="sla-table table-hover align-middle">
+                        <table class="table table-sm table-hover align-middle">
                             <thead class="table-primary">
                                 <tr>
                                     <th>Ticket No.</th>
@@ -219,9 +264,9 @@
                @if (UserState?.UserType != 3)
                 {
                 <!-- Agent Productivity -->
-                <div class="card mb-4">
+                    <div class="card" style="overflow:auto; margin-bottom:15px">
                     <h3>Support Agent Productivity</h3>
-                    <table class="agent-table mt-2">
+                        <table class="table table-sm table-hover align-middle">
                         <thead>
                             <tr>
                                 <th>Agent</th>
@@ -245,76 +290,81 @@
                         </tbody>
                     </table>
                 </div>
-
+                }
                 <!-- Recent Tickets -->
-                <div class="card mb-4">
+                    <div class="card mb-4">
                     <h3>Recent Tickets</h3>
-                    <div class="mt-2" style="overflow:auto; height:250px;">
-                        @foreach (var t in _Dashboard.RecentTickets.OrderByDescending(x => x.CreatedAt).Take(10))
+                        <div class="mt-2" style="overflow:auto; height:250px;">
+                            @foreach (var t in _Dashboard.RecentTickets.OrderByDescending(x => x.CreatedAt).Take(10))
+                            {
+                                <div class="ticket-item d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <div class="fw-600">• @t.Subject</div>
+                                        <div class="muted">@t.ClientName • Created @t.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
+                                        <div class="muted mt-1">SLA: @t.SlaStatus</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+              
+                @if (UserState?.UserType != 3)
+                {
+                    <!-- Recent Activity -->
+                    <div class="card mb-4" style="
+                    overflow: scroll;
+                    max-height: 300px;
+                    ">
+                        <h3>Recent Activity</h3>
+
+                        @if (isLoadingActivity)
                         {
-                            <div class="ticket-item d-flex justify-content-between align-items-start mb-2">
-                                <div>
-                                    <div class="fw-600">• @t.Subject</div>
-                                    <div class="muted">@t.ClientName • Created @t.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
-                                </div>
-                                <div class="text-end">
-                                    <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
-                                    <div class="muted mt-1">SLA: @t.SlaStatus</div>
-                                </div>
+                            <div class="text-center py-3">
+                                <i class="fa fa-spinner fa-spin"></i> Loading activity...
                             </div>
                         }
-                    </div>
-                </div>
-                }
-
-                <!-- Recent Activity -->
-                <div class="card mb-4">
-                    <h3>Recent Activity (last 3 months by default)</h3>
-
-                    @if (isLoadingActivity)
-                    {
-                        <div class="text-center py-3">
-                            <i class="fa fa-spinner fa-spin"></i> Loading activity...
-                        </div>
-                    }
-                    else if (_activity?.Items == null || !_activity.Items.Any())
-                    {
-                        <div class="text-muted py-2">No activity found for the selected date range.</div>
-                    }
-                    else
-                    {
-                        <div style="overflow:auto; max-height:300px;">
-                            <table class="table table-sm table-hover align-middle">
-                                <thead class="table-primary">
-                                    <tr>
-                                        <th style="width:170px;">Time</th>
-                                        <th style="width:180px;">Actor</th>
-                                        <th style="width:160px;">Type</th>
-                                        <th style="width:140px;">Ticket</th>
-                                        <th>Summary</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var a in _activity.Items)
-                                    {
+                        else if (_activity?.Items == null || !_activity.Items.Any())
+                        {
+                            <div class="text-muted py-2">No activity found for the selected date range.</div>
+                        }
+                        else
+                        {
+                            <div style="overflow:auto;">
+                                <table class="table table-sm table-hover align-middle">
+                                    <thead class="table-primary">
                                         <tr>
-                                            <td>@a.OccurredAtUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</td>
-                                            <td>@a.ActorName</td>
-                                            <td>@a.ActivityType</td>
-                                            <td>@(string.IsNullOrWhiteSpace(a.TicketNo) ? "-" : a.TicketNo)</td>
-                                            <td>@a.Summary</td>
+                                            <th style="width:170px;">Time</th>
+                                            <th style="width:180px;">Actor</th>
+                                            <th style="width:160px;">Type</th>
+                                            <th style="width:140px;">Ticket</th>
+                                            <th>Summary</th>
                                         </tr>
-                                    }
-                                </tbody>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var a in _activity.Items)
+                                        {
+                                            <tr>
+                                                <td>@a.OccurredAtUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</td>
+                                                <td>@a.ActorName</td>
+                                                <td>@a.ActivityType</td>
+                                                <td>@(string.IsNullOrWhiteSpace(a.TicketNo) ? "-" : a.TicketNo)</td>
+                                                <td>@a.Summary</td>
+                                            </tr>
+                                        }
+                                    </tbody>
                             </table>
                         </div>
                     }
                 </div>
+                }
             }
         </section>
     </main>
 </div>
-<button class="mobile-menu-btn" @onclick="ToggleSidebar">Menu</button>
+@* <button class="mobile-menu-btn" @onclick="ToggleSidebar">Menu</button> *@
 @code {
 
     private bool sidebarVisible = false;
@@ -324,9 +374,97 @@
     [Inject]
     public LinkService LinkService { get; set; }
     private int UserId;
+    private List<ProjectDto> Projects = new();
+    private int? SelectedProjectId;
+    private List<ProjectDto> allProjects = new();
+    private List<ProjectDto> filteredProjects = new();
+    private string projectSearch = string.Empty;
+    private int? projectFilter = null;
+    private bool showProjectDropdown = false;
     void ToggleSidebar()
     {
         sidebarVisible = !sidebarVisible;
+    }
+    private int MaxTickets =>
+        new[] {
+            _Dashboard.TicketCounts.Open,
+            _Dashboard.TicketCounts.InProgress,
+            _Dashboard.TicketCounts.Closed,
+            _Dashboard.TicketCounts.Rejected,
+            _Dashboard.TicketCounts.Critical
+        }.Max();
+
+    private RenderFragment RenderBar(string label, int value, string color) => builder =>
+    {
+        var heightPercent = MaxTickets == 0 ? 0 : (value * 100.0 / MaxTickets);
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "bar-item");
+
+        builder.AddMarkupContent(2, $@"
+            <div class='bar-value'>{value}</div>
+            <div class='bar-column'>
+                <div class='bar-fill' style='height:{heightPercent}%; background:{color}'></div>
+            </div>
+            <div class='bar-label'>{label}</div>
+        ");
+
+        builder.CloseElement();
+    };
+    private async Task LoadProjectsAsync()
+    {
+        try
+        {
+            var url = $"{AppConfig.ChatUrl}Projects/GetProjectsByUser/by-user/{UserId}";
+            var response = await Http.GetFromJsonAsync<List<ProjectDto>>(url);
+
+            if (response != null)
+            {
+                allProjects = response;
+                filteredProjects = allProjects;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error loading projects: {ex.Message}");
+        }
+    }
+    private void FilterProjects()
+    {
+        if (string.IsNullOrWhiteSpace(projectSearch))
+        {
+            filteredProjects = allProjects;
+        }
+        else
+        {
+            filteredProjects = allProjects
+                .Where(p => p.Title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+    }
+    private void OnProjectInput(ChangeEventArgs e)
+    {
+        projectSearch = e.Value?.ToString() ?? string.Empty;
+        showProjectDropdown = true;
+
+        filteredProjects = allProjects
+            .Where(p => p.Title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+    private async Task SelectProject(ProjectDto proj)
+    {
+        projectSearch = proj.Title;
+        projectFilter = proj.Id;
+
+        showProjectDropdown = false;
+
+        _currentPage = 1;
+        await LoadDashboardAsync(_currentPage);
+    }
+    private async Task HideProjectDropdown()
+    {
+        await Task.Delay(150); // allow click before closing
+        showProjectDropdown = false;
     }
     // Dashboard Data
     private DashboardDto? _Dashboard { get; set; }
@@ -349,6 +487,7 @@
     {
         await LoadDashboardAsync(_currentPage);
         await LoadActivityAsync(1);
+        await LoadProjectsAsync(); // ✅ ADD
     }
 
     private DateTime FilterStartDate { get; set; } = DateTime.UtcNow.Date.AddMonths(-3);
@@ -408,7 +547,9 @@
 
         // ✅ INCLUDE USER ID
         var query = $"?userId={UserId}&page={page}&pageSize=10";
-
+        
+        if (projectFilter.HasValue)
+            query += $"&projectId={projectFilter.Value}";
         if (startDate.HasValue)
             query += $"&from={startDate.Value:yyyy-MM-ddTHH:mm:ss}";
 
