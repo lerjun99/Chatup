@@ -13,6 +13,7 @@ namespace ChatUp.Application.Features.Ticket.Commands
         TicketStatus? NewStatus,
         TicketPriority? NewPriority,
         int UpdatedBy,
+        int? ProjectId,
         DateTime UpdatedAt,
         string? Remarks = null
     ) : IRequest<bool>;

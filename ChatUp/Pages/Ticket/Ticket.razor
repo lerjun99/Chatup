@@ -1,5 +1,6 @@
 ﻿@page "/tickets/{EncryptedId}"
 @using ChatUp.Application.Auth.Commands
+@using ChatUp.Application.Features.Projects.DTOs
 @using ChatUp.Application.Features.Ticket.DTOs
 @using ChatUp.Domain.Entities
 @using ChatUp.Services
@@ -106,7 +107,28 @@ else
 
                 <div class="small"><strong>Requested By:</strong> @ticket.RequestedByName</div>
                 <div class="small"><strong>Client:</strong> @ticket.ClientName</div>
-                <div class="small"><strong>Project:</strong> @ticket.ProjectName</div>
+                    <div class="small mt-1">
+                        <strong>Project:</strong>
+
+                        @if (UserState.UserType == 3)
+                        {
+                            <!-- 🔒 Read-only -->
+                            <span class="ms-1">@ticket.ProjectName</span>
+                        }
+                        else
+                        {
+                            <select class="form-select form-select-sm d-inline-block w-auto ms-2"
+                                    @bind="selectedProjectId">
+            
+                                <option value="">-- Select Project --</option>
+
+                                @foreach (var project in filteredProjects)
+                                {
+                                    <option value="@project.Id">@project.Title</option>
+                                }
+                            </select>
+                        }
+                    </div>
 
                 <div class="mt-1 small">
                     <strong>SLA:</strong>
@@ -196,45 +218,76 @@ else
     </div>
 
     <!-- HISTORY -->
-    <div class="card border-0 shadow-lg rounded-4 p-3 p-md-4 bg-white">
-        <h6 class="fw-bold mb-3">🕒 History</h6>
+        <div class="card border-0 shadow-lg rounded-4 p-3 p-md-4 bg-white">
+            <h6 class="fw-bold mb-3">🕒 History</h6>
 
-        <div class="history-container">
-            @if (history == null)
-            {
-                <div class="text-center small text-muted">Loading...</div>
-            }
-            else if (!history.Any())
-            {
-                <div class="text-center small text-muted">No records</div>
-            }
-            else
-            {
-                @foreach (var h in history.OrderByDescending(x => x.UpdatedAt))
+            <div class="history-container">
+
+                @if (history == null)
                 {
-                    <div class="history-item">
-                        <div class="fw-semibold small">@h.UpdatedByName</div>
-                        <div class="text-muted small">
-                            @h.UpdatedAt.ToLocalTime().ToString("g")
-                        </div>
-
-                        <div class="small mt-1">
-                            <span class="badge bg-secondary">@h.OldStatus</span>
-                            →
-                            <span class="badge bg-success">@h.NewStatus</span>
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(h.Remarks))
-                        {
-                            <div class="small text-muted mt-1">
-                                <em>@h.Remarks</em>
-                            </div>
-                        }
-                    </div>
+                    <div class="text-center small text-muted">Loading...</div>
                 }
-            }
+                else if (!history.Any())
+                {
+                    <div class="text-center small text-muted">No records</div>
+                }
+                else
+                {
+                    @foreach (var h in history.OrderByDescending(x => x.UpdatedAt))
+                    {
+                        <div class="history-item mb-3 pb-2 border-bottom">
+
+                            <!-- USER + DATE -->
+                            <div class="fw-semibold small">@h.UpdatedByName</div>
+                            <div class="text-muted small">
+                                @h.UpdatedAt.ToLocalTime().ToString("g")
+                            </div>
+
+                            <!-- STATUS -->
+                            @if (!string.IsNullOrWhiteSpace(h.OldStatus) && !string.IsNullOrWhiteSpace(h.NewStatus))
+                            {
+                                <div class="small mt-1">
+                                    <span class="badge bg-secondary">@h.OldStatus</span>
+                                    →
+                                    <span class="badge bg-success">@h.NewStatus</span>
+                                </div>
+                            }
+
+                            <!-- PRIORITY (optional if you add later) -->
+                     @*        @if (!string.IsNullOrWhiteSpace(h.OldProjectName) && !string.IsNullOrWhiteSpace(h.NewProjectName))
+                            {
+                                <div class="small mt-1">
+                                    <span class="badge bg-dark">@h.OldProjectName</span>
+                                    →
+                                    <span class="badge bg-warning text-dark">@h.NewProjectName</span>
+                                </div>
+                            }
+ *@
+                            <!-- PROJECT CHANGE (NEW) -->
+                            @if (h.OldProjectId != h.NewProjectId)
+                            {
+                                <div class="small mt-1">
+                                    <span class="badge bg-info">Project</span>
+                                    <span class="badge bg-dark">@h.OldProjectName</span>
+                                    →
+                                    <span class="badge bg-warning text-dark">@h.NewProjectName</span>
+                                </div>
+                            }
+
+                            <!-- REMARKS -->
+                            @if (!string.IsNullOrWhiteSpace(h.Remarks))
+                            {
+                                <div class="small text-muted mt-1">
+                                    <em>@h.Remarks</em>
+                                </div>
+                            }
+
+                        </div>
+                    }
+                }
+
+            </div>
         </div>
-    </div>
     </div>
 }
 @code {
@@ -257,6 +310,9 @@ else
     [Parameter] public EventCallback OnNavigate { get; set; }
     private bool showInbox = false;
     private string? selectedTicketNo;
+    private List<ProjectDto> allProjects = new();
+    private List<ProjectDto> filteredProjects = new();
+    private int? selectedProjectId;
     /* -------- nav helpers -------- */
     private void Navigate(string url)
     {
@@ -286,6 +342,27 @@ else
             _ => "badge bg-secondary"
         };
     }
+    private async Task LoadProjects()
+    {
+        try
+        {
+            if (!UserState.UserId.HasValue)
+                return;
+            var url = $"{AppConfig.ChatUrl}Projects/GetProjectsByUser/by-user/{UserState.UserId.Value.ToString()}";
+            // var url = $"{AppConfig.ChatUrl}Projects/Get";
+            var response = await Http.GetFromJsonAsync<List<ProjectDto>>(url);
+
+            if (response != null)
+            {
+                allProjects = response;
+                filteredProjects = allProjects;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error loading projects: {ex.Message}");
+        }
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || sessionChecked)
@@ -311,11 +388,28 @@ else
             await PerformLogoutAsync(notifyBackend: false);
             return;
         }
+        // ✅ Load data in parallel
+        await Task.WhenAll(
+            LoadProjects(),
+            LoadTicket(),
+            LoadHistory()
+        );
+        // ✅ CRITICAL: set selected project AFTER both loaded
+        // ✅ Set selected project AFTER loading
+        if (ticket != null)
+        {
+            selectedProjectId = ticket.ProjectId;
 
-        // ✅ Now safe to load data
-        await LoadTicket();
-        await LoadHistory();
-
+            // 🔧 Ensure project exists in dropdown
+            if (!filteredProjects.Any(p => p.Id == ticket.ProjectId))
+            {
+                filteredProjects.Insert(0, new ProjectDto
+                {
+                    Id = ticket.ProjectId ?? 0,
+                    Title = ticket.ProjectName
+                });
+            }
+        }
         StateHasChanged();
     }
     private async Task PerformLogoutAsync(bool notifyBackend = true)
@@ -385,42 +479,6 @@ else
     }
     private async Task OnStatusChanged(ChangeEventArgs e)
     {
-        // if (ticket == null) return;
-
-        // // Get the new status from the dropdown
-        // if (Enum.TryParse<TicketStatus>(e.Value?.ToString(), out var newStatus))
-        // {
-        //     selectedStatus = newStatus;
-
-        //     var payload = new
-        //     {
-        //         TicketId = ticket.Id,
-        //         NewStatus = newStatus,
-        //         UpdatedBy = UserState.UserId,
-        //         UpdatedAt = DateTime.UtcNow,
-        //         remarks = remarks
-        //     };
-
-        //     try
-        //     {
-        //         var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateStatus", payload);
-        //         if (response.IsSuccessStatusCode)
-        //         {
-        //             updateMessage = $"✅ Status automatically updated to '{newStatus}'";
-        //             await LoadHistory(); // refresh ticket history
-        //         }
-        //         else
-        //         {
-        //             updateMessage = "⚠ Failed to update ticket status.";
-        //         }
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         updateMessage = $"Error updating status: {ex.Message}";
-        //     }
-
-        //     StateHasChanged();
-        // }
         if (Enum.TryParse<TicketStatus>(e.Value?.ToString(), out var newStatus))
         {
             selectedStatus = newStatus;
@@ -441,6 +499,7 @@ else
                 NewPriority = selectedPriority,
                 UpdatedBy = UserState.UserId,
                 UpdatedAt = DateTime.UtcNow,
+                ProjectId = selectedProjectId, // ✅ add this
                 Remarks = remarks
             };
 
@@ -529,8 +588,6 @@ else
            selectedStatus = ticket.Status;
            selectedPriority = ticket.Priority; // initialize dropdown
 
-            // ✅ Load history next
-            await LoadHistory();
 
             // ✅ Set remarks value
             if (history != null && history.Any())

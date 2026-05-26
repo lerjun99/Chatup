@@ -35,6 +35,8 @@
           } *@
             @if (UserState.UserType != 5)
           {
+              
+ 
         <li class="nav-item">
             <NavLink  
                      class="sidebar-link nav-link"
@@ -151,6 +153,16 @@
             var token = LinkService.Protect(UserState.UserId.Value.ToString());
             var encodedToken = Uri.EscapeDataString(token);
             Navigate($"/dashboard/{encodedToken}");
+        }
+    }
+    private void NavigateCalendar()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/calendar/{encodedToken}");
         }
     }
     private bool _initialized = false;

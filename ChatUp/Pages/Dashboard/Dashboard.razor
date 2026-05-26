@@ -9,7 +9,7 @@
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @inject UserState UserState
-
+@inject IJSRuntime JS
 <link href="css/dashboard.css" rel="stylesheet" />
 
 
@@ -34,7 +34,7 @@
                 <div class="muted">Overview & productivity</div>
             </div>
            
-            <div class="d-flex align-items-center gap-2" >
+            <div class="d-flex align-items-center gap-2">
                 <div class="col position-relative">
                     <input type="text" style="min-width:300px"
                            class="form-control"
@@ -114,7 +114,7 @@
                 </div>
 
                 <!-- Status & SLA Donut -->
-              @*   <div class="grid grid-2 mb-4">
+                @*   <div class="grid grid-2 mb-4">
                     <div class="card">
                         <h3>Tickets by Status</h3>
                         <div class="d-flex gap-3 mt-2">
@@ -183,7 +183,7 @@
 
                    
                 </div> *@
-                 <div class="grid grid-2 mb-4">
+                <div class="grid grid-2 mb-4">
                     <div class="card">
                         <h3>Tickets by Status</h3>
 
@@ -203,7 +203,7 @@
                             </div>
                         </div>
                     </div>
-                <!-- SLA Alerts -->
+                    <!-- SLA Alerts -->
                     <div class="card" style="overflow:auto; max-height:300px">
                         <h3>SLA Alerts</h3>
                         <table class="table table-sm table-hover align-middle">
@@ -261,63 +261,121 @@
                         </table>
                     </div>
                 </div>
-               @if (UserState?.UserType != 3)
+                @if (UserState?.UserType != 3)
                 {
-                <!-- Agent Productivity -->
+                    <!-- Agent Productivity -->
                     <div class="card" style="overflow:auto; margin-bottom:15px">
-                    <h3>Support Agent Productivity</h3>
+                        <h3>Support Agent Productivity</h3>
                         <table class="table table-sm table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th>Agent</th>
-                                <th>Tickets Assigned</th>
-                                <th>Avg First Response (mins)</th>
-                                <th>Idle Time (mins)</th>
-                                <th>Proactiveness (%)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var a in AgentStats)
-                            {
+                            <thead>
                                 <tr>
-                                    <td>@a.Name</td>
-                                    <td>@a.TicketCount</td>
-                                    <td>@($"{a.AvgFirstResponseMinutes:F1}")</td>
-                                    <td>@($"{a.AvgIdleMinutes:F1}")</td>
-                                    <td>@($"{a.ProactivenessPercent:F0}%")</td>
+                                    <th>Agent</th>
+                                    <th>Tickets Assigned</th>
+                                    <th>Avg First Response (mins)</th>
+                                    <th>Idle Time (mins)</th>
+                                    <th>Proactiveness (%)</th>
                                 </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
+                            </thead>
+                            <tbody>
+                                @foreach (var a in AgentStats)
+                                {
+                                    <tr>
+                                        <td>@a.Name</td>
+                                        <td>@a.TicketCount</td>
+                                        <td>@($"{a.AvgFirstResponseMinutes:F1}")</td>
+                                        <td>@($"{a.AvgIdleMinutes:F1}")</td>
+                                        <td>@($"{a.ProactivenessPercent:F0}%")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
                 }
-                <!-- Recent Tickets -->
                     <div class="card mb-4">
-                    <h3>Recent Tickets</h3>
-                        <div class="mt-2" style="overflow:auto; height:250px;">
-                            @foreach (var t in _Dashboard.RecentTickets.OrderByDescending(x => x.CreatedAt).Take(10))
-                            {
-                                <div class="ticket-item d-flex justify-content-between align-items-start mb-2">
-                                    <div>
-                                        <div class="fw-600">• @t.Subject</div>
-                                        <div class="muted">@t.ClientName • Created @t.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
-                                    </div>
-                                    <div class="text-end">
-                                        <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
-                                        <div class="muted mt-1">SLA: @t.SlaStatus</div>
-                                    </div>
-                                </div>
-                            }
+
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                            <div>
+                                <h3 class="mb-0">Business Calendar</h3>
+                                <small class="text-muted">@currentMonthLabel</small>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <select class="form-select form-select-sm"
+                                        style="width:160px"
+                                        @bind="selectedRegion"
+                                        @bind:after="OnRegionChanged">
+                                    <option value="PH">Philippines</option>
+                                    <option value="US">United States</option>
+                                </select>
+
+                                <button class="btn btn-primary btn-sm" @onclick="SyncHolidays">
+                                    Sync
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="gc-layout">
+
+                            <!-- CALENDAR -->
+                            <div id="calendar" class="gc-calendar"></div>
+
+                            <!-- AGENDA -->
+                            <div class="gc-agenda">
+
+                                <h6>Agenda</h6>
+
+                                @if (_agendaEvents.Any())
+                                {
+                                    <ul class="agenda-list">
+                                        @foreach (var e in _agendaEvents.OrderBy(x => x.Start))
+                                        {
+                                            <li>
+                                                <span class="dot" style="background:@e.Color"></span>
+                                                <div>
+                                                    <div class="title">@e.Title</div>
+                                                    <div class="muted small">@e.Start.ToString("MMM dd yyyy")</div>
+                                                </div>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                else
+                                {
+                                    <div class="text-muted small">No events</div>
+                                }
+
+                            </div>
+
                         </div>
                     </div>
+             
+                <!-- Recent Tickets -->
+                <div class="card mb-4">
+                    <h3>Recent Tickets</h3>
+                    <div class="mt-2" style="overflow:auto; height:250px;">
+                        @foreach (var t in _Dashboard.RecentTickets.OrderByDescending(x => x.CreatedAt).Take(10))
+                        {
+                            <div class="ticket-item d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <div class="fw-600">• @t.Subject</div>
+                                    <div class="muted">@t.ClientName • Created @t.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
+                                    <div class="muted mt-1">SLA: @t.SlaStatus</div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
               
                 @if (UserState?.UserType != 3)
                 {
                     <!-- Recent Activity -->
                     <div class="card mb-4" style="
-                    overflow: scroll;
-                    max-height: 300px;
-                    ">
+                        overflow: scroll;
+                        max-height: 300px;
+                        ">
                         <h3>Recent Activity</h3>
 
                         @if (isLoadingActivity)
@@ -355,10 +413,10 @@
                                             </tr>
                                         }
                                     </tbody>
-                            </table>
-                        </div>
-                    }
-                </div>
+                                </table>
+                            </div>
+                        }
+                    </div>
                 }
             }
         </section>
@@ -381,6 +439,121 @@
     private string projectSearch = string.Empty;
     private int? projectFilter = null;
     private bool showProjectDropdown = false;
+    private List<CalendarEventDto> events = new();
+    private List<CalendarEventDto> agendaEvents = new();
+
+    private DateTime selectedDate = DateTime.UtcNow;
+    private string selectedPriority = "Medium";
+    private List<object> calendarJsEvents = new();
+    private string selectedRegion = "PH";
+    private DateTime currentMonth = DateTime.UtcNow;
+
+    private string currentMonthLabel => currentMonth.ToString("MMMM yyyy");
+    private List<AgendaDto> _agendaEvents = new();
+    private List<HolidayDto> holidays = new();
+    private List<HolidayDto> filteredHolidays = new();
+
+    private List<object> calendarEvents = new();
+
+    private DotNetObjectReference<Dashboard>? objRef;
+    private void BuildCalendarEvents()
+    {
+        var eventItems = events.Select(e => new CalendarJsEvent
+        {
+            id = e.Id,
+            title = e.Title,
+            start = e.Start.ToString("yyyy-MM-ddTHH:mm:ss"),
+            end = e.End?.ToString("yyyy-MM-ddTHH:mm:ss"),
+            color = e.Color,
+            editable = true
+        });
+
+        var holidayItems = holidays.Select(h => new CalendarJsEvent
+        {
+            id = null,
+            title = h.Name,
+            start = h.Date.ToString("yyyy-MM-dd"),
+            end = null,
+            color = "#fecaca",
+            editable = false,
+            allDay = true,
+            display = "background"
+        });
+
+        calendarJsEvents = eventItems
+            .Concat(holidayItems)
+            .Cast<object>()   // only needed if JS interop expects object
+            .ToList();
+    }
+    [JSInvokable]
+    public async Task OnDateClick(string date)
+    {
+        selectedDate = DateTime.Parse(date);
+
+        // OPEN YOUR TICKET MODAL HERE
+        await JS.InvokeVoidAsync("alert", $"Create ticket for {selectedDate:yyyy-MM-dd}");
+    }
+
+    [JSInvokable]
+    public async Task OnEventDrop(string id, string newDate)
+    {
+        var ev = events.FirstOrDefault(x => x.Id == id);
+        if (ev != null)
+        {
+            ev.Start = DateTime.Parse(newDate);
+            BuildCalendarEvents();
+            await RenderCalendar();
+        }
+    }
+
+    private async Task RenderCalendar()
+    {
+        objRef = DotNetObjectReference.Create(this);
+
+        await JS.InvokeVoidAsync(
+            "renderCalendar",
+            calendarJsEvents,
+            objRef
+        );
+    }
+    [JSInvokable]
+    public async Task OnMonthChanged(string startDate)
+    {
+        var parsedDate = DateTime.Parse(startDate);
+
+        // 🔥 Move to correct month (FullCalendar gives previous range start)
+        selectedDate = parsedDate.AddMonths(1);
+
+        // Optional: normalize to first day of month
+        selectedDate = new DateTime(selectedDate.Year, selectedDate.Month, 1);
+
+        currentMonth = selectedDate;
+
+        UpdateAgenda();
+        StateHasChanged();
+    }
+    private void UpdateAgenda()
+    {
+        _agendaEvents = holidays
+            .Where(x => x.Date.Month == selectedDate.Month &&
+                        x.Date.Year == selectedDate.Year)
+            .Select(x => new AgendaDto
+            {
+                Title = x.Name,
+                Start = x.Date,
+                Color = "#ef4444" // holiday color
+            })
+            .OrderBy(x => x.Start)
+            .ToList();
+    }
+    private string GetColor(string priority) => priority switch
+    {
+        "Critical" => "#dc2626",
+        "High" => "#f97316",
+        "Medium" => "#3b82f6",
+        "Low" => "#22c55e",
+        _ => "#6b7280"
+    };
     void ToggleSidebar()
     {
         sidebarVisible = !sidebarVisible;
@@ -488,8 +661,54 @@
         await LoadDashboardAsync(_currentPage);
         await LoadActivityAsync(1);
         await LoadProjectsAsync(); // ✅ ADD
+        await LoadCalendarData();
+    }
+    private async Task LoadCalendarData()
+    {
+        holidays = await Http.GetFromJsonAsync<List<HolidayDto>>(
+            $"{AppConfig.ChatUrl}Holidays/Get/{selectedRegion}");
+ 
+        ApplyMonthFilter();
+        BuildCalendarEvents();
+        BuildAgenda();
+
+        await RenderCalendar();
     }
 
+    private void ApplyMonthFilter()
+    {
+        filteredHolidays = holidays
+            .Where(x => x.Date.Month == currentMonth.Month &&
+                        x.Date.Year == currentMonth.Year)
+            .ToList();
+    }
+   
+    private void BuildAgenda()
+    {
+        _agendaEvents = holidays
+      .Where(x => x.Date.Month == currentMonth.Month &&
+                  x.Date.Year == currentMonth.Year)
+      .Select(x => new AgendaDto
+      {
+          Title = x.Name,
+          Start = x.Date,
+          Color = "#ef4444"
+      })
+      .ToList();
+    }
+    private async Task SyncHolidays()
+    {
+        await Http.PostAsync(
+            $"{AppConfig.ChatUrl}Holidays/Sync/sync/{selectedRegion}/2026",
+            null);
+
+        await LoadCalendarData();
+    }
+
+    private async Task OnRegionChanged()
+    {
+        await LoadCalendarData();
+    }
     private DateTime FilterStartDate { get; set; } = DateTime.UtcNow.Date.AddMonths(-3);
     private DateTime FilterEndDate { get; set; } = DateTime.UtcNow.Date;
 
@@ -662,4 +881,37 @@
     private double OffsetRejected => _Dashboard?.TicketCounts.OffsetRejected ?? 0;
     private double OffsetClosed => _Dashboard?.TicketCounts.OffsetClosed ?? 0;
     private double OffsetInProgress => _Dashboard?.TicketCounts.OffsetInProgress ?? 0;
+    public class AgendaDto
+    {
+        public string Title { get; set; }
+        public DateTime Start { get; set; }
+        public string Color { get; set; }
+    }
+    public class CalendarEventDto
+    {
+        public string Id { get; set; }
+        public string Title { get; set; }
+        public DateTime Start { get; set; }
+        public DateTime? End { get; set; }
+        public string Color { get; set; }
+        public string Priority { get; set; }
+    }
+    public class CalendarJsEvent
+    {
+        public string? id { get; set; }
+        public string title { get; set; }
+        public string start { get; set; }
+        public string? end { get; set; }
+
+        public string? color { get; set; }
+        public bool? editable { get; set; }
+
+        public bool? allDay { get; set; }
+        public string? display { get; set; }
+    }
+    public class HolidayDto
+    {
+        public DateTime Date { get; set; }
+        public string Name { get; set; }
+    }
 }

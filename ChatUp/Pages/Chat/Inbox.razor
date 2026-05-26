@@ -23,7 +23,11 @@
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 <link href="css/ticket-chat.css" rel="stylesheet" />
 
-
+<style>
+    .chat-header > div {
+        transition: all 0.3s ease;
+    }
+</style>
 
 <div class="ticket-container @(IsSidebarOpen ? "sidebar-open" : "")">
 
@@ -228,110 +232,131 @@
         @if (SelectedTicket != null)
         {
           <!-- Chat Header -->
-            <div class="chat-header d-flex flex-wrap align-items-center justify-content-between">
+            <div class="chat-header border-bottom p-2">
 
-                <!-- LEFT : Ticket Info -->
-                <div class="ticket-info d-flex align-items-center gap-2 flex-wrap">
+                <!-- TOP ROW (Always visible on mobile) -->
+                <div class="d-none justify-content-between align-items-center chat-mobile-header-2">
 
-                    <i class="fa-solid fa-rectangle-list ticket-icon shadow"></i>
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-rectangle-list ticket-icon shadow"></i>
 
-                    <div class="ticket-details">
+                        <span class="fw-bold">
+                            @SelectedTicket?.IssueTitle
+                        </span>
+                    </div>
 
-                        @if (SelectedTicket != null)
-                        {
-                            <div class="ticket-title fw-bold d-flex align-items-center gap-2">
+                    <!-- Toggle Button (Mobile Only) -->
+                    <button class="btn btn-sm btn-outline-secondary d-md-none btn-collapse"
+                            @onclick="() => isHeaderCollapsed = !isHeaderCollapsed">
+                        <i class="fa-solid @(isHeaderCollapsed ? "fa-chevron-down" : "fa-chevron-up")"></i>
+                    </button>
+                </div>
 
-                                @if (!isEditingTitle)
-                                {
-                                    <div class="chat-title d-flex align-items-center gap-2">
-                                        <span class="issue-title">
-                                            @SelectedTicket.IssueTitle
+                <!-- COLLAPSIBLE CONTENT -->
+                <div class="mt-2 w-100 @(isHeaderCollapsed ? "d-none d-md-flex" : "d-flex flex-column flex-md-row")
+                    align-items-md-center justify-content-between gap-2">
+
+                    <!-- LEFT : Ticket Info -->
+                    <div class="ticket-info d-flex align-items-center gap-2 flex-wrap">
+
+                        <div class="ticket-details">
+
+                            @if (SelectedTicket != null)
+                            {
+                                <div class="ticket-title fw-bold d-flex align-items-center gap-2 flex-wrap">
+
+                                    @if (!isEditingTitle)
+                                    {
+                                        <div class="chat-title d-flex align-items-center gap-2">
+                                            <span class="issue-title">
+                                                @SelectedTicket.IssueTitle
+                                            </span>
+
+                                            <i class="fa-solid fa-pencil text-primary edit-icon"
+                                               @onclick="() => isEditingTitle = true"></i>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="chat-title d-flex align-items-center gap-2 w-100">
+                                            <input class="form-control form-control-sm flex-grow-1"
+                                                   @bind="editingTitle"
+                                                   @bind:event="oninput" />
+
+                                            <i class="fa-solid fa-floppy-disk text-success action-icon"
+                                               @onclick="SaveTitle"></i>
+
+                                            <i class="fa-solid fa-times text-danger action-icon"
+                                               @onclick="CancelEditTitle"></i>
+                                        </div>
+                                    }
+
+                                    <!-- Status + Priority -->
+                                    <div class="chat-ticketstatus">
+                                        <span class="ticket-status shadow px-2 py-1 rounded fw-semibold
+                                            @(GetStatusClass(Enum.Parse<TicketStatus>(SelectedTicket.Status)))">
+                                            @SelectedTicket.Status
                                         </span>
 
-                                        <i class="fa-solid fa-pencil text-primary edit-icon"
-                                           @onclick="() => isEditingTitle = true"></i>
+                                        <span class="ticket-status shadow px-2 py-1 rounded fw-semibold
+                                            @(GetPriorityClass(SelectedTicket.Priority))">
+                                            @SelectedTicket.Priority
+                                        </span>
                                     </div>
+                                </div>
+                            }
+
+                            <!-- Meta -->
+                            <div class="ticket-meta text-muted small fw-bold d-flex flex-wrap gap-1">
+                                <NavLink href="#"
+                                         class="sidebar-link nav-link p-0"
+                                         Match="NavLinkMatch.All"
+                                         @onclick="NavigateTicket">
+                                    @(SelectedTicket.IsCase ? SelectedTicket.CaseNo : SelectedTicket.TicketNo)
+                                </NavLink>
+                                <span>|</span>
+                                <span>@SelectedTicket.DateReceived?.ToString("MMM dd, yyyy")</span>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(SelectedTicket.ProjectTitle))
+                            {
+                                <div class="ticket-project text-muted small mt-1">
+                                    <i class="fa-solid fa-diagram-project me-1"></i>
+                                    @SelectedTicket.ProjectTitle
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- RIGHT : Actions -->
+                    <div class="chat-header-actions d-flex flex-column flex-md-row gap-2">
+                        @if (SelectedTicket.Status != TicketStatus.Closed.ToString() &&
+                             SelectedTicket.Status != TicketStatus.Rejected.ToString())
+                        {
+                            @if (UserState?.UserType is 1 or 2)
+                            {
+                                @if (SelectedTicket.IsCase)
+                                {
+                                    <button class="btn btn-warning w-100 w-md-auto"
+                                            @onclick="() => ConvertToCase(SelectedTicket.Id)">
+                                        Convert to Ticket
+                                    </button>
+
+                                    <button class="btn btn-danger w-100 w-md-auto"
+                                            @onclick="() => showCloseTicketModal = true">
+                                        Close Ticket
+                                    </button>
                                 }
                                 else
                                 {
-                                    <div class="chat-title d-flex align-items-center gap-2 w-100">
-                                        <input class="form-control form-control-sm flex-grow-1"
-                                               @bind="editingTitle"
-                                               @bind:event="oninput" />
-
-                                        <i class="fa-solid fa-floppy-disk text-success action-icon"
-                                           @onclick="SaveTitle"></i>
-
-                                        <i class="fa-solid fa-times text-danger action-icon"
-                                           @onclick="CancelEditTitle"></i>
-                                    </div>
+                                    <button class="btn btn-danger w-100 w-md-auto"
+                                            @onclick="() => showCloseTicketModal = true">
+                                        Close Ticket
+                                    </button>
                                 }
-
-                                <!-- Status + Priority -->
-                                <div class="chat-ticketstatus">
-                                    <span class="ticket-status shadow px-2 py-1 rounded fw-semibold
-                                          @(GetStatusClass(Enum.Parse<TicketStatus>(SelectedTicket.Status)))">
-                                        @SelectedTicket.Status
-                                    </span>
-
-                                    <span class="ticket-status shadow px-2 py-1 rounded fw-semibold
-                                          @(GetPriorityClass(SelectedTicket.Priority))">
-                                        @SelectedTicket.Priority
-                                    </span>
-                                </div>
-                            </div>
-                        }
-
-                        <!-- Meta -->
-                        <div class="ticket-meta text-muted small fw-bold d-flex flex-wrap gap-1">
-                            <NavLink href="#"
-                                     class="sidebar-link nav-link p-0"
-                                     Match="NavLinkMatch.All"
-                                     @onclick="NavigateTicket">
-                                @(SelectedTicket.IsCase ? SelectedTicket.CaseNo : SelectedTicket.TicketNo)
-                            </NavLink>
-                            <span>|</span>
-                            <span>@SelectedTicket.DateReceived?.ToString("MMM dd, yyyy")</span>
-                        </div>
-
-                        @if (!string.IsNullOrEmpty(SelectedTicket.ProjectTitle))
-                        {
-                            <div class="ticket-project text-muted small mt-1">
-                                <i class="fa-solid fa-diagram-project me-1"></i>
-                                @SelectedTicket.ProjectTitle
-                            </div>
+                            }
                         }
                     </div>
-                </div>
-
-                <!-- RIGHT : Actions -->
-                <div class="chat-header-actions d-flex align-items-center gap-2">
-                    @if (SelectedTicket.Status != TicketStatus.Closed.ToString() &&
-                         SelectedTicket.Status != TicketStatus.Rejected.ToString())
-                    {
-                        @if (UserState?.UserType is 1 or 2)
-                        {
-                            @if (SelectedTicket.IsCase)
-                            {
-                                <button class="btn btn-warning w-100 w-md-auto"
-                                        @onclick="() => ConvertToCase(SelectedTicket.Id)">
-                                    Convert to Ticket
-                                </button>
-
-                                <button class="btn btn-danger w-100 w-md-auto"
-                                        @onclick="() => showCloseTicketModal = true">
-                                    Close Ticket
-                                </button>
-                            }
-                            else
-                            {
-                                <button class="btn btn-danger w-100 w-md-auto"
-                                        @onclick="() => showCloseTicketModal = true">
-                                    Close Ticket
-                                </button>
-                            }
-                        }
-                    }
                 </div>
             </div>
             <!-- Chat Body -->
@@ -367,25 +392,36 @@
                     {
                         bool isMine = msg.SenderId == UserId;
 
+                        var currentDate = msg.DateCreated?.Date;
+
+                        // ✅ DATE SEPARATOR
+                        @if (previousDate != currentDate)
+                        {
+                            <div class="chat-date-line">
+                                <span class="chat-date-text">
+                                    @GetMessageDate(msg.DateCreated)
+                                </span>
+                            </div>
+
+                            previousDate = currentDate;
+                        }
+
                         <div class="chat-message @(isMine ? "user" : "agent")">
                             <div class="bubble-wrapper d-flex @(isMine ? "justify-content-end" : "justify-content-start")">
 
-                                @* Avatar for agent *@
                                 @if (!isMine)
                                 {
-                                    <img src="@(!string.IsNullOrEmpty(msg.SenderAvatar)? msg.SenderAvatar: "/images/default.png")"class="avatar" />
-                                        
+                                    <img src="@(!string.IsNullOrEmpty(msg.SenderAvatar) ? msg.SenderAvatar : "/images/default.png")"
+                                         class="avatar" />
                                 }
 
                                 <div class="bubble-container @(isMine ? "user-bubble" : "agent-bubble")">
 
-                                    @* Sender name *@
                                     @if (!isMine)
                                     {
                                         <div class="sender-name">@msg.SenderName</div>
                                     }
 
-                                    @* Message text *@
                                     @if (!string.IsNullOrWhiteSpace(msg.Content))
                                     {
                                         <div class="bubble">
@@ -393,7 +429,7 @@
                                         </div>
                                     }
 
-                                    @* Attachments inside bubble *@
+                                    @* Attachments (unchanged) *@
                                     @if (msg.Attachments?.Any() == true)
                                     {
                                         <div class="chat-attachments">
@@ -402,11 +438,8 @@
                                                 <div class="chat-attachment">
                                                     <div class="attachment-preview">
 
-                                                        @* ACTION BUTTONS ON TOP-RIGHT *@
-
                                                         <div class="attachment-actions-top">
                                                             <button class="btn btn-sm btn-light"
-                                                                    title="Download"
                                                                     @onclick="() => DownloadAttachment(file)">
                                                                 <i class="fa-solid fa-download"></i>
                                                             </button>
@@ -414,44 +447,21 @@
                                                             @if (file.UploadedById == UserId)
                                                             {
                                                                 <button class="btn btn-sm btn-danger"
-                                                                        title="Remove"
                                                                         @onclick="() => RemoveAttachment(file)">
                                                                     <i class="fa-solid fa-xmark"></i>
                                                                 </button>
                                                             }
                                                         </div>
 
-                                                        @* PREVIEW *@
                                                         @if (file.FileType.StartsWith("image/"))
                                                         {
-                                                            @*  <div class="chat-image-wrapper">
-                                                                <img src="@($"data:{file.FileType};base64,{file.Base64Content}")"
-                                                                     class="chat-image magnify"
-                                                                     alt="@file.FileName"
-                                                                     role="button"
-                                                                     tabindex="0"
-                                                                     title="Click to magnify"
-                                                                     @onclick="() => OpenImage(file.Base64Content, file.FileType)"
-                                                                     @onclick:stopPropagation />
-
-                                                                <span class="zoom-icon">
-                                                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
-                                                                </span>
-                                                            </div> *@
                                                             <div class="chat-image-wrapper">
                                                                 <img src="@GetPreviewImageSrc(file)"
                                                                      class="chat-image magnify"
-                                                                     alt="@file.FileName"
-                                                                     role="button" loading="lazy"
-                                                                     title="Click to view full image"
+                                                                     loading="lazy"
                                                                      @onclick="() => OpenImage(file)"
                                                                      @onclick:stopPropagation />
-
-                                                                <span class="zoom-icon">
-                                                                    <i class="fa-solid fa-magnifying-glass-plus"></i>
-                                                                </span>
                                                             </div>
-
                                                         }
                                                         else
                                                         {
@@ -460,7 +470,6 @@
                                                                 <span class="file-name">@file.FileName</span>
                                                             </div>
                                                         }
-
 
                                                     </div>
                                                 </div>
@@ -881,6 +890,7 @@
     </div>
 }
 @code {
+    private bool isHeaderCollapsed = true;
     private string? attachmentPreview;     // Base64 preview
     private IBrowserFile? attachmentFile;  // Actual image file
     private string? attachmentFileName;
@@ -974,6 +984,7 @@
     private string? selectedImageBase64;
     private string? selectedImageType;
     private const int MinLoadingMs = 600; // adjust if needed
+    DateTime? previousDate = null;
     private async Task AutoResizeTextArea()
     {
         if (chatInputRef.Context is not null)
@@ -1009,7 +1020,13 @@
 
         return "/images/image-placeholder.png";
     }
+    private string GetMessageDate(DateTime? date)
+    {
+        if (!date.HasValue)
+            return string.Empty;
 
+        return date.Value.ToLocalTime().ToString("MMMM dd, yyyy");
+    }
     private async Task OpenImage(TicketUploadDto file)
     {
         try

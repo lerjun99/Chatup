@@ -42,7 +42,7 @@
     @* ── Main content ── *@
     <main class="layout-main flex-grow-1 d-flex flex-column">
         <div class="top-row d-flex align-items-center gap-3 px-3 px-md-4">
-            <button class="btn btn-link d-md-none p-0"
+            <button class="btn btn-link d-md-none p-0" style="max-width:70px"
                     @onclick="OpenDrawer"
                     aria-controls="sidebarNav"
                     aria-expanded="@_drawerOpen"
@@ -82,6 +82,7 @@
                 </a> *@
                  @if (UserState != null && UserState.UserType != 5)
                 {
+           
                    <NavLink href="#"
                          class="sidebar-link nav-link"
                          Match="NavLinkMatch.Prefix"
@@ -190,6 +191,16 @@
     private bool _showSessionExpired = false;
     private bool _loaded;
     // private void NavigateDashboard() => Navigate("/dashboard");
+    private void NavigateCalendar()
+    {
+        if (UserState.UserId.HasValue)
+        {
+            // 🔐 Encrypt user ID
+            var token = LinkService.Protect(UserState.UserId.Value.ToString());
+            var encodedToken = Uri.EscapeDataString(token);
+            Navigate($"/calendar/{encodedToken}");
+        }
+    }
     private void NavigateDashboard()
     {
         if (UserState.UserId.HasValue)

@@ -1,7 +1,9 @@
 ﻿@page "/ticketlist/{EncryptedId}"
+@implements IAsyncDisposable
 @using ChatUp.Domain.Entities
 @using ChatUp.Services
 @using ChatUp.Services.DTOs
+@using Microsoft.AspNetCore.SignalR.Client
 @inject HttpClient Http
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
@@ -154,18 +156,23 @@ else
                             </td>
                             <td>@t.DueDate.ToString("g")</td>
                             <td>
-                                @if (t.IsBreached)
-                                {
-                                    <span class="badge bg-danger">⚠ Breached</span>
-                                }
-                                else if (timeLeft.TotalHours <= 2 && timeLeft.TotalSeconds > 0)
-                                {
-                                    <span class="badge bg-warning text-dark">⏳ Near SLA</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-success">✅ On Track</span>
-                                }
+                                <div class="d-flex flex-column">
+
+                                    <span class="fw-bold @GetSlaColor(t.Id)">
+                                        @GetSlaTime(t.Id)
+                                    </span>
+
+                                    <span class="badge @(GetSlaStatus(t.Id) switch
+                                                      {
+                                                          "Breached" => "bg-danger",
+                                                          "Near" => "bg-warning text-dark",
+                                                          "OnTrack" => "bg-success",
+                                                          _ => "bg-secondary"
+                                                      })">
+                                        @GetSlaStatus(t.Id)
+                                    </span>
+
+                                </div>
                             </td>
                             <td class="sticky-actions">
                                 <div class="action-buttons">
@@ -237,10 +244,44 @@ else
     private string projectSearch = string.Empty;
     private int? projectFilter = null;
     private bool showProjectDropdown = false;
+    private Dictionary<int, string> slaStatusMap = new();
+    private System.Timers.Timer? slaTimer;
+    private HubConnection? hub;
     public class ProjectDto
     {
         public int Id { get; set; }
         public string title { get; set; }
+    }
+    private async Task InitSlaSignalR()
+    {
+        hub = new HubConnectionBuilder()
+     .WithUrl($"{AppConfig.ChatUrl}slahub") // ✅ correct API endpoint
+     .WithAutomaticReconnect()
+     .Build();
+
+        hub.On<int, string, string>("ReceiveSlaUpdate", (ticketId, time, status) =>
+        {
+            slaStatusMap[ticketId] = status;
+            InvokeAsync(StateHasChanged);
+        });
+
+        // ✅ Handle reconnect (VERY IMPORTANT)
+        hub.Reconnected += async (connectionId) =>
+        {
+            await JoinTicketGroups();
+        };
+
+        await hub.StartAsync();
+    }
+    private async Task JoinTicketGroups()
+    {
+        if (hub == null || hub.State != HubConnectionState.Connected || tickets == null || tickets.Count == 0)
+            return;
+
+        // One hub call with all ticket IDs — server joins all groups and sends
+        // back each ticket's current SLA status in a single round-trip
+        var ids = tickets.Select(t => t.Id).ToList();
+        await hub.SendAsync("JoinTicketGroups", ids);
     }
     protected override async Task OnInitializedAsync()
     {
@@ -254,10 +295,63 @@ else
         }
 
         UserId = int.Parse(decrypted);
-
+        slaTimer = new System.Timers.Timer(1000);
+        slaTimer.Elapsed += (_, __) =>
+        {
+            InvokeAsync(() =>
+            {
+                StateHasChanged();
+            });
+        };
+        slaTimer.AutoReset = true;
+        slaTimer.Start();
         TitleService.SetTitle("Chat Support Page");
-        await LoadTickets();
-        await LoadProjects();   // ✅ ADD THIS
+        await InitSlaSignalR();   // start SignalR first
+        await LoadTickets();      // load tickets — also joins groups internally
+        await LoadProjects();
+
+    }
+    private string GetSlaTime(int ticketId)
+    {
+        var t = tickets?.FirstOrDefault(x => x.Id == ticketId);
+        if (t == null) return "--:--:--";
+
+        var remaining = t.DueDate - DateTime.UtcNow;
+        if (remaining <= TimeSpan.Zero) return "00:00:00";
+        return $"{(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
+    }
+
+    private string GetSlaStatus(int ticketId)
+    {
+        var t = tickets?.FirstOrDefault(x => x.Id == ticketId);
+        if (t == null) return "Loading...";
+
+        var remaining = t.DueDate - DateTime.UtcNow;
+        if (remaining <= TimeSpan.Zero) return "Breached";
+        if (remaining.TotalHours <= 2) return "Near";
+        return "OnTrack";
+    }
+
+    private string GetSlaColor(int ticketId)
+    {
+        return GetSlaStatus(ticketId) switch
+        {
+            "Breached" => "text-danger",
+            "Near" => "text-warning",
+            "OnTrack" => "text-success",
+            _ => "text-muted"
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hub != null)
+            await hub.DisposeAsync();
+        if (slaTimer != null)
+        {
+            slaTimer.Stop();
+            slaTimer.Dispose();
+        }
     }
     private async Task LoadProjects()
     {
@@ -344,6 +438,8 @@ else
                 _totalRecords = 0;
                 _totalPages = 1;
             }
+            // Rejoin groups so the server sends fresh SLA values for the new page of tickets
+            await JoinTicketGroups();
         }
         catch (Exception ex)
         {

@@ -7,6 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Services\SlaBackgroundService.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Remove="Pages\Chat\Chat.razor" />
   </ItemGroup>
 
@@ -24,7 +28,12 @@
   <ItemGroup>
     <ProjectReference Include="..\ChatUp.Application\ChatUp.Application.csproj" />
     <ProjectReference Include="..\ChatUp.Domain\ChatUp.Domain.csproj" />
+    <ProjectReference Include="..\ChatUp.Infrastructure\ChatUp.Infrastructure.csproj" />
     <ProjectReference Include="..\Shared\Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="SlaHub\" />
   </ItemGroup>
 
 

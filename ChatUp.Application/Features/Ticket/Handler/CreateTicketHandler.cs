@@ -16,15 +16,21 @@ public class CreateTicketHandler : IRequestHandler<CreateTicketCommand, TicketCr
 {
     private readonly ITicketRepository _repo;
     private readonly IProjectRepository _projectRepo;
-    public CreateTicketHandler(ITicketRepository repo, IProjectRepository projectRepo)
+    private readonly IBusinessCalendarRepository _calendarService;
+    public CreateTicketHandler(ITicketRepository repo, IProjectRepository projectRepo, IBusinessCalendarRepository calendarService)
     {
         _repo = repo;
-       _projectRepo = projectRepo;
+        _projectRepo = projectRepo;
+        _calendarService = calendarService;
     }
     public async Task<TicketCreatedDto> Handle(CreateTicketCommand request, CancellationToken cancellationToken)
     {
         try
         {
+            var calendar = await _calendarService.GetByCountryAsync("PH");
+
+            if (calendar == null)
+                throw new Exception("Business calendar not found for PH");
             var ticket = new Ticket
             {
                 DateReceived = request.DateReceived,
@@ -40,7 +46,8 @@ public class CreateTicketHandler : IRequestHandler<CreateTicketCommand, TicketCr
                 Status = Enum.TryParse<TicketStatus>(request.Status, out var status)
                          ? status
                          : TicketStatus.Open,
-                DueDate = SlaHelper.CalculateDueDate(request.Priority),
+
+                DueDate = SlaHelper.CalculateDueDate(request.Priority, calendar, request.DateReceived),
                 IsCase = request.IsCase
             };
 

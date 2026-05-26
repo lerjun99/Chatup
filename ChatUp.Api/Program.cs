@@ -27,7 +27,7 @@ IConfiguration configuration = new ConfigurationBuilder()
         .SetBasePath(Path.GetPathRoot(Environment.SystemDirectory))
         .AddJsonFile("app/chatup/appconfig.json", optional: true, reloadOnChange: true)
         .Build();
-
+builder.Services.AddSignalR();
 builder.Services.AddMediatR(cfg =>
     cfg.RegisterServicesFromAssembly(typeof(GetUsersQuery).Assembly));
 // Add services
@@ -48,8 +48,6 @@ builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblies(
     typeof(SendScheduledEmailsCommand).Assembly
 ));
 builder.Services.AddHostedService<EmailSchedulerService>();
-builder.Services.AddSignalR();
-builder.Services.AddHostedService<SlaBackgroundService>();
 // Register AutoMapper and scan for profiles in this assembly
 builder.Services.AddAutoMapper(cfg =>
 {
@@ -63,6 +61,7 @@ builder.Services.AddScoped<ContractService>();
 builder.Services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
 builder.Services.AddTransient<IEmailService, EmailService>();
 builder.Services.AddScoped<IChatHubContext, ChatHubContext>();
+builder.Services.AddScoped<IHolidayRepository, HolidayRepository>();
 //builder.Services.AddHostedService<ContractExpiryNotificationService>();
 builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ChatUp.Application.Common.Behaviors.ValidationBehavior<,>));
 var app = builder.Build();

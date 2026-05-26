@@ -175,15 +175,21 @@ main {
     padding-bottom: env(safe-area-inset-bottom, 0); /* iOS safe‑area */
     z-index: 1030;
     cursor: pointer;
+    background-color: #111827;
 }
     /* hover / focus */
     .mobile-tabbar:hover,
     .mobile-tabbar:focus {
-        background-color: rgba(255, 255, 255, 0.15); /* Slight light overlay on hover */
+        /*background-color: rgba(255, 255, 255, 0.15);*/ /* Slight light overlay on hover */
         color: #fff !important;
         text-decoration: none;
     }
-
+.mobile-tabber a {
+    display: block;
+    padding: 10px 12px;
+    border-radius: 6px;
+    transition: background-color 0.2s ease;
+}
     .mobile-tabbar .tab-item {
         text-decoration: none;
         color: inherit;

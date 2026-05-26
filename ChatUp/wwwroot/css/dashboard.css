@@ -1,36 +1,193 @@
-﻿.erp-app {
+﻿/* =========================
+   BASE LAYOUT (CLEAN)
+========================= */
+
+.erp-app {
     display: flex;
     min-height: 100vh;
-    /*background: #f9fafb;*/
+    overflow-x: hidden;
 }
+/* =========================
+   BAR GRAPH (REAL STYLE)
+========================= */
+
+.bargraph-wrapper {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+/* Y Axis */
+.bargraph-yaxis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 220px;
+    font-size: 11px;
+    color: #6b7280;
+    padding-right: 6px;
+}
+
+/* Graph area */
+.bargraph {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex: 1;
+    height: 220px;
+    border-left: 1px solid #e5e7eb;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 10px 10px 0 10px;
+    gap: 14px;
+}
+
+/* Each bar */
+.bar-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Value on top */
+.bar-value {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #111827;
+}
+
+/* Column container */
+.bar-column {
+    width: 100%;
+    max-width: 34px;
+    height: 170px;
+    background: #f3f4f6;
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+}
+
+/* Fill */
+.bar-fill {
+    width: 100%;
+    transition: height 0.4s ease;
+}
+
+/* Label */
+.bar-label {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #374151;
+    text-align: center;
+}
+
+/* =========================
+   MOBILE
+========================= */
+
+@media (max-width: 768px) {
+    header > div:last-child {
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    .bargraph-wrapper {
+        gap: 6px;
+    }
+
+    .bargraph {
+        height: 180px;
+        gap: 10px;
+    }
+
+    .bar-column {
+        max-width: 22px;
+        height: 140px;
+    }
+
+    .bar-label {
+        font-size: 10px;
+    }
+
+    .bar-value {
+        font-size: 10px;
+    }
+}
+/* =========================
+   SIDEBAR
+========================= */
 
 .sidebar {
     width: 240px;
-    border-right: 1px solid #e5e7eb;
+    background: #111827;
+    color: white;
     padding: 16px;
     position: fixed;
     top: 0;
     bottom: 0;
     left: 0;
     overflow-y: auto;
-    transition: transform .3s ease;
+    transition: transform 0.3s ease;
+    z-index: 1000;
 }
 
-    /* Sidebar hidden on mobile */
+    /* mobile states */
     .sidebar.mobile-hidden {
         transform: translateX(-100%);
     }
 
-/* Main content shifts depending on sidebar */
-
-
-/* Cards & Layout Grids */
-.card {
-    background: white;
-    border-radius: 8px;
-    padding: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    .sidebar.mobile-visible {
+        transform: translateX(0);
+    }
+/* Icon styling */
+.mobile-tabbar .sidebar-link i {
+    font-size: 18px;
+    display: block;
 }
+
+/* Hover effect */
+.mobile-tabbar .sidebar-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    transform: translateY(-2px);
+}
+
+/* Active/selected state (NavLink auto adds "active") */
+.mobile-tabbar .sidebar-link.active {
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.15);
+}
+
+/* Smooth press effect */
+.mobile-tabbar .sidebar-link:active {
+    transform: scale(0.95);
+}
+/* =========================
+   MAIN CONTENT
+========================= */
+
+.main {
+    flex: 1;
+    padding: 16px;
+    min-width: 0;
+}
+
+/* =========================
+   CARDS
+========================= */
+
+.card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    min-width: 0;
+}
+
+/* =========================
+   GRID SYSTEM
+========================= */
 
 .grid {
     display: grid;
@@ -45,74 +202,15 @@
     grid-template-columns: repeat(2, 1fr);
 }
 
-.ticket-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid #f1f5f9;
+/* =========================
+   TABLES (FIXED)
+========================= */
+
+.table-responsive {
+    overflow-x: auto;
+    width: 100%;
 }
 
-.muted {
-    color: #6b7280;
-}
-
-.small {
-    font-size: 13px;
-}
-
-/* KPI */
-.kpi-value {
-    font-size: 24px;
-    font-weight: 700;
-}
-
-/* Badges (status colors) */
-.badge.open {
-    background: #3b82f6;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-}
-
-.badge.inprogress {
-    background: #22c55e;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-}
-
-.badge.closed {
-    background: #f97316;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-}
-
-.badge.rejected {
-    background: #ef4444;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-}
-
-.badge.critical {
-    background: #7e22ce;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 4px;
-}
-
-/* Pagination */
-.pagination-holder {
-    margin-top: 14px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-}
-
-/* TABLE responsiveness */
 table {
     width: 100%;
     border-collapse: collapse;
@@ -120,35 +218,68 @@ table {
 
     table th, table td {
         padding: 8px 10px;
+        white-space: nowrap;
+    }
+
+/* =========================
+   MOBILE MENU BUTTON
+========================= */
+
+.mobile-menu-btn {
+    display: none;
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 1100;
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 12px 14px;
+    border-radius: 50px;
+}
+/* =========================
+   RESPONSIVE TABLE SYSTEM
+========================= */
+
+.table-responsive-card {
+    width: 100%;
+}
+
+    /* Base table */
+    .table-responsive-card table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    /* Desktop default */
+    .table-responsive-card th,
+    .table-responsive-card td {
+        padding: 10px;
         text-align: left;
         white-space: nowrap;
     }
 
-/* Scroll tables horizontally on mobile */
-.sla-table, .agent-table {
-    overflow-x: auto;
-}
+/* =========================
+   RESPONSIVE BREAKPOINTS
+========================= */
 
-/* ---------------- MOBILE RESPONSIVE BREAKPOINTS ---------------- */
+/* Tablet */
 @media (max-width: 1024px) {
     .grid-4 {
         grid-template-columns: repeat(2, 1fr);
     }
 }
 
+/* Mobile */
 @media (max-width: 768px) {
+
     .main {
         margin-left: 0;
-        padding: 16px;
+        padding-bottom: 80px;
+        overflow: auto;
+        min-height: 100px !important;
+        max-height: 880px !important;
     }
-
-    .sidebar {
-        transform: translateX(-100%);
-    }
-
-        .sidebar.mobile-visible {
-            transform: translateX(0);
-        }
 
     .grid-4 {
         grid-template-columns: 1fr;
@@ -158,10 +289,18 @@ table {
         grid-template-columns: 1fr;
     }
 
-    header {
+    header.d-flex {
         flex-direction: column;
         align-items: flex-start !important;
-        gap: 12px;
+        gap: 10px;
+    }
+
+    .mobile-menu-btn {
+        display: block;
+    }
+
+    .sidebar {
+        width: 260px;
     }
 
     .ticket-item {
@@ -169,24 +308,127 @@ table {
         align-items: flex-start;
         gap: 6px;
     }
+
+}
+.gc-layout {
+    display: flex;
+    gap: 16px;
 }
 
-/* Mobile menu button */
-.mobile-menu-btn {
-    display: none;
-    position: fixed;
-    top: 14px;
-    left: 14px;
-    background: #1e293b;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    z-index: 1000;
+.gc-calendar {
+    flex: 3;
 }
 
-@media (max-width: 768px) {
-    .mobile-menu-btn {
-        display: block;
+.gc-agenda {
+    flex: 1;
+    border-left: 1px solid #eee;
+    padding-left: 12px;
+}
+
+.agenda-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+    .agenda-list li {
+        display: flex;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid #f1f1f1;
     }
+
+    .agenda-list .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-top: 5px;
+    }
+
+    .agenda-list .title {
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+/* MOBILE */
+@media (max-width: 768px) {
+    .gc-layout {
+        flex-direction: column;
+    }
+
+    .gc-agenda {
+        border-left: none;
+        border-top: 1px solid #eee;
+        padding-left: 0;
+        padding-top: 10px;
+    }
+}
+.calendar-layout {
+    display: flex;
+    gap: 16px;
+    max-width: 1200px;
+    margin: auto;
+    padding: 12px;
+}
+
+.calendar-main {
+    flex: 2;
+}
+
+.calendar-side {
+    flex: 1;
+}
+
+/* CARDS */
+.card {
+    border-radius: 14px;
+    border: 1px solid #eee;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    padding: 14px;
+}
+
+/* HEADER */
+.side-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.side-header small {
+    color: #888;
+}
+
+/* HOLIDAY LIST */
+.holiday-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+    .holiday-list li {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 6px;
+        border-bottom: 1px solid #f1f1f1;
+    }
+
+.holiday-date {
+    font-weight: 600;
+    font-size: 12px;
+    color: #555;
+}
+
+.holiday-name {
+    font-size: 13px;
+}
+
+/* EMPTY */
+.empty-state {
+    padding: 10px;
+    color: #999;
+}
+
+/* CALENDAR */
+#calendar {
+    font-size: 12px;
 }

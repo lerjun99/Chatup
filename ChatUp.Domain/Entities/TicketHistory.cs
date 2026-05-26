@@ -21,6 +21,11 @@ namespace ChatUp.Domain.Entities
         // Priority change
         public TicketPriority? OldPriority { get; set; }
         public TicketPriority? NewPriority { get; set; }
+
+        // ✅ NEW: Project tracking
+        public int? OldProjectId { get; set; }
+        public int? NewProjectId { get; set; }
+
         public int? UpdatedBy { get; set; } 
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

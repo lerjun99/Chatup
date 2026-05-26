@@ -222,6 +222,10 @@
     }
 }
 @media (max-width: 768px) {
+    .main-ticket-container {
+        overflow: auto;
+        height: 650px;
+    }
     .chat-header {
         flex-direction: column;
         align-items: flex-start;
@@ -704,6 +708,7 @@
     padding: 1rem;
     border-bottom: 1px solid #ddd;
     background-color: #fff;
+
 }
 
 .ticket-info {
@@ -1047,4 +1052,39 @@
     .bottom-action-btn:hover {
         background: linear-gradient(135deg, #1e40af, #1e3a8a);
         transform: translateY(-1px);
+    }
+.history-container {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.history-item {
+    border-left: 3px solid #0d6efd;
+    padding-left: 10px;
+    margin-bottom: 12px;
+}
+
+.formatted-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+@media (max-width: 425px) {
+    .main-ticket-container {
+        overflow: auto;
+        height: 650px;
+    }
+}
+    /* Mobile tweaks */
+    @media (max-width: 576px) {
+        .card {
+            border-radius: 12px !important;
+        }
+
+        h6 {
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+        }
     }

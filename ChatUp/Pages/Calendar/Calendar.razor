@@ -1,0 +1,244 @@
+﻿@page "/calendar/{EncryptedId}"
+@using ChatUp.Services
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject LinkService LinkService
+
+<div class="calendar-layout">
+
+    <!-- LEFT: CALENDAR -->
+    <div class="calendar-main">
+        <div class="card calendar-card">
+            <div id="calendar"></div>
+        </div>
+    </div>
+
+    <!-- RIGHT: HOLIDAYS -->
+    <div class="calendar-side">
+
+        <div class="card side-card">
+            <div class="side-header">
+                <h5>Holidays</h5>
+                <small>@currentMonthLabel</small>
+            </div>
+
+            @if (filteredHolidays.Any())
+            {
+                <ul class="holiday-list">
+                    @foreach (var h in filteredHolidays)
+                    {
+                        <li>
+                            <div class="holiday-date">
+                                @h.Date.ToString("MMM dd")
+                            </div>
+                            <div class="holiday-name">
+                                @h.Name
+                            </div>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <div class="empty-state">No holidays for this month</div>
+            }
+
+        </div>
+
+        <div class="card mt-3 config-card">
+            <label>Region</label>
+            <select class="form-select"
+                    @bind="selectedRegion"
+                    @bind:after="OnRegionChanged">
+                <option value="PH">Philippines</option>
+                <option value="US">United States</option>
+            </select>
+
+            <div class="mt-2 d-grid">
+                <button class="btn btn-primary" @onclick="SyncHolidays">
+                    Sync Holidays
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<style>
+.calendar-layout {
+    display: flex;
+    gap: 16px;
+    max-width: 1200px;
+    margin: auto;
+    padding: 12px;
+}
+
+.calendar-main {
+    flex: 2;
+}
+
+.calendar-side {
+    flex: 1;
+}
+
+/* CARDS */
+.card {
+    border-radius: 14px;
+    border: 1px solid #eee;
+    background: #fff;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    padding: 14px;
+}
+
+/* HEADER */
+.side-header h5 {
+    margin: 0;
+    font-weight: 600;
+}
+
+.side-header small {
+    color: #888;
+}
+
+/* HOLIDAY LIST */
+.holiday-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.holiday-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 6px;
+    border-bottom: 1px solid #f1f1f1;
+}
+
+.holiday-date {
+    font-weight: 600;
+    font-size: 12px;
+    color: #555;
+}
+
+.holiday-name {
+    font-size: 13px;
+}
+
+/* EMPTY */
+.empty-state {
+    padding: 10px;
+    color: #999;
+}
+
+/* CALENDAR */
+#calendar {
+    font-size: 12px;
+}
+
+/* MOBILE */
+@@media (max-width: 768px) {
+    .calendar-layout {
+        flex-direction: column;
+    }
+}
+</style>
+
+@code {
+
+    [Parameter] public string EncryptedId { get; set; }
+
+    private string selectedRegion = "PH";
+    private DateTime currentMonth = DateTime.Now;
+
+    private string currentMonthLabel => currentMonth.ToString("MMMM yyyy");
+
+    private List<HolidayDto> holidays = new();
+    private List<HolidayDto> filteredHolidays = new();
+
+    private List<object> calendarEvents = new();
+    private DotNetObjectReference<Calendar>? objRef;
+
+    private int UserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(EncryptedId))
+            return;
+
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+
+        if (string.IsNullOrEmpty(decrypted))
+        {
+            Navigation.NavigateTo("/unauthorized");
+            return;
+        }
+
+        await LoadHolidays();
+    }
+
+    private async Task LoadHolidays()
+    {
+        holidays = await Http.GetFromJsonAsync<List<HolidayDto>>(
+            $"{AppConfig.ChatUrl}Holidays/Get/{selectedRegion}");
+
+        ApplyMonthFilter();
+        BuildCalendarEvents();
+        await RenderCalendar();
+    }
+
+    private void ApplyMonthFilter()
+    {
+        filteredHolidays = holidays
+            .Where(x => x.Date.Month == currentMonth.Month &&
+                        x.Date.Year == currentMonth.Year)
+            .ToList();
+    }
+
+    private void BuildCalendarEvents()
+    {
+        calendarEvents = holidays.Select(h => new
+        {
+            title = h.Name,
+            start = h.Date.ToString("yyyy-MM-dd"),
+            allDay = true,
+            display = "background",
+            color = "#ff4d4f"
+        }).Cast<object>().ToList();
+    }
+
+    private async Task RenderCalendar()
+    {
+        objRef = DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync("renderCalendar", calendarEvents, objRef);
+    }
+
+    [JSInvokable]
+    public async Task OnMonthChanged(string startDate)
+    {
+        currentMonth = DateTime.Parse(startDate);
+
+        ApplyMonthFilter();
+        StateHasChanged();
+    }
+
+    private async Task SyncHolidays()
+    {
+        await Http.PostAsync(
+            $"{AppConfig.ChatUrl}Holidays/Sync/sync/{selectedRegion}/2026",
+            null);
+
+        await LoadHolidays();
+    }
+
+    private async Task OnRegionChanged()
+    {
+        await LoadHolidays();
+    }
+
+    public class HolidayDto
+    {
+        public DateTime Date { get; set; }
+        public string Name { get; set; }
+    }
+}

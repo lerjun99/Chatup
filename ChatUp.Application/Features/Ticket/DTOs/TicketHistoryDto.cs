@@ -26,7 +26,11 @@ namespace ChatUp.Application.Features.Ticket.DTOs
         /// Optional description or comment on the update
         /// </summary>
         public string? Remarks { get; set; }
+        public int? OldProjectId { get; set; }
+        public int? NewProjectId { get; set; }
 
+        public string? OldProjectName { get; set; }
+        public string? NewProjectName { get; set; }
         /// <summary>
         /// The ID of the user who made the update
         /// </summary>

@@ -2,7 +2,6 @@
 using Blazored.SessionStorage;
 using ChatUp.ChatHub;
 using ChatUp.Services;
-using ChatUp.SlaHub;
 using ChatUp.UserStatusHub;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -42,7 +41,7 @@ builder.Services.AddScoped<TicketNotificationService>();
 builder.Services.AddHostedService<ContractExpiryBackgroundService>();
 builder.Services.AddScoped<PasswordRecoveryService>();
 builder.Services.AddScoped<ApplicantApiService>();
-
+//builder.Services.AddScoped<BusinessCalendarService>();
 builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddBlazoredSessionStorage();
 
@@ -59,8 +58,7 @@ app.UseRouting();
 app.MapControllers();
 app.MapBlazorHub();
 app.MapHub<ChatHub>("/chathub");
-app.MapHub<UserStatusHub>("userstatushub");
-app.MapHub<SlaHub>("/slahub");
+app.MapHub<UserStatusHub>("/userstatushub");
 app.MapFallbackToPage("/_Host");
 
 app.Run();

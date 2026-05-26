@@ -39,6 +39,7 @@
     <Folder Include="Features\Dashboard\Commands\" />
     <Folder Include="Features\EmailOTP\DTOs\" />
     <Folder Include="Features\EmailOTP\Queries\" />
+    <Folder Include="Features\Holiday\DTOs\" />
   </ItemGroup>
 
 </Project>

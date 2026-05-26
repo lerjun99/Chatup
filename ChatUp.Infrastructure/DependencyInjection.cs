@@ -42,12 +42,17 @@ public static class DependencyInjection
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<IEmailOtpRepository, EmailOtpRepository>();
         services.AddScoped<IUserStatusNotifier, UserStatusNotifier>();
+        services.AddScoped<IBusinessCalendarService, BusinessCalendarService>();
         services.AddScoped<IClientContext, ClientContext>();
         services.AddHttpClient<IPublicIpService, PublicIpService>();
-        // Register MediatR (scans the Application assembly for handlers)
+        services.AddHttpClient<IHolidayApiService, HolidayApiService>();
+
+        services.AddScoped<IBusinessCalendarRepository, BusinessCalendarRepository>();
         // ------------------- Services (Infrastructure Layer) -------------------
         services.AddScoped<NotificationService>();
-        services.AddSignalR();
+        // SlaStatusCache is a singleton shared by SlaBackgroundService and SlaHub
+        services.AddSingleton<SlaStatusCache>();
+        services.AddHostedService<SlaBackgroundService>();
         // ------------------- Controllers + JSON Options -------------------
         services.AddControllers()
             .AddJsonOptions(options =>

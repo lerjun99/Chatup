@@ -36,7 +36,9 @@ namespace ChatUp.Infrastructure.Persistence
         public DbSet<EmailOtp> EmailOtp { get; set; }
         public DbSet<Applicant> Applicants { get; set; }
 
-
+        public DbSet<Holiday> Holidays { get; set; }
+        public DbSet<BusinessCalendarConfig> BusinessCalendarConfigs { get; set; }
+        public DbSet<BusinessCalendar> BusinessCalendar { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -51,6 +53,46 @@ namespace ChatUp.Infrastructure.Persistence
                 entity.Property(u => u.ClientId)
                       .IsRequired(false);
             });
+            #region Holiday
+            modelBuilder.Entity<Holiday>(e =>
+            {
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Name).IsRequired().HasMaxLength(200);
+                e.Property(x => x.Region).HasMaxLength(10);
+                e.HasIndex(x => new { x.Date, x.Region }).IsUnique();
+            });
+            modelBuilder.Entity<BusinessCalendar>(b =>
+            {
+                // WorkingDays: stored as JSON string names (e.g. ["Monday","Tuesday"]).
+                // Enum.Parse handles both string names and numeric strings, making this
+                // resilient whether the DB was seeded with names or integer values.
+                b.Property(x => x.WorkingDays)
+                 .HasConversion(
+                     v => System.Text.Json.JsonSerializer.Serialize(
+                              v.Select(d => d.ToString()).ToList(),
+                              (System.Text.Json.JsonSerializerOptions?)null),
+                     v => System.Text.Json.JsonSerializer
+                              .Deserialize<List<string>>(v, (System.Text.Json.JsonSerializerOptions?)null)!
+                              .Select(s => Enum.Parse<DayOfWeek>(s))
+                              .ToList()
+                 )
+                 .HasColumnType("nvarchar(max)");
+
+                // Holidays: stored as ISO-8601 date strings (EF default for DateTime).
+                b.Property(x => x.Holidays)
+                 .HasConversion(
+                     v => System.Text.Json.JsonSerializer.Serialize(
+                              v.Select(d => d.ToString("O")).ToList(),
+                              (System.Text.Json.JsonSerializerOptions?)null),
+                     v => System.Text.Json.JsonSerializer
+                              .Deserialize<List<string>>(v, (System.Text.Json.JsonSerializerOptions?)null)!
+                              .Select(s => DateTime.Parse(s, null, System.Globalization.DateTimeStyles.RoundtripKind))
+                              .ToList()
+                 )
+                 .HasColumnType("nvarchar(max)");
+            });
+
+            #endregion
             #region TicketMessage
             modelBuilder.Entity<TicketMessage>(b =>
             {

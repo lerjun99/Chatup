@@ -307,3 +307,44 @@ window.startOnboarding = function (dotNetRef) {
 
     tour.start();
 };
+window.initCalendar = function (events) {
+    var calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+        initialView: 'dayGridMonth',
+        editable: true,
+        selectable: true,
+
+        events: events.map(e => ({
+            title: e.name,
+            start: e.date
+        })),
+
+        dateClick: function (info) {
+            let name = prompt("Holiday Name:");
+            if (!name) return;
+
+            fetch('/api/calendar/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: info.dateStr,
+                    name: name,
+                    region: 'PH'
+                })
+            }).then(() => location.reload());
+        },
+
+        eventDrop: function (info) {
+            fetch('/api/calendar/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    date: info.event.startStr,
+                    name: info.event.title,
+                    region: 'PH'
+                })
+            });
+        }
+    });
+
+    calendar.render();
+};

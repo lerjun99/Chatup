@@ -29,6 +29,8 @@ public record TicketDto(
     DateTime? DueDate,
     bool IsBreached,
     bool IsArchived,
+    string SlaTime,
+    string SlaStatus,
     string? RequesterEmail,        // requester's email
     string? ClientEmail = null,    // optional: client email if needed
     string? DeveloperEmail = null, // optional: developer email

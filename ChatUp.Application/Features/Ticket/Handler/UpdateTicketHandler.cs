@@ -14,11 +14,12 @@ namespace ChatUp.Application.Tickets.Commands.UpdateTicket
 {
     public class UpdateTicketCommandHandler : IRequestHandler<UpdateTicketCommand, Unit>
     {
+        private readonly IBusinessCalendarRepository _calendarService;
         private readonly ITicketRepository _repo;
-        public UpdateTicketCommandHandler(ITicketRepository repo, IChatHubContext chatHub)
+        public UpdateTicketCommandHandler(ITicketRepository repo, IChatHubContext chatHub,IBusinessCalendarRepository calendarService)
         {
             _repo = repo;
-
+            _calendarService = calendarService;
         }
 
         public async Task<Unit> Handle(UpdateTicketCommand request, CancellationToken cancellationToken)
@@ -26,7 +27,10 @@ namespace ChatUp.Application.Tickets.Commands.UpdateTicket
             var ticket = await _repo.GetByIdAsync(request.Id, cancellationToken);
             if (ticket == null)
                 throw new KeyNotFoundException($"Ticket {request.Id} not found.");
+            var calendar = await _calendarService.GetByCountryAsync("PH");
 
+            if (calendar == null)
+                throw new Exception("Business calendar not found for PH");
             var oldStatus = ticket.Status;
 
             ticket.IssueTitle = request.IssueTitle;
@@ -42,7 +46,7 @@ namespace ChatUp.Application.Tickets.Commands.UpdateTicket
             if (ticket.Priority != request.Priority)
             {
                 ticket.Priority = request.Priority;
-                ticket.DueDate = SlaHelper.CalculateDueDate(request.Priority);
+                ticket.DueDate = SlaHelper.CalculateDueDate(request.Priority, calendar, ticket.DateReceived);
             }
 
             // Save ticket changes
