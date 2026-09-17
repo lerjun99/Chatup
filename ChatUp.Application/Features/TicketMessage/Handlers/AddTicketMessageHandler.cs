@@ -110,7 +110,16 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
 
                 if (isSupport)
                 {
+                    // -------------------------------
+                    // SUPPORT MESSAGE
+                    // -------------------------------
+
                     ticket.LastSupportReplyAt = message.DateCreated;
+
+                    // Support has responded.
+                    // Reset reminder state.
+                    ticket.SupportResponseReminderSent = false;
+                    ticket.SupportResponseReminderSentAt = null;
 
                     // ✅ Prevent duplicate email spam
                     if (!ticket.HasUnreadSupportReply)
@@ -156,10 +165,18 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                 }
                 else
                 {
-                    // Client message
+                    // -------------------------------
+                    // CLIENT MESSAGE
+                    // -------------------------------
+
                     ticket.LastClientMessageAt = message.DateCreated;
 
-                    // Optional: reset flag when client replies
+                    // Client sent a new message, so allow
+                    // a new support reminder to be sent.
+                    ticket.SupportResponseReminderSent = false;
+                    ticket.SupportResponseReminderSentAt = null;
+
+                    // Reset support reply notification state
                     ticket.HasUnreadSupportReply = false;
                 }
 

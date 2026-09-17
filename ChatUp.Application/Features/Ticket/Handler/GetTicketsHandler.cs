@@ -25,7 +25,6 @@ public class GetTicketsHandler : IRequestHandler<GetTicketsQuery, PaginatedRespo
     public async Task<PaginatedResponse<TicketDto>> Handle(GetTicketsQuery request, CancellationToken cancellationToken)
     {
         var query = _repo.Query()
-            .Where(t => t.Status != TicketStatus.New)
             .AsNoTracking();
 
         // 1️⃣ Hide closed tickets unless explicitly filtered

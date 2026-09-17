@@ -49,6 +49,11 @@ namespace ChatUp.Domain.Entities
         public bool HasUnreadSupportReply { get; set; }
         public DateTime? LastSupportReplyAt { get; set; }
         public DateTime? LastClientMessageAt { get; set; }
+        // NEW
+        public bool SupportResponseReminderSent { get; set; }
+
+        // Optional but useful
+        public DateTime? SupportResponseReminderSentAt { get; set; }
         // 🕓 Audit trail
         public ICollection<TicketHistory> History { get; set; } = new List<TicketHistory>();
         public ICollection<TicketUpload> TicketUploads { get; set; } = new List<TicketUpload>();

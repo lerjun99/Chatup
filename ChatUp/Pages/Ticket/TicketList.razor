@@ -108,7 +108,7 @@ else if (!tickets.Any())
 else
 {
     <div class="table-wrapper">
-        <div class="table-responsive scrollable-table2" >
+        <div class="table-responsive scrollable-table2">
             <table class="table table-hover align-middle user-table ">
                 <thead class="table-primary">
                     <tr>
@@ -127,61 +127,93 @@ else
                 <tbody>
                     @foreach (var t in tickets)
                     {
-                        var timeLeft = t.DueDate - DateTime.UtcNow;
+                        TimeSpan timeLeft;
+
+                        if (t.Status == "Closed")
+                        {
+                            timeLeft = TimeSpan.Zero;
+                        }
+                        else
+                        {
+                            timeLeft = t.DueDate - DateTime.UtcNow;
+
+                            if (timeLeft < TimeSpan.Zero)
+                            {
+                                timeLeft = TimeSpan.Zero;
+                            }
+                        }
+
                         <tr class="@(t.IsArchived ? "table-secondary" : "")">
                             <td>@t.TicketNo</td>
                             <td>@t.DateReceived.ToString("g")</td>
                             <td class="text-start">@t.IssueTitle</td>
                             <td>@t.ClientName</td>
                             <td>@t.ProjectName</td>
+
                             <td>
                                 <span class="badge @(t.Status switch
-                                {
-                                    "Open" => "bg-success",
-                                    "InProgress" => "bg-info",
-                                    "Resolved" => "bg-primary",
-                                    "Closed" => "bg-secondary",
-                                    "Rejected" => "bg-danger",
-                                    _ => "bg-light text-dark"
-                                })">@t.Status</span>
+                                      {
+                                          "Open" => "bg-success",
+                                          "InProgress" => "bg-info",
+                                          "Resolved" => "bg-primary",
+                                          "Closed" => "bg-secondary",
+                                          "Rejected" => "bg-danger",
+                                          _ => "bg-light text-dark"
+                                      })">
+                                    @t.Status
+                                </span>
                             </td>
+
                             <td>
                                 <span class="badge @(t.Priority switch
-                                {
-                                    "High" => "bg-danger",
-                                    "Medium" => "bg-warning text-dark",
-                                    "Low" => "bg-success",
-                                    _ => "bg-secondary"
-                                })">@t.Priority</span>
+                                      {
+                                          "High" => "bg-danger",
+                                          "Medium" => "bg-warning text-dark",
+                                          "Low" => "bg-success",
+                                          _ => "bg-secondary"
+                                      })">
+                                    @t.Priority
+                                </span>
                             </td>
+
                             <td>@t.DueDate.ToString("g")</td>
+
                             <td>
-                                <div class="d-flex flex-column">
-
-                                    <span class="fw-bold @GetSlaColor(t.Id)">
-                                        @GetSlaTime(t.Id)
-                                    </span>
-
-                                    <span class="badge @(GetSlaStatus(t.Id) switch
-                                                      {
-                                                          "Breached" => "bg-danger",
-                                                          "Near" => "bg-warning text-dark",
-                                                          "OnTrack" => "bg-success",
-                                                          _ => "bg-secondary"
-                                                      })">
-                                        @GetSlaStatus(t.Id)
-                                    </span>
-
-                                </div>
+                                @if (t.Status == "Closed")
+                                {
+                                    <span class="badge bg-secondary">✔ Closed</span>
+                                    <br />
+                                    <small>0:00:00</small>
+                                }
+                                else if (t.IsBreached)
+                                {
+                                    <span class="badge bg-danger">⚠ Breached</span>
+                                    <br />
+                                    <small>@($"{(int)timeLeft.TotalHours}:{timeLeft.Minutes:D2}:{timeLeft.Seconds:D2}")</small>
+                                }
+                                else if (timeLeft.TotalHours <= 2)
+                                {
+                                    <span class="badge bg-warning text-dark">⏳ Near SLA</span>
+                                    <br />
+                                    <small>@($"{(int)timeLeft.TotalHours}:{timeLeft.Minutes:D2}:{timeLeft.Seconds:D2}")</small>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-success">✅ On Track</span>
+                                    <br />
+                                    <small>@($"{(int)timeLeft.TotalHours}:{timeLeft.Minutes:D2}:{timeLeft.Seconds:D2}")</small>
+                                }
                             </td>
+
                             <td class="sticky-actions">
                                 <div class="action-buttons">
                                     <button class="btn btn-sm btn-info text-white rounded-pill px-3"
                                             @onclick="() => ViewTicket(t.Id)">
                                         <i class="fa-solid fa-eye"></i> View
                                     </button>
+
                                     <button class="btn btn-sm @(t.IsArchived ? "btn-success" : "btn-danger") rounded-pill px-3"
-                                            @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived,t.Id)">
+                                            @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived, t.Id)">
                                         <i class="fa-solid @(t.IsArchived ? "fa-rotate-left" : "fa-trash")"></i>
                                         @(t.IsArchived ? "Restore" : "Delete")
                                     </button>
@@ -193,7 +225,6 @@ else
             </table>
         </div>
     </div>
-
     <!-- ✅ Enhanced Pagination -->
     <div class="pagination-holder ">
         <div class="text-muted small">

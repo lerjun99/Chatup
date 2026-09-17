@@ -573,33 +573,35 @@ else
     }
     private async Task LoadTicket()
     {
+      
         try
         {
             var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/GetById/{TicketId}");
             ticket = await Http.GetFromJsonAsync<TicketDto>(url);
-            
+
             if (ticket == null)
             {
                 Navigation.NavigateTo("/ticketlist");
                 return;
             }
 
-            // ✅ Set current status
-           selectedStatus = ticket.Status;
-           selectedPriority = ticket.Priority; // initialize dropdown
+            // =========================
+            // CURRENT STATE (SOURCE OF TRUTH)
+            // =========================
+            selectedStatus = ticket.Status;
+            selectedPriority = ticket.Priority;
 
+            // ✅ FIX: DO NOT override with history
+            remarks = ticket.Concern ?? string.Empty;
 
-            // ✅ Set remarks value
+            // =========================
+            // HISTORY (ONLY FOR DISPLAY)
+            // =========================
             if (history != null && history.Any())
             {
-                // Get the latest remark from ticket history
-                remarks = history.OrderByDescending(h => h.UpdatedAt)
-                                 .FirstOrDefault()?.Remarks ?? string.Empty;
-            }
-            else
-            {
-                // Fallback: use remark stored directly in the ticket (if applicable)
-                remarks = ticket.Concern ?? string.Empty;
+                history = history
+                    .OrderByDescending(h => h.UpdatedAt)
+                    .ToList();
             }
         }
         catch (Exception ex)

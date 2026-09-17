@@ -20,15 +20,18 @@ public class GetTicketByIdHandler : IRequestHandler<GetTicketByIdQuery, TicketDt
         _repo = repo;
     }
 
-    public async Task<TicketDto?> Handle(GetTicketByIdQuery request, CancellationToken cancellationToken)
+    public async Task<TicketDto?> Handle(
+     GetTicketByIdQuery request,
+     CancellationToken cancellationToken)
     {
         var t = await _repo.GetByIdAsync(request.Id, cancellationToken);
-        if (t == null) return null;
 
-        // ✅ Get business calendar
+        if (t == null)
+            return null;
+
+        // Get business calendar
         var calendar = await _calendarService.GetByCountryAsync("PH");
 
-        // Fallback if missing
         if (calendar == null)
             throw new Exception("Business calendar not configured");
 
@@ -51,32 +54,36 @@ public class GetTicketByIdHandler : IRequestHandler<GetTicketByIdQuery, TicketDt
             t.IssueTitle ?? string.Empty,
             t.Concern ?? string.Empty,
             t.Description ?? string.Empty,
+
             t.RequestedById,
             t.RequestedBy?.FullName ?? string.Empty,
+
             t.ClientId,
             t.Client?.ClientName ?? string.Empty,
+
             t.ProjectId,
             t.Project?.Title ?? string.Empty,
+
             t.Status ?? TicketStatus.Open,
+
             t.SupportedById,
             t.SupportedBy?.FullName ?? string.Empty,
+
             t.Priority,
+
             t.DueDate,
 
-            // ✅ REPLACE STATIC BREACH
+            // SLA
             isBreached,
-
             t.IsArchived,
+            slaTime,
+            slaStatus,
 
-            // emails
-            t.RequestedBy?.EmailAddress ?? "",
-            t.Client?.EmailAddress ?? "",
-            t.SupportedBy?.EmailAddress ?? "",
-            t.SupportedBy?.FullName ?? ""
-        )
-        {
-            SlaTime = slaTime,
-            SlaStatus = slaStatus
-        };
+            // Emails
+            t.RequestedBy?.EmailAddress ?? string.Empty,   // RequesterEmail
+            t.Client?.EmailAddress ?? string.Empty,        // ClientEmail
+            t.SupportedBy?.EmailAddress ?? string.Empty,   // DeveloperEmail
+            t.SupportedBy?.FullName ?? string.Empty        // DeveloperName
+        );
     }
 }
