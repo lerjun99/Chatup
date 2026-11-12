@@ -1,4 +1,5 @@
 ﻿@page "/tickets/{EncryptedId}"
+@using System.Globalization
 @using ChatUp.Application.Auth.Commands
 @using ChatUp.Application.Features.Projects.DTOs
 @using ChatUp.Application.Features.Ticket.DTOs
@@ -13,32 +14,10 @@
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @inject ChatUp.Services.ChatService ChatService
 @inject ChatUp.Services.EmailService EmailService
+@inject SlaService SlaService
 @using Chat
-<style>
-    .priority-critical {
-        background-color: #212529 !important;
-        color: #fff !important;
-        border-color: #212529 !important;
-    }
+<link href="css/tickets.css" rel="stylesheet" />
 
-    .priority-high {
-        background-color: #dc3545 !important;
-        color: #fff !important;
-        border-color: #dc3545 !important;
-    }
-
-    .priority-medium {
-        background-color: #ffc107 !important;
-        color: #000 !important;
-        border-color: #ffc107 !important;
-    }
-
-    .priority-low {
-        background-color: #198754 !important;
-        color: #fff !important;
-        border-color: #198754 !important;
-    }
-</style>
 @if (isSendingEmail)
 {
     <div class="email-overlay">
@@ -48,248 +27,294 @@
         </div>
     </div>
 }
-<h3 class="mb-4 text-primary fw-bold">
-    <i class="bi bi-ticket-detailed me-2"></i> Ticket Details
-</h3>
 
-@if (ticket == null)
-{
-    <div class="text-center text-muted py-5">
-        <div class="spinner-border text-primary mb-3" role="status"></div>
-        <p><em>Loading ticket details...</em></p>
-    </div>
-}
-else
-{
-    <div class="main-ticket-container">
-    <div class="card border-0 shadow-lg rounded-4 p-3 p-md-4 mb-4 bg-light">
-        <div class="row g-3">
-
-            <!-- LEFT COLUMN -->
-            <div class="col-12 col-lg-6">
-                <h6 class="fw-bold text-dark mb-2">📄 Ticket Information</h6>
-
-                <div class="small"><strong>Ticket No:</strong> @ticket.TicketNo</div>
-                <div class="small"><strong>Date:</strong> @ticket.DateReceived.ToString("g")</div>
-                <div class="small"><strong>Title:</strong> @ticket.IssueTitle</div>
-
-                    <div class="mt-1 small">
-                        <strong>Priority:</strong>
-
-                        @if (UserState.UserType == 3)
-                        {
-                            <!-- 🔒 Read-only -->
-                            <span class="@GetPriorityClass(selectedPriority)">
-                                @selectedPriority
-                            </span>
-                        }
-                        else
-                        {
-                            <select class="form-select form-select-sm d-inline-block w-auto ms-2 @GetPriorityDropdownClass(selectedPriority)"
-                                    @onchange="OnPriorityChangedManual">
-
-                                @foreach (var priority in Enum.GetValues<TicketPriority>())
-                                {
-                                    <option value="@priority" selected="@(priority == selectedPriority)">
-                                        @priority
-                                    </option>
-                                }
-                            </select>
-                        }
+<div class="tk tk-detail">
+    @if (_notFound)
+    {
+        <div class="tk-card tk-empty">
+            <i class="fa-regular fa-circle-question"></i>
+            <p>This ticket couldn't be found.</p>
+            <small class="tk-muted">It may have been removed, or you may not have access to it.</small>
+            <button class="tk-btn tk-btn-ghost" @onclick="GoBack"><i class="fa-solid fa-arrow-left"></i> Back to tickets</button>
+        </div>
+    }
+    else if (ticket == null)
+    {
+        <!-- ============ SKELETON ============ -->
+        <div class="tk-skel tk-skel-hero"></div>
+        <div class="tk-detail-grid">
+            <div class="tk-detail-main">
+                <div class="tk-card tk-skel" style="height:220px"></div>
+                <div class="tk-card tk-skel" style="height:260px"></div>
+            </div>
+            <div class="tk-detail-side">
+                <div class="tk-card tk-skel" style="height:260px"></div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <!-- ============ HEADER ============ -->
+        <header class="tk-hero tk-hero-detail">
+            <div class="tk-hero-main">
+                <button class="tk-back" @onclick="GoBack" title="Back to tickets">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <div class="tk-hero-text">
+                    <div class="tk-eyebrow">
+                        <span class="tk-mono">@ticket.TicketNo</span>
+                        <span>· received @RelativeTime(ticket.DateReceived)</span>
                     </div>
+                    <h1>@ticket.IssueTitle</h1>
+                    <div class="tk-hero-chips">
+                        <span class="tk-chip tk-chip-glass tk-st-@StatusCss(ticket.Status.ToString())"><span class="tk-dot"></span>@StatusLabel(ticket.Status.ToString())</span>
+                        <span class="tk-prio tk-prio-glass tk-prio-@ticket.Priority.ToString().ToLowerInvariant()"><i class="@PriorityIcon(ticket.Priority)"></i> @ticket.Priority priority</span>
+                    </div>
+                </div>
+            </div>
+            @if (UserState.UserType != 3)
+            {
+                <button class="tk-btn tk-btn-glass" @onclick="() => OpenInbox(ticket.TicketNo)">
+                    <i class="fa-regular fa-comments"></i> Open inbox
+                </button>
+            }
+        </header>
 
-                <div class="small"><strong>Due:</strong> @ticket.DueDate?.ToString("g")</div>
+        @if (_saveSuccess != null)
+        {
+            <div class="tk-alert tk-alert-ok" role="status">
+                <i class="fa-solid fa-circle-check"></i>
+                <span>@_saveSuccess</span>
+                <button class="tk-icon-btn" title="Dismiss" @onclick="() => _saveSuccess = null"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        }
+        @if (_saveError != null)
+        {
+            <div class="tk-alert tk-alert-error" role="alert">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                <span>@_saveError</span>
+                <button class="tk-icon-btn" title="Dismiss" @onclick="() => _saveError = null"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        }
+
+        <div class="tk-detail-grid">
+            <div class="tk-detail-main">
+
+                <!-- ============ DETAILS ============ -->
+                <section class="tk-card">
+                    <h2 class="tk-card-title"><i class="fa-solid fa-circle-info"></i> Details</h2>
+                    <dl class="tk-facts">
+                        <div>
+                            <dt>Requested by</dt>
+                            <dd>@Fallback(ticket.RequestedByName)</dd>
+                        </div>
+                        <div>
+                            <dt>Client</dt>
+                            <dd>@Fallback(ticket.ClientName)</dd>
+                        </div>
+                        <div>
+                            <dt>Project</dt>
+                            <dd>@Fallback(ticket.ProjectName, "No project")</dd>
+                        </div>
+                        <div>
+                            <dt>Assigned to</dt>
+                            <dd>@Fallback(ticket.SupportedByName, "Unassigned")</dd>
+                        </div>
+                        <div>
+                            <dt>Received</dt>
+                            <dd>@ticket.DateReceived.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</dd>
+                        </div>
+                        <div>
+                            <dt>Due</dt>
+                            <dd>@(ticket.DueDate.HasValue ? ticket.DueDate.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt") : "—")</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <!-- ============ CONCERN ============ -->
+                <section class="tk-card">
+                    <details open class="tk-concern">
+                        <summary class="tk-card-title"><i class="fa-regular fa-file-lines"></i> Concern <i class="fa-solid fa-chevron-down tk-summary-caret"></i></summary>
+                        <div class="tk-concern-body">
+                            @if (string.IsNullOrWhiteSpace(ticket.Description))
+                            {
+                                <span class="tk-muted">No description provided.</span>
+                            }
+                            else
+                            {
+                                @ticket.Description
+                            }
+                        </div>
+                    </details>
+                </section>
+
+                <!-- ============ UPDATE ============ -->
+                @if (UserState.UserType != 3)
+                {
+                    <section class="tk-card tk-update">
+                        <div class="tk-card-head">
+                            <h2 class="tk-card-title"><i class="fa-solid fa-pen-to-square"></i> Update ticket</h2>
+                            @if (IsDirty)
+                            {
+                                <span class="tk-dirty"><span class="tk-dot"></span> Unsaved changes</span>
+                            }
+                        </div>
+
+                        <div class="tk-form-grid">
+                            <label class="tk-field">
+                                <span>Status</span>
+                                <select class="tk-select" value="@selectedStatus" @onchange="OnStatusChanged">
+                                    @foreach (var status in Enum.GetValues<TicketStatus>())
+                                    {
+                                        <option value="@status">@StatusLabel(status.ToString())</option>
+                                    }
+                                </select>
+                            </label>
+
+                            <label class="tk-field">
+                                <span>Priority</span>
+                                <select class="tk-select tk-select-prio tk-prio-@selectedPriority.ToString().ToLowerInvariant()" @onchange="OnPriorityChangedManual">
+                                    @foreach (var priority in Enum.GetValues<TicketPriority>())
+                                    {
+                                        <option value="@priority" selected="@(priority == selectedPriority)">@priority</option>
+                                    }
+                                </select>
+                                @if (selectedPriority != ticket.Priority)
+                                {
+                                    <small class="tk-hint"><i class="fa-solid fa-circle-info"></i> Changing priority recalculates the SLA due date.</small>
+                                }
+                            </label>
+
+                            <label class="tk-field">
+                                <span>Project</span>
+                                <select class="tk-select" @bind="selectedProjectId">
+                                    <option value="">— Select project —</option>
+                                    @foreach (var project in filteredProjects)
+                                    {
+                                        <option value="@project.Id">@project.Title</option>
+                                    }
+                                </select>
+                            </label>
+
+                            <label class="tk-field tk-field-wide">
+                                <span>Remarks</span>
+                                <textarea class="tk-textarea" rows="4" placeholder="Add context for this update…" @bind="remarks" @bind:event="oninput"></textarea>
+                            </label>
+                        </div>
+
+                        <div class="tk-actions">
+                            <label class="tk-switch">
+                                <input type="checkbox" @bind="sendEmail" />
+                                <span class="tk-switch-track"><span></span></span>
+                                <span class="tk-switch-label">
+                                    Email the requester
+                                    @if (sendEmail && !string.IsNullOrWhiteSpace(ticket.RequesterEmail))
+                                    {
+                                        <small class="tk-muted">(@ticket.RequesterEmail)</small>
+                                    }
+                                </span>
+                            </label>
+
+                            <div class="tk-actions-buttons">
+                                @if (IsDirty)
+                                {
+                                    <button class="tk-btn tk-btn-ghost" @onclick="DiscardChanges" disabled="@_saving">Discard</button>
+                                }
+                                <button class="tk-btn tk-btn-primary" @onclick="SubmitChanges" disabled="@_saving">
+                                    @if (_saving)
+                                    {
+                                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                                        <span>Saving…</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-floppy-disk"></i>
+                                        <span>Save changes</span>
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                }
             </div>
 
-            <!-- RIGHT COLUMN -->
-            <div class="col-12 col-lg-6">
-                <h6 class="fw-bold text-dark mb-2">👤 Related Details</h6>
+            <aside class="tk-detail-side">
+                <!-- ============ SLA ============ -->
+                <section class="tk-card">
+                    <h2 class="tk-card-title"><i class="fa-solid fa-stopwatch"></i> Service level</h2>
+                    <SlaTimer Variant="full"
+                              Received="ticket.DateReceived"
+                              Due="ticket.DueDate"
+                              Status="@ticket.Status.ToString()"
+                              IsBreached="ticket.IsBreached"
+                              Calendar="_slaCalendar" />
+                </section>
 
-                <div class="small"><strong>Requested By:</strong> @ticket.RequestedByName</div>
-                <div class="small"><strong>Client:</strong> @ticket.ClientName</div>
-                    <div class="small mt-1">
-                        <strong>Project:</strong>
+                <!-- ============ HISTORY ============ -->
+                <section class="tk-card">
+                    <h2 class="tk-card-title"><i class="fa-solid fa-clock-rotate-left"></i> History</h2>
 
-                        @if (UserState.UserType == 3)
-                        {
-                            <!-- 🔒 Read-only -->
-                            <span class="ms-1">@ticket.ProjectName</span>
-                        }
-                        else
-                        {
-                            <select class="form-select form-select-sm d-inline-block w-auto ms-2"
-                                    @bind="selectedProjectId">
-            
-                                <option value="">-- Select Project --</option>
-
-                                @foreach (var project in filteredProjects)
-                                {
-                                    <option value="@project.Id">@project.Title</option>
-                                }
-                            </select>
-                        }
-                    </div>
-
-                <div class="mt-1 small">
-                    <strong>SLA:</strong>
-                    @if (ticket.IsBreached)
+                    @if (history == null)
                     {
-                        <span class="badge bg-danger">Breached</span>
+                        for (var i = 0; i < 3; i++)
+                        {
+                            <div class="tk-skel tk-skel-row"></div>
+                        }
+                    }
+                    else if (!history.Any())
+                    {
+                        <div class="tk-empty tk-empty-sm">
+                            <i class="fa-regular fa-clock"></i>
+                            <p>No updates yet.</p>
+                        </div>
                     }
                     else
                     {
-                        <span class="badge bg-success">On Track</span>
+                        <ol class="tk-timeline">
+                            @foreach (var h in history)
+                            {
+                                <li @key="h.Id">
+                                    <span class="tk-avatar">@Initials(h.UpdatedByName)</span>
+                                    <div class="tk-timeline-body">
+                                        <div class="tk-timeline-head">
+                                            <span class="tk-strong">@Fallback(h.UpdatedByName, "System")</span>
+                                            <time class="tk-muted tk-small" title="@h.UpdatedAt.ToLocalTime().ToString("MMM d, yyyy h:mm tt")">@RelativeTime(h.UpdatedAt)</time>
+                                        </div>
+
+                                        @if (!string.IsNullOrWhiteSpace(h.OldStatus) && !string.IsNullOrWhiteSpace(h.NewStatus))
+                                        {
+                                            <div class="tk-change">
+                                                <span class="tk-chip tk-chip-sm tk-st-@StatusCss(h.OldStatus)"><span class="tk-dot"></span>@StatusLabel(h.OldStatus)</span>
+                                                <i class="fa-solid fa-arrow-right-long tk-muted"></i>
+                                                <span class="tk-chip tk-chip-sm tk-st-@StatusCss(h.NewStatus)"><span class="tk-dot"></span>@StatusLabel(h.NewStatus)</span>
+                                            </div>
+                                        }
+
+                                        @if (h.OldProjectId != h.NewProjectId)
+                                        {
+                                            <div class="tk-change">
+                                                <i class="fa-solid fa-folder-open tk-muted"></i>
+                                                <span class="tk-tag">@Fallback(h.OldProjectName, "No project")</span>
+                                                <i class="fa-solid fa-arrow-right-long tk-muted"></i>
+                                                <span class="tk-tag tk-tag-accent">@Fallback(h.NewProjectName, "No project")</span>
+                                            </div>
+                                        }
+
+                                        @if (!string.IsNullOrWhiteSpace(h.Remarks))
+                                        {
+                                            <blockquote class="tk-remark">@h.Remarks</blockquote>
+                                        }
+                                    </div>
+                                </li>
+                            }
+                        </ol>
                     }
-                </div>
-            </div>
-
-            <!-- CONCERN -->
-            <div class="col-12">
-                <details open class="concern-details">
-                    <summary class="fw-semibold mb-2">📝 Concern</summary>
-                    <div class="formatted-text small">
-                        @ticket.Description
-                    </div>
-                </details>
-            </div>
+                </section>
+            </aside>
         </div>
+    }
+</div>
 
-        @if (UserState.UserType != 3)
-        {
-                <div class="row g-2 align-items-end">
-
-                    <!-- STATUS -->
-                    <div class="col-5 col-md-2">
-                        <label class="form-label small mb-1">Status</label>
-                        <select class="form-select form-select-sm"
-                                value="@selectedStatus"
-                                @onchange="OnStatusChanged">
-                            @foreach (var status in Enum.GetValues<TicketStatus>())
-                            {
-                                <option value="@status">@status</option>
-                            }
-                        </select>
-                    </div>
-
-                    <!-- EMAIL TOGGLE -->
-                    <div class="col-12 col-md-6">
-                        @* <label class="form-label small mb-1">Email Notification</label> *@
-
-                        <div class="form-check form-switch d-flex align-items-center"
-                             style="height: 31px;">
-                            <!-- match select height -->
-
-                            <input class="form-check-input me-2"
-                                   type="checkbox"
-                                   @bind="sendEmail">
-
-                            <label class="form-check-label small m-0">
-                                Email: <strong>@(sendEmail ? "Yes" : "No")</strong>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- REMARKS -->
-                    <div class="col-12">
-                        <label class="form-label small">Remarks</label>
-                        <textarea class="form-control form-control-sm"
-                                  rows="3"
-                                  @bind="remarks"></textarea>
-                    </div>
-
-                </div>
-
-            <!-- ACTION BUTTONS -->
-            <div class="d-flex flex-wrap gap-2 mt-3">
-                <button class="btn btn-secondary btn-sm" @onclick="GoBack">
-                    ← Back
-                </button>
-
-                <button class="btn btn-primary btn-sm" @onclick="SubmitChanges">
-                    Save
-                </button>
-
-                <button class="btn btn-outline-primary btn-sm"
-                        @onclick="() => OpenInbox(ticket.TicketNo)">
-                    Inbox
-                </button>
-            </div>
-        }
-    </div>
-
-    <!-- HISTORY -->
-        <div class="card border-0 shadow-lg rounded-4 p-3 p-md-4 bg-white">
-            <h6 class="fw-bold mb-3">🕒 History</h6>
-
-            <div class="history-container">
-
-                @if (history == null)
-                {
-                    <div class="text-center small text-muted">Loading...</div>
-                }
-                else if (!history.Any())
-                {
-                    <div class="text-center small text-muted">No records</div>
-                }
-                else
-                {
-                    @foreach (var h in history.OrderByDescending(x => x.UpdatedAt))
-                    {
-                        <div class="history-item mb-3 pb-2 border-bottom">
-
-                            <!-- USER + DATE -->
-                            <div class="fw-semibold small">@h.UpdatedByName</div>
-                            <div class="text-muted small">
-                                @h.UpdatedAt.ToLocalTime().ToString("g")
-                            </div>
-
-                            <!-- STATUS -->
-                            @if (!string.IsNullOrWhiteSpace(h.OldStatus) && !string.IsNullOrWhiteSpace(h.NewStatus))
-                            {
-                                <div class="small mt-1">
-                                    <span class="badge bg-secondary">@h.OldStatus</span>
-                                    →
-                                    <span class="badge bg-success">@h.NewStatus</span>
-                                </div>
-                            }
-
-                            <!-- PRIORITY (optional if you add later) -->
-                     @*        @if (!string.IsNullOrWhiteSpace(h.OldProjectName) && !string.IsNullOrWhiteSpace(h.NewProjectName))
-                            {
-                                <div class="small mt-1">
-                                    <span class="badge bg-dark">@h.OldProjectName</span>
-                                    →
-                                    <span class="badge bg-warning text-dark">@h.NewProjectName</span>
-                                </div>
-                            }
- *@
-                            <!-- PROJECT CHANGE (NEW) -->
-                            @if (h.OldProjectId != h.NewProjectId)
-                            {
-                                <div class="small mt-1">
-                                    <span class="badge bg-info">Project</span>
-                                    <span class="badge bg-dark">@h.OldProjectName</span>
-                                    →
-                                    <span class="badge bg-warning text-dark">@h.NewProjectName</span>
-                                </div>
-                            }
-
-                            <!-- REMARKS -->
-                            @if (!string.IsNullOrWhiteSpace(h.Remarks))
-                            {
-                                <div class="small text-muted mt-1">
-                                    <em>@h.Remarks</em>
-                                </div>
-                            }
-
-                        </div>
-                    }
-                }
-
-            </div>
-        </div>
-    </div>
-}
 @code {
     private int? sessionUserType;
     private bool isUserLoaded = false;
@@ -298,21 +323,30 @@ else
     [Parameter] public int TicketId { get; set; }
     private TicketDto? ticket;
     private TicketStatus selectedStatus;
-    private string? updateMessage;
     private List<TicketHistoryDto>? history;
     private string? remarks;
-    private bool isModified = false;
     private bool isSendingEmail = false;
-    [Parameter] public string EncryptedId { get; set; }
-    [Inject] public LinkService LinkService { get; set; }
-    private List<IBrowserFile> Uploads = [];
+    [Parameter] public string EncryptedId { get; set; } = string.Empty;
+    [Inject] public LinkService LinkService { get; set; } = default!;
     private bool sessionChecked = false;
     [Parameter] public EventCallback OnNavigate { get; set; }
-    private bool showInbox = false;
-    private string? selectedTicketNo;
     private List<ProjectDto> allProjects = new();
     private List<ProjectDto> filteredProjects = new();
     private int? selectedProjectId;
+
+    private BusinessCalendar? _slaCalendar;
+    private bool _notFound;
+    private bool _saving;
+    private string? _saveSuccess;
+    private string? _saveError;
+
+    private bool IsDirty =>
+        ticket != null &&
+        (selectedStatus != ticket.Status ||
+         selectedPriority != ticket.Priority ||
+         selectedProjectId != ticket.ProjectId ||
+         (remarks ?? string.Empty) != (ticket.Concern ?? string.Empty));
+
     /* -------- nav helpers -------- */
     private void Navigate(string url)
     {
@@ -320,36 +354,25 @@ else
         if (OnNavigate.HasDelegate)
             OnNavigate.InvokeAsync();
     }
+
     private void OpenInbox(string ticketNo)
     {
-        if (UserState.UserId.HasValue)
+        if (UserState.UserId.HasValue && ticket != null)
         {
             // 🔐 Encrypt user ID
-
             var token = LinkService.Protect(UserState.UserId.Value.ToString());
             var encodedToken = Uri.EscapeDataString(token);
             Navigation.NavigateTo($"/inbox/ticket/{encodedToken}/{ticketNo}/{ticket.Status}");
         }
     }
-    private string GetPriorityClass(TicketPriority priority)
-    {
-        return priority switch
-        {
-            TicketPriority.Critical => "badge bg-dark",
-            TicketPriority.High => "badge bg-danger",
-            TicketPriority.Medium => "badge bg-warning text-dark",
-            TicketPriority.Low => "badge bg-success",
-            _ => "badge bg-secondary"
-        };
-    }
+
     private async Task LoadProjects()
     {
         try
         {
             if (!UserState.UserId.HasValue)
                 return;
-            var url = $"{AppConfig.ChatUrl}Projects/GetProjectsByUser/by-user/{UserState.UserId.Value.ToString()}";
-            // var url = $"{AppConfig.ChatUrl}Projects/Get";
+            var url = $"{AppConfig.ChatUrl}Projects/GetProjectsByUser/by-user/{UserState.UserId.Value}";
             var response = await Http.GetFromJsonAsync<List<ProjectDto>>(url);
 
             if (response != null)
@@ -363,6 +386,12 @@ else
             Console.WriteLine($"❌ Error loading projects: {ex.Message}");
         }
     }
+
+    private async Task LoadSlaCalendar()
+    {
+        _slaCalendar = await SlaService.GetCalendarAsync();
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || sessionChecked)
@@ -388,30 +417,33 @@ else
             await PerformLogoutAsync(notifyBackend: false);
             return;
         }
+
         // ✅ Load data in parallel
         await Task.WhenAll(
             LoadProjects(),
             LoadTicket(),
-            LoadHistory()
+            LoadHistory(),
+            LoadSlaCalendar()
         );
-        // ✅ CRITICAL: set selected project AFTER both loaded
-        // ✅ Set selected project AFTER loading
+
+        // ✅ Set selected project AFTER both loaded
         if (ticket != null)
         {
             selectedProjectId = ticket.ProjectId;
 
             // 🔧 Ensure project exists in dropdown
-            if (!filteredProjects.Any(p => p.Id == ticket.ProjectId))
+            if (ticket.ProjectId.HasValue && !filteredProjects.Any(p => p.Id == ticket.ProjectId))
             {
                 filteredProjects.Insert(0, new ProjectDto
                 {
-                    Id = ticket.ProjectId ?? 0,
+                    Id = ticket.ProjectId.Value,
                     Title = ticket.ProjectName
                 });
             }
         }
         StateHasChanged();
     }
+
     private async Task PerformLogoutAsync(bool notifyBackend = true)
     {
         try
@@ -449,11 +481,12 @@ else
             Navigation.NavigateTo("/", forceLoad: true);
         }
     }
+
     private async Task<bool> LoadSessionUser()
     {
         try
         {
-            string encUserType = null;
+            string? encUserType = null;
 
             if (await SessionStorage.ContainKeyAsync("UserType"))
                 encUserType = await SessionStorage.GetItemAsync<string>("UserType");
@@ -477,18 +510,36 @@ else
             return false;
         }
     }
-    private async Task OnStatusChanged(ChangeEventArgs e)
+
+    private void OnStatusChanged(ChangeEventArgs e)
     {
         if (Enum.TryParse<TicketStatus>(e.Value?.ToString(), out var newStatus))
-        {
             selectedStatus = newStatus;
-            isModified = true; // Mark that something changed
-            StateHasChanged();
-        }
     }
-    private async Task SubmitChanges()
+
+    private void OnPriorityChangedManual(ChangeEventArgs e)
+    {
+        if (Enum.TryParse<TicketPriority>(e.Value?.ToString(), out var newPriority))
+            selectedPriority = newPriority;
+    }
+
+    private void DiscardChanges()
     {
         if (ticket == null) return;
+
+        selectedStatus = ticket.Status;
+        selectedPriority = ticket.Priority;
+        selectedProjectId = ticket.ProjectId;
+        remarks = ticket.Concern ?? string.Empty;
+    }
+
+    private async Task SubmitChanges()
+    {
+        if (ticket == null || _saving) return;
+
+        _saving = true;
+        _saveSuccess = null;
+        _saveError = null;
 
         try
         {
@@ -499,29 +550,57 @@ else
                 NewPriority = selectedPriority,
                 UpdatedBy = UserState.UserId,
                 UpdatedAt = DateTime.UtcNow,
-                ProjectId = selectedProjectId, // ✅ add this
+                ProjectId = selectedProjectId,
                 Remarks = remarks
             };
 
             var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateStatus", payload);
 
-            if (response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode)
             {
-                updateMessage = "✅ Changes successfully saved.";
-                isModified = false;
+                _saveError = $"Couldn't save your changes ({(int)response.StatusCode}). Please try again.";
+                return;
+            }
 
-                await LoadTicket();
-                await LoadHistory();
+            _saveSuccess = "Changes saved.";
 
-                // Send email
+            // Ticket and history are independent — refresh both at once
+            await Task.WhenAll(LoadTicket(), LoadHistory());
 
-                StateHasChanged();
-                if (sendEmail)
-                {
-                    isSendingEmail = true;
-                    StateHasChanged();
-                    string subject = $"[Ticket Update] {ticket.IssueTitle} - Status Changed to {selectedStatus}";
-                    string body = $@"
+            if (sendEmail)
+                await SendUpdateEmailAsync();
+
+            if (ChatService != null)
+                await ChatService.NotifyTicketUpdateAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Error saving ticket: {ex.Message}");
+            _saveError = "Couldn't save your changes. Check your connection and try again.";
+        }
+        finally
+        {
+            _saving = false;
+            isSendingEmail = false; // never leave the overlay stuck
+            StateHasChanged();
+        }
+    }
+
+    private async Task SendUpdateEmailAsync()
+    {
+        if (ticket == null) return;
+
+        if (string.IsNullOrWhiteSpace(ticket.RequesterEmail))
+        {
+            _saveSuccess = "Changes saved. No email was sent — the requester has no email address.";
+            return;
+        }
+
+        isSendingEmail = true;
+        StateHasChanged();
+
+        string subject = $"[Ticket Update] {ticket.IssueTitle} - Status Changed to {selectedStatus}";
+        string body = $@"
                             <html>
                               <head>
                                 <meta charset='UTF-8'>
@@ -548,65 +627,48 @@ else
                               </body>
                             </html>";
 
-                    // You can use the actual client email from your ticket DTO
-                    await EmailService.SendEmailAsync(ticket.RequesterEmail, subject, body);
-                    await DialogService.ShowSuccessAsync("Email notification sent to the client!");
-                }
-                
-                if (ChatService != null)
-                {
-                    await ChatService.NotifyTicketUpdateAsync();
-                }
-                isSendingEmail = false; // hide overlay
-            }
-            else
-            {
-                updateMessage = "⚠ Failed to save one or more updates.";
-            }
+        try
+        {
+            await EmailService.SendEmailAsync(ticket.RequesterEmail, subject, body);
+            _saveSuccess = $"Changes saved and the requester was emailed ({ticket.RequesterEmail}).";
         }
         catch (Exception ex)
         {
-            updateMessage = $"Error: {ex.Message}";
+            Console.WriteLine($"❌ Error sending email: {ex.Message}");
+            _saveError = "Changes were saved, but the email notification couldn't be sent.";
         }
-
-        StateHasChanged();
+        finally
+        {
+            isSendingEmail = false;
+        }
     }
+
     private async Task LoadTicket()
     {
-      
         try
         {
-            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/GetById/{TicketId}");
-            ticket = await Http.GetFromJsonAsync<TicketDto>(url);
+            ticket = await Http.GetFromJsonAsync<TicketDto>($"{AppConfig.ChatUrl}Tickets/GetById/{TicketId}");
 
             if (ticket == null)
             {
-                Navigation.NavigateTo("/ticketlist");
+                _notFound = true;
                 return;
             }
 
-            // =========================
             // CURRENT STATE (SOURCE OF TRUTH)
-            // =========================
             selectedStatus = ticket.Status;
             selectedPriority = ticket.Priority;
-
-            // ✅ FIX: DO NOT override with history
+            selectedProjectId = ticket.ProjectId;
             remarks = ticket.Concern ?? string.Empty;
-
-            // =========================
-            // HISTORY (ONLY FOR DISPLAY)
-            // =========================
-            if (history != null && history.Any())
-            {
-                history = history
-                    .OrderByDescending(h => h.UpdatedAt)
-                    .ToList();
-            }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _notFound = true;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error loading ticket: {ex.Message}");
+            _notFound = ticket == null;
         }
     }
 
@@ -614,9 +676,9 @@ else
     {
         try
         {
-      
-            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/GetHistory/GetHistory/{TicketId}");
-            history = await Http.GetFromJsonAsync<List<TicketHistoryDto>>(url);
+            var result = await Http.GetFromJsonAsync<List<TicketHistoryDto>>(
+                $"{AppConfig.ChatUrl}Tickets/GetHistory/GetHistory/{TicketId}");
+            history = result?.OrderByDescending(h => h.UpdatedAt).ToList() ?? new List<TicketHistoryDto>();
         }
         catch (Exception ex)
         {
@@ -625,91 +687,68 @@ else
         }
     }
 
-    private async Task UpdateStatus()
-    {
-        if (ticket == null) return;
-
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        var user = authState.User.Identity?.Name ?? "System";
-
-        var payload = new
-        {
-            TicketId = ticket.Id,
-            NewStatus = selectedStatus,
-            UpdatedBy = UserState.UserId,
-            UpdatedAt = DateTime.UtcNow,
-            Remarks = remarks 
-        };
-
-        try
-        {
-            var response = await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdateStatus", payload);
-            if (response.IsSuccessStatusCode)
-            {
-                updateMessage = $"✅ Status updated to '{selectedStatus}' with remarks: {remarks}";
-                remarks = string.Empty; // clear after update
-                await LoadTicket();
-                await LoadHistory();
-            }
-            else
-            {
-                updateMessage = "⚠ Failed to update ticket status.";
-            }
-        }
-        catch (Exception ex)
-        {
-            updateMessage = $"Error: {ex.Message}";
-        }
-        StateHasChanged();
-    }
-   private async Task OnPriorityChangedManual(ChangeEventArgs e)
-    {
-        // if (Enum.TryParse<TicketPriority>(e.Value?.ToString(), out var newPriority))
-        // {
-        //     selectedPriority = newPriority;
-
-        //     var payload = new
-        //     {
-        //         TicketId = ticket.Id,
-        //         NewPriority = selectedPriority,
-        //         UpdatedBy = UserState.UserId,
-        //         UpdatedAt = DateTime.UtcNow
-        //     };
-
-        //     await Http.PutAsJsonAsync($"{AppConfig.ChatUrl}Tickets/UpdatePriority", payload);
-        //     updateMessage = $"✅ Priority updated to '{selectedPriority}'";
-        //     await LoadTicket();
-        //     await LoadHistory();
-        //     StateHasChanged();
-        // }
-        if (Enum.TryParse<TicketPriority>(e.Value?.ToString(), out var newPriority))
-        {
-            selectedPriority = newPriority;
-            isModified = true; // Mark that something changed
-            StateHasChanged();
-        }
-    }
-    // private void GoBack() => Navigation.NavigateTo("/ticketlist");
-    private string GetPriorityDropdownClass(TicketPriority priority)
-    {
-        return priority switch
-        {
-            TicketPriority.Critical => "priority-critical",
-            TicketPriority.High => "priority-high",
-            TicketPriority.Medium => "priority-medium",
-            TicketPriority.Low => "priority-low",
-            _ => "priority-default"
-        };
-    }
     private void GoBack()
     {
         if (UserState.UserId.HasValue)
         {
             // 🔐 Encrypt user ID
-
             var token = LinkService.Protect(UserState.UserId.Value.ToString());
             var encodedToken = Uri.EscapeDataString(token);
             Navigate($"/ticketlist/{encodedToken}");
         }
+    }
+
+    // =============================
+    // FORMATTING
+    // =============================
+    private static string StatusLabel(string? status) => status switch
+    {
+        "InProgress" => "In progress",
+        null or "" => "Unknown",
+        _ => status
+    };
+
+    private static string StatusCss(string? status) => status switch
+    {
+        "Open" => "open",
+        "InProgress" => "progress",
+        "Resolved" => "resolved",
+        "Closed" => "closed",
+        "Rejected" => "rejected",
+        "New" => "new",
+        _ => "other"
+    };
+
+    private static string PriorityIcon(TicketPriority priority) => priority switch
+    {
+        TicketPriority.Critical => "fa-solid fa-fire",
+        TicketPriority.High => "fa-solid fa-angles-up",
+        TicketPriority.Medium => "fa-solid fa-equals",
+        TicketPriority.Low => "fa-solid fa-angle-down",
+        _ => "fa-regular fa-circle"
+    };
+
+    private static string Fallback(string? value, string fallback = "—") =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value;
+
+    private static string Initials(string? name)
+    {
+        var parts = (name ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
+    }
+
+    private static string RelativeTime(DateTime utc)
+    {
+        var ago = DateTime.UtcNow - utc;
+        if (ago.TotalMinutes < 1) return "just now";
+        if (ago.TotalHours < 1) return $"{(int)ago.TotalMinutes}m ago";
+        if (ago.TotalDays < 1) return $"{(int)ago.TotalHours}h ago";
+        if (ago.TotalDays < 7) return $"{(int)ago.TotalDays}d ago";
+        return utc.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
     }
 }

@@ -26,10 +26,13 @@ namespace ChatUp.Services
         public event Action<int, bool, DateTime>? OnUserStatusChanged;
         private static readonly ConcurrentDictionary<int, bool> UserStatuses = new();
         public bool IsConnected => _hubConnection?.State == HubConnectionState.Connected;
-        public ChatService(NavigationManager navigation, HttpClient http)
+        private readonly ChatUp.Services.Security.UiApiKeyStore _apiKeys;
+
+        public ChatService(NavigationManager navigation, HttpClient http, ChatUp.Services.Security.UiApiKeyStore apiKeys)
         {
             _navigation = navigation;
             _http = http;
+            _apiKeys = apiKeys;
         }
 
         public async Task StartAsync(int userId)
@@ -37,7 +40,12 @@ namespace ChatUp.Services
             if (_hubConnection != null) return;
 
              _hubConnection = new HubConnectionBuilder()
-            .WithUrl($"{AppConfig.ChatUrl}chathub?userId={userId}")
+            .WithUrl($"{AppConfig.ChatUrl}chathub?userId={userId}", options =>
+            {
+                // The hub requires the API key too. The provider is called on every (re)connect,
+                // so a rotated key is picked up automatically.
+                options.AccessTokenProvider = () => Task.FromResult<string?>(_apiKeys.CurrentKey);
+            })
             .WithAutomaticReconnect()
             .Build();
 

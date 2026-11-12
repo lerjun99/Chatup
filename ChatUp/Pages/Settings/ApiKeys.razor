@@ -1,0 +1,639 @@
+@page "/settings/api-keys"
+@using System.Globalization
+@using ChatUp.Services
+@using ChatUp.Services.Security
+@inject ApiKeyAdminService KeyApi
+@inject UiApiKeyStore UiKey
+@inject UserState UserState
+@inject TitleService TitleService
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+<link href="css/settings.css" rel="stylesheet" />
+
+<div class="st">
+    <header class="st-hero">
+        <div class="st-eyebrow"><span></span> Tokens for the ChatUp UI and integrations</div>
+        <h1><i class="fa-solid fa-key"></i> API keys</h1>
+        <p>Every call to the ChatUp API must carry one of these keys. Rotate or revoke a key at any time.</p>
+    </header>
+
+    @if (UserState.UserType != 1)
+    {
+        <div class="st-card st-empty">
+            <i class="fa-solid fa-lock"></i>
+            <p>Only administrators can manage API keys.</p>
+        </div>
+    }
+    else
+    {
+        @if (notice != null)
+        {
+            <div class="st-alert st-alert-ok" role="status">
+                <i class="fa-solid fa-circle-check"></i><span>@notice</span>
+                <button class="st-icon-btn" title="Dismiss" @onclick="() => notice = null"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        }
+        @if (error != null)
+        {
+            <div class="st-alert st-alert-error" role="alert">
+                <i class="fa-solid fa-circle-exclamation"></i><span>@error</span>
+                <button class="st-icon-btn" title="Dismiss" @onclick="() => error = null"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        }
+
+        <!-- ============ THIS UI ============ -->
+        <section class="st-card">
+            <div class="st-card-head">
+                <span class="st-card-icon"><i class="fa-solid fa-plug"></i></span>
+                <div class="st-card-title">
+                    <h2>This ChatUp UI</h2>
+                    <p>The key this UI sends with every call to the ChatUp API.</p>
+                </div>
+                <span class="st-source st-source-@UiKey.Source.ToString().ToLowerInvariant()">@SourceLabel</span>
+            </div>
+
+            <div class="st-current">
+                <div class="st-current-main">
+                    @if (currentKey != null)
+                    {
+                        <span class="st-role st-role-@currentKey.Role.ToLowerInvariant()">@currentKey.Role</span>
+                        <strong>@currentKey.Name</strong>
+                    }
+                    <code class="st-code">@UiKey.CurrentKeyPreview</code>
+                    <div class="st-meta">
+                        @if (currentKey != null)
+                        {
+                            <span>expires @ExpiryText(currentKey.ExpiresAt)</span>
+                            <span>· last used @RelativeTime(currentKey.LastUsedAt)</span>
+                        }
+                        else if (!testing)
+                        {
+                            <span>Not verified yet</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="st-current-actions">
+                    @if (testResult != null)
+                    {
+                        <span class="st-pill @(testResult.Value ? "is-ok" : "is-bad")">
+                            <i class="fa-solid @(testResult.Value ? "fa-circle-check" : "fa-circle-xmark")"></i>
+                            @(testResult.Value ? "Connected" : "Not accepted")
+                        </span>
+                    }
+                    <button class="st-btn st-btn-ghost" @onclick="TestConnection" disabled="@testing">
+                        <i class="fa-solid @(testing ? "fa-circle-notch fa-spin" : "fa-wave-square")"></i> Test connection
+                    </button>
+                </div>
+            </div>
+
+            @if (currentKey?.LabelShowsKey == true)
+            {
+                <div class="st-warn"><i class="fa-solid fa-shield-halved"></i>
+                    <span>This key's label is the key itself, so anyone who sees the label can use it. Rename it, or better, rotate it (the UI reconnects automatically).</span>
+                </div>
+            }
+            @if (UsingBuiltInDefault)
+            {
+                <div class="st-warn"><i class="fa-solid fa-circle-info"></i>
+                    <span>This UI is using the built-in default key, which is publicly known. Create a key below and choose <strong>Use for this UI</strong>.</span>
+                </div>
+            }
+            @if (UiKey.LoadProblem != null)
+            {
+                <div class="st-warn is-bad"><i class="fa-solid fa-triangle-exclamation"></i><span>@UiKey.LoadProblem</span></div>
+            }
+
+            <div class="st-foot">
+                <span><i class="fa-solid fa-hard-drive"></i> A connected key is kept encrypted in <code>@UiApiKeyStore.FilePath</code> on the UI server.</span>
+                @if (UiKey.Source == UiKeySource.Connected)
+                {
+                    <button class="st-link" @onclick="DisconnectUiKey">Stop using it (fall back to the default)</button>
+                }
+            </div>
+        </section>
+
+        <!-- ============ ALL KEYS ============ -->
+        <section class="st-card">
+            <div class="st-card-head">
+                <div class="st-card-title">
+                    <h2>API keys</h2>
+                    <p>@ActiveCount active key@(ActiveCount == 1 ? "" : "s") · values are encrypted and only shown when you reveal them.</p>
+                </div>
+                <label class="st-check">
+                    <input type="checkbox" @bind="showRevoked" @bind:after="LoadKeys" /> Show revoked
+                </label>
+                <button class="st-btn st-btn-primary" @onclick="ToggleCreate">
+                    <i class="fa-solid @(showCreate ? "fa-xmark" : "fa-plus")"></i> @(showCreate ? "Cancel" : "New key")
+                </button>
+            </div>
+
+            @if (showCreate)
+            {
+                <div class="st-create">
+                    <div class="st-field">
+                        <label for="newName">Name</label>
+                        <input id="newName" class="st-input" placeholder="e.g. HRIS integration" @bind="newName" @bind:event="oninput" />
+                        <small>Describe who uses it — never paste the key itself here.</small>
+                    </div>
+                    <div class="st-field">
+                        <label for="newRole">Role</label>
+                        <select id="newRole" class="st-input" @bind="newRole">
+                            <option value="2">ApiUser — every endpoint except key management</option>
+                            <option value="1">Admin — everything, including key management</option>
+                        </select>
+                    </div>
+                    <div class="st-field">
+                        <label for="newExpiry">Expires</label>
+                        <select id="newExpiry" class="st-input" @bind="newExpiryDays">
+                            <option value="30">In 30 days</option>
+                            <option value="90">In 90 days</option>
+                            <option value="180">In 6 months</option>
+                            <option value="365">In 1 year</option>
+                            <option value="0">Never</option>
+                        </select>
+                    </div>
+                    <div class="st-create-actions">
+                        <button class="st-btn st-btn-primary" @onclick="CreateKey" disabled="@(busy || string.IsNullOrWhiteSpace(newName))">
+                            <i class="fa-solid @(busy ? "fa-circle-notch fa-spin" : "fa-key")"></i> Create key
+                        </button>
+                    </div>
+                </div>
+            }
+
+            @if (freshSecret != null)
+            {
+                <div class="st-secret">
+                    <div class="st-secret-head">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <strong>Copy the key for “@freshSecret.Key.Name” now.</strong>
+                        <span>You can reveal it again later from this page.</span>
+                    </div>
+                    <div class="st-secret-value">
+                        <code>@freshSecret.Value</code>
+                        <button class="st-btn st-btn-ghost st-btn-sm" @onclick="() => Copy(freshSecret.Value)"><i class="fa-regular fa-copy"></i> Copy</button>
+                        @if (freshSecret.Key.Id != currentKey?.Id)
+                        {
+                            <button class="st-btn st-btn-ghost st-btn-sm" @onclick="() => UseValueForUi(freshSecret.Value)"><i class="fa-solid fa-plug"></i> Use for this UI</button>
+                        }
+                        <button class="st-icon-btn" title="Hide" @onclick="() => freshSecret = null"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </div>
+            }
+
+            @if (keys == null)
+            {
+                for (var i = 0; i < 3; i++)
+                {
+                    <div class="st-skel"></div>
+                }
+            }
+            else if (!keys.Any())
+            {
+                <div class="st-empty"><i class="fa-solid fa-key"></i><p>No keys yet.</p></div>
+            }
+            else
+            {
+                <ul class="st-keys">
+                    @foreach (var k in keys)
+                    {
+                        var id = k.Id ?? 0;
+                        var isThisUi = k.Id == currentKey?.Id;
+                        var expired = k.ExpiresAt.HasValue && k.ExpiresAt.Value <= DateTime.UtcNow;
+                        <li @key="id" class="st-key @(isThisUi ? "is-this-ui" : "") @(!k.IsActive ? "is-revoked" : "")">
+                            <div class="st-key-main">
+                                <div class="st-key-title">
+                                    <span class="st-role st-role-@k.Role.ToLowerInvariant()">@k.Role</span>
+                                    @if (editingId == id)
+                                    {
+                                        <input class="st-input st-input-sm" @bind="editName" @bind:event="oninput" @onkeydown="OnEditKeyDown" />
+                                        <button class="st-icon-btn is-ok" title="Save" @onclick="() => SaveEdit(id)"><i class="fa-solid fa-check"></i></button>
+                                        <button class="st-icon-btn" title="Cancel" @onclick="() => editingId = null"><i class="fa-solid fa-xmark"></i></button>
+                                    }
+                                    else
+                                    {
+                                        <strong>@k.Name</strong>
+                                    }
+                                    @if (isThisUi)
+                                    {
+                                        <span class="st-badge is-ui"><i class="fa-solid fa-plug"></i> This UI</span>
+                                    }
+                                    @if (k.IsBuiltIn)
+                                    {
+                                        <span class="st-badge is-warn">Built-in default</span>
+                                    }
+                                    @if (k.LabelShowsKey)
+                                    {
+                                        <span class="st-badge is-warn"><i class="fa-solid fa-shield-halved"></i> Label shows key</span>
+                                    }
+                                    @if (!k.IsActive)
+                                    {
+                                        <span class="st-badge is-bad">Revoked</span>
+                                    }
+                                    else if (expired)
+                                    {
+                                        <span class="st-badge is-bad">Expired</span>
+                                    }
+                                </div>
+                                <div class="st-meta">
+                                    @if (revealed.TryGetValue(id, out var value))
+                                    {
+                                        <code class="st-code is-revealed">@value</code>
+                                        <button class="st-link" @onclick="() => Copy(value)"><i class="fa-regular fa-copy"></i> Copy</button>
+                                    }
+                                    else
+                                    {
+                                        <code class="st-code">@k.Preview</code>
+                                    }
+                                    <span>#@id</span>
+                                    <span>created @k.CreatedAt.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture)</span>
+                                    <span>expires @ExpiryText(k.ExpiresAt)</span>
+                                    <span>last used @RelativeTime(k.LastUsedAt)</span>
+                                </div>
+                            </div>
+
+                            @if (k.IsActive)
+                            {
+                                <div class="st-key-actions">
+                                    <button class="st-btn st-btn-ghost st-btn-sm" disabled="@(busyId == id)" @onclick="() => ToggleReveal(id)">
+                                        <i class="fa-regular @(revealed.ContainsKey(id) ? "fa-eye-slash" : "fa-eye")"></i> @(revealed.ContainsKey(id) ? "Hide" : "Reveal")
+                                    </button>
+                                    @if (!isThisUi && !expired)
+                                    {
+                                        <button class="st-btn st-btn-ghost st-btn-sm" disabled="@(busyId == id)" @onclick="() => UseKeyForUi(id)">
+                                            <i class="fa-solid fa-plug"></i> Use for this UI
+                                        </button>
+                                    }
+                                    <button class="st-icon-btn" title="Rename / change expiry" @onclick="() => StartEdit(k)"><i class="fa-solid fa-pen"></i></button>
+                                    @if (!k.ExpiresAt.HasValue || expired)
+                                    {
+                                        <button class="st-icon-btn" title="@(expired ? "Extend 1 year" : "Set expiry to 1 year")" @onclick="() => Extend(id)"><i class="fa-regular fa-calendar-plus"></i></button>
+                                    }
+                                    <button class="st-icon-btn" title="Rotate (issue a new value)" disabled="@(busyId == id)" @onclick="() => Rotate(k)"><i class="fa-solid fa-rotate"></i></button>
+                                    <button class="st-icon-btn is-danger" title="@(isThisUi ? "Connect the UI to another key before revoking this one" : "Revoke")"
+                                            disabled="@(isThisUi || busyId == id)" @onclick="() => Revoke(k)">
+                                        <i class="fa-solid fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <!-- ============ CONNECT BY VALUE ============ -->
+        <section class="st-card">
+            <div class="st-card-head">
+                <span class="st-card-icon"><i class="fa-solid fa-link"></i></span>
+                <div class="st-card-title">
+                    <h2>Connect a key by value</h2>
+                    <p>Paste a key to check which one it is and use it for this UI.</p>
+                </div>
+            </div>
+            <div class="st-connect">
+                <label for="pasteKey">Key value</label>
+                <div class="st-connect-row">
+                    <div class="st-input-wrap">
+                        <input id="pasteKey" class="st-input" type="@(showPasted ? "text" : "password")" placeholder="chk_…" autocomplete="off"
+                               @bind="pastedKey" @bind:event="oninput" />
+                        <button class="st-input-btn" title="@(showPasted ? "Hide" : "Show")" @onclick="() => showPasted = !showPasted">
+                            <i class="fa-regular @(showPasted ? "fa-eye-slash" : "fa-eye")"></i>
+                        </button>
+                    </div>
+                    <button class="st-btn st-btn-ghost" disabled="@(busy || string.IsNullOrWhiteSpace(pastedKey))" @onclick="ConnectPasted">
+                        <i class="fa-solid @(busy ? "fa-circle-notch fa-spin" : "fa-plug")"></i> Check &amp; use for this UI
+                    </button>
+                </div>
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private ApiKeyView? currentKey;
+    private List<ApiKeyView>? keys;
+    private readonly Dictionary<int, string> revealed = new();
+    private ApiKeySecretView? freshSecret;
+
+    private bool testing;
+    private bool? testResult;
+    private bool busy;
+    private int? busyId;
+    private string? notice;
+    private string? error;
+
+    private bool showRevoked;
+    private bool showCreate;
+    private string newName = string.Empty;
+    private int newRole = 2;
+    private int newExpiryDays = 365;
+
+    private int? editingId;
+    private string editName = string.Empty;
+
+    private string pastedKey = string.Empty;
+    private bool showPasted;
+
+    private int ActiveCount => keys?.Count(k => k.IsActive) ?? 0;
+
+    private bool UsingBuiltInDefault =>
+        UiKey.Source == UiKeySource.BuiltIn || currentKey?.IsBuiltIn == true;
+
+    private string SourceLabel => UiKey.Source switch
+    {
+        UiKeySource.Connected => "Connected key",
+        UiKeySource.Configured => "appconfig.json default",
+        _ => "Built-in default"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        TitleService.SetTitle("API keys");
+        if (UserState.UserType != 1)
+            return;
+
+        // Identify this UI's key and load the list together
+        await Task.WhenAll(TestConnection(), LoadKeys());
+    }
+
+    private async Task TestConnection()
+    {
+        testing = true;
+        StateHasChanged();
+
+        var result = await KeyApi.WhoAmIAsync();
+        currentKey = result.Data;
+        testResult = result.Ok;
+        if (!result.Ok)
+            error = $"This UI's key was not accepted: {result.Error}";
+
+        testing = false;
+    }
+
+    private async Task LoadKeys()
+    {
+        var result = await KeyApi.ListAsync();
+        if (result.Ok)
+            keys = (result.Data ?? new()).Where(k => showRevoked || k.IsActive).ToList();
+        else
+        {
+            keys ??= new();
+            error = result.Error;
+        }
+    }
+
+    private async Task RefreshAll()
+    {
+        await Task.WhenAll(TestConnection(), LoadKeys());
+    }
+
+    // =============================
+    // CREATE
+    // =============================
+    private void ToggleCreate()
+    {
+        showCreate = !showCreate;
+        newName = string.Empty;
+    }
+
+    private async Task CreateKey()
+    {
+        busy = true;
+        error = notice = null;
+
+        var result = await KeyApi.CreateAsync(newName, newRole, newExpiryDays > 0 ? newExpiryDays : null);
+        busy = false;
+
+        if (!result.Ok || result.Data == null)
+        {
+            error = result.Error;
+            return;
+        }
+
+        freshSecret = result.Data;
+        showCreate = false;
+        notice = $"Key “{result.Data.Key.Name}” created.";
+        await LoadKeys();
+    }
+
+    // =============================
+    // REVEAL / USE
+    // =============================
+    private async Task ToggleReveal(int id)
+    {
+        if (revealed.Remove(id))
+            return;
+
+        busyId = id;
+        var result = await KeyApi.RevealAsync(id);
+        busyId = null;
+
+        if (result.Ok && result.Data != null && !string.IsNullOrEmpty(result.Data.Value))
+            revealed[id] = result.Data.Value;
+        else
+            error = result.Error ?? "The key couldn't be decrypted.";
+    }
+
+    private async Task UseKeyForUi(int id)
+    {
+        busyId = id;
+        error = notice = null;
+
+        var secret = await KeyApi.RevealAsync(id);
+        if (!secret.Ok || secret.Data == null || string.IsNullOrEmpty(secret.Data.Value))
+        {
+            busyId = null;
+            error = secret.Error ?? "The key couldn't be read.";
+            return;
+        }
+
+        await UseValueForUi(secret.Data.Value);
+        busyId = null;
+    }
+
+    /// <summary>Verifies a key against the API first, then makes it this UI's key.</summary>
+    private async Task UseValueForUi(string value)
+    {
+        var check = await KeyApi.WhoAmIAsync(value);
+        if (!check.Ok)
+        {
+            error = $"That key can't be used: {check.Error}";
+            return;
+        }
+
+        UiKey.Connect(value);
+        var connectedName = check.Data?.Name ?? "the pasted key";
+        notice = $"This UI now uses “{connectedName}”.";
+        freshSecret = null;
+        await RefreshAll();
+    }
+
+    private async Task ConnectPasted()
+    {
+        busy = true;
+        error = notice = null;
+        await UseValueForUi(pastedKey);
+        if (error == null)
+            pastedKey = string.Empty;
+        busy = false;
+    }
+
+    private async Task DisconnectUiKey()
+    {
+        var dialog = await DialogService.ShowConfirmationAsync(
+            "Stop using the connected key? The UI will fall back to the default key from appconfig.json (or the built-in default).",
+            "Stop using it", "Cancel");
+        if ((await dialog.Result).Cancelled)
+            return;
+
+        UiKey.Disconnect();
+        notice = "The UI is back on the default key.";
+        await RefreshAll();
+    }
+
+    // =============================
+    // EDIT / EXTEND
+    // =============================
+    private void StartEdit(ApiKeyView k)
+    {
+        editingId = k.Id;
+        editName = k.Name;
+    }
+
+    private async Task OnEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && editingId.HasValue)
+            await SaveEdit(editingId.Value);
+        else if (e.Key == "Escape")
+            editingId = null;
+    }
+
+    private async Task SaveEdit(int id)
+    {
+        if (string.IsNullOrWhiteSpace(editName))
+            return;
+
+        var result = await KeyApi.UpdateAsync(id, editName, null, false);
+        if (!result.Ok)
+        {
+            error = result.Error;
+            return;
+        }
+
+        editingId = null;
+        notice = "Key renamed.";
+        await RefreshAll();
+    }
+
+    private async Task Extend(int id)
+    {
+        var result = await KeyApi.UpdateAsync(id, string.Empty, 365, false);
+        if (!result.Ok)
+        {
+            error = result.Error;
+            return;
+        }
+
+        notice = "The key now expires in one year.";
+        await RefreshAll();
+    }
+
+    // =============================
+    // ROTATE / REVOKE
+    // =============================
+    private async Task Rotate(ApiKeyView k)
+    {
+        var id = k.Id ?? 0;
+        var isThisUi = id == currentKey?.Id;
+        var message = isThisUi
+            ? $"Rotate “{k.Name}”? It's this UI's key — the UI switches to the new value automatically, but integrations using the old value stop working."
+            : $"Rotate “{k.Name}”? The old value stops working immediately, so update anything that uses it.";
+
+        var dialog = await DialogService.ShowConfirmationAsync(message, "Rotate", "Cancel");
+        if ((await dialog.Result).Cancelled)
+            return;
+
+        busyId = id;
+        error = notice = null;
+        var result = await KeyApi.RotateAsync(id);
+        busyId = null;
+
+        if (!result.Ok || result.Data == null)
+        {
+            error = result.Error;
+            return;
+        }
+
+        revealed.Remove(id);
+        if (isThisUi)
+        {
+            // The old value no longer works — reconnect the UI with the new one right away
+            UiKey.Connect(result.Data.Value);
+            notice = $"“{k.Name}” was rotated and this UI reconnected with the new value.";
+        }
+        else
+        {
+            freshSecret = result.Data;
+            notice = $"“{k.Name}” was rotated. Copy the new value below.";
+        }
+
+        await RefreshAll();
+    }
+
+    private async Task Revoke(ApiKeyView k)
+    {
+        var dialog = await DialogService.ShowConfirmationAsync(
+            $"Revoke “{k.Name}”? Anything using it gets 401 errors from now on. This can't be undone.", "Revoke", "Cancel");
+        if ((await dialog.Result).Cancelled)
+            return;
+
+        var id = k.Id ?? 0;
+        busyId = id;
+        error = notice = null;
+        var result = await KeyApi.RevokeAsync(id);
+        busyId = null;
+
+        if (!result.Ok)
+        {
+            error = result.Error;
+            return;
+        }
+
+        revealed.Remove(id);
+        notice = $"“{k.Name}” was revoked.";
+        await LoadKeys();
+    }
+
+    // =============================
+    // HELPERS
+    // =============================
+    private async Task Copy(string value)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", value);
+            notice = "Copied to the clipboard.";
+        }
+        catch
+        {
+            error = "Couldn't access the clipboard — select the value and copy it manually.";
+        }
+    }
+
+    private static string ExpiryText(DateTime? expiresAt) =>
+        expiresAt.HasValue ? expiresAt.Value.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture) : "never";
+
+    private static string RelativeTime(DateTime? utc)
+    {
+        if (!utc.HasValue)
+            return "never";
+
+        var ago = DateTime.UtcNow - utc.Value;
+        if (ago.TotalMinutes < 2) return "just now";
+        if (ago.TotalHours < 1) return $"{(int)ago.TotalMinutes} min ago";
+        if (ago.TotalDays < 1) return $"{(int)ago.TotalHours} h ago";
+        if (ago.TotalDays < 60) return $"{(int)ago.TotalDays} d ago";
+        return utc.Value.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+    }
+}

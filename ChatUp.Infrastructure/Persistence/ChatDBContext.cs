@@ -15,6 +15,7 @@ namespace ChatUp.Infrastructure.Persistence
         public DbSet<ChatUser> ChatUsers { get; set; }
         public DbSet<LoginAttempt> Attempts { get; set; }
         public DbSet<ApiTokenModel> ApiTokenModel { get; set; }
+        public DbSet<ApiKey> ApiKeys { get; set; }
         public DbSet<Client> Client { get; set; }
         public DbSet<Ticket> Tickets { get; set; }
         public DbSet<Project> Projects { get; set; }
@@ -42,6 +43,13 @@ namespace ChatUp.Infrastructure.Persistence
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.Entity<ApiKey>(entity =>
+            {
+                entity.HasIndex(k => k.KeyHash).IsUnique();
+                entity.Property(k => k.Role).HasConversion<int>();
+            });
+
             modelBuilder.Entity<UserAccount>(entity =>
             {
                 // ✅ Optional relationship

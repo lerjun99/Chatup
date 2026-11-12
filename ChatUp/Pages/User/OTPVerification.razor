@@ -91,7 +91,7 @@
 
         if (!string.IsNullOrEmpty(value) && index < OtpDigits.Count - 1)
         {
-            await JS.InvokeVoidAsync("eval", $"document.getElementsByClassName('otp-box')[{index + 1}].focus()");
+            await JS.InvokeVoidAsync("focusOtpBox", index + 1);
         }
     }
 

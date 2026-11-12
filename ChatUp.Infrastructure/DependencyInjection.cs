@@ -1,4 +1,5 @@
 ﻿using ChatUp.Application.Common.Interfaces;
+using ChatUp.Application.Common.Security;
 using ChatUp.Application.Features.Messages.Handlers;
 using ChatUp.Domain.Interfaces;
 using ChatUp.Infrastructure.Common;
@@ -10,6 +11,8 @@ using ChatUp.Infrastructure.Services.BasicAuthenticationHandler;
 using ChatUp.Infrastructure.Services.Cryptography;
 using ChatUp.Infrastructure.Services.FileUploadOperationFilter;
 using ChatUp.Infrastructure.Services.JwtAuth;
+using ChatUp.Infrastructure.Services.Security;
+using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -231,7 +234,9 @@ namespace ChatUp.Infrastructure
             // CONTROLLERS
             // ============================================================
 
-            services.AddControllers()
+            // Every controller requires a valid API key unless it opts out with [AllowAnonymous]
+            services.AddControllers(options =>
+                    options.Filters.Add(new AuthorizeFilter(ApiKeyDefaults.ApiAccessPolicy)))
                 .AddJsonOptions(options =>
                 {
                     options.JsonSerializerOptions.ReferenceHandler =
@@ -261,20 +266,18 @@ namespace ChatUp.Infrastructure
                     });
 
                 c.AddSecurityDefinition(
-                    "Bearer",
+                    ApiKeyDefaults.Scheme,
                     new OpenApiSecurityScheme
                     {
                         Description =
-                            "JWT Authorization header using the Bearer scheme " +
-                            "(Example: 'Bearer 12345abcdef')",
+                            "API key for the ChatUp API. Send it as 'X-Api-Key: <key>' " +
+                            "(or 'Authorization: Bearer <key>'). Manage keys in the UI under Settings → API keys.",
 
-                        Name = "Authorization",
+                        Name = ApiKeyDefaults.HeaderName,
 
                         In = ParameterLocation.Header,
 
-                        Type = SecuritySchemeType.ApiKey,
-
-                        Scheme = "Bearer"
+                        Type = SecuritySchemeType.ApiKey
                     });
 
                 c.AddSecurityRequirement(
@@ -289,7 +292,7 @@ namespace ChatUp.Infrastructure
                                         Type =
                                             ReferenceType.SecurityScheme,
 
-                                        Id = "Bearer"
+                                        Id = ApiKeyDefaults.Scheme
                                     }
                             },
 
@@ -306,11 +309,15 @@ namespace ChatUp.Infrastructure
             // AUTHENTICATION
             // ============================================================
 
-            services.AddAuthentication("Basic")
+            // API keys: hashed lookup, cached validation (see ApiKeyAuthenticationHandler)
+            services.AddMemoryCache();
+            services.AddScoped<ApiKeyService>();
+
+            services.AddAuthentication(ApiKeyDefaults.Scheme)
                 .AddScheme<
-                    BasicAuthenticationOptions,
-                    BasicAuthenticationHandler>(
-                        "Basic",
+                    ApiKeyAuthenticationOptions,
+                    ApiKeyAuthenticationHandler>(
+                        ApiKeyDefaults.Scheme,
                         null);
 
 
@@ -320,13 +327,24 @@ namespace ChatUp.Infrastructure
 
             services.AddAuthorization(options =>
             {
+                // Any valid API key — applied globally to controllers and hubs
                 options.AddPolicy(
-                    "ApiKey",
-                    authBuilder =>
-                    {
-                        authBuilder.RequireRole(
-                            "Administrators");
-                    });
+                    ApiKeyDefaults.ApiAccessPolicy,
+                    policy => policy
+                        .AddAuthenticationSchemes(ApiKeyDefaults.Scheme)
+                        .RequireAuthenticatedUser());
+
+                // API key management: an Admin key, or any key used by a signed-in administrator
+                options.AddPolicy(
+                    ApiKeyDefaults.AdminPolicy,
+                    policy => policy
+                        .AddAuthenticationSchemes(ApiKeyDefaults.Scheme)
+                        .RequireAuthenticatedUser()
+                        .RequireAssertion(ctx =>
+                            ctx.User.IsInRole(nameof(ChatUp.Domain.Entities.ApiKeyRole.Admin)) ||
+                            ctx.User.HasClaim(ApiKeyDefaults.UserTypeClaim, "1")));
+
+                options.DefaultPolicy = options.GetPolicy(ApiKeyDefaults.ApiAccessPolicy)!;
             });
 
 

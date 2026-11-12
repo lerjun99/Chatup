@@ -55,20 +55,32 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
             // =============================
             // 1️⃣ TICKET COUNTS
             // =============================
-            var total = await ticketsQuery.CountAsync(cancellationToken);
-            total = total == 0 ? 1 : total;
+            // Single round-trip instead of one COUNT query per status
+            var counts = await ticketsQuery
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    Total = g.Count(),
+                    Open = g.Sum(t => t.Status == TicketStatus.Open ? 1 : 0),
+                    InProgress = g.Sum(t => t.Status == TicketStatus.InProgress ? 1 : 0),
+                    Resolved = g.Sum(t => t.Status == TicketStatus.Resolved ? 1 : 0),
+                    Closed = g.Sum(t => t.Status == TicketStatus.Closed ? 1 : 0),
+                    Rejected = g.Sum(t => t.Status == TicketStatus.Rejected ? 1 : 0),
+                    Critical = g.Sum(t => t.Priority == TicketPriority.Critical ? 1 : 0),
+                    Breached = g.Sum(t => t.IsBreached ? 1 : 0)
+                })
+                .FirstOrDefaultAsync(cancellationToken);
 
-            int Count(TicketStatus s) => ticketsQuery.Count(t => t.Status == s);
+            int total = counts?.Total ?? 0;
+            int open = counts?.Open ?? 0;
+            int inProgress = counts?.InProgress ?? 0;
+            int resolved = counts?.Resolved ?? 0;
+            int closed = counts?.Closed ?? 0;
+            int rejected = counts?.Rejected ?? 0;
+            int critical = counts?.Critical ?? 0;
+            int breached = counts?.Breached ?? 0;
 
-            int open = Count(TicketStatus.Open);
-            int inProgress = Count(TicketStatus.InProgress);
-            int closed = Count(TicketStatus.Closed);
-            int rejected = Count(TicketStatus.Rejected);
-            int critical = await ticketsQuery.CountAsync(
-                t => t.Priority == TicketPriority.Critical,
-                cancellationToken);
-
-            double Pct(int v) => Math.Round(v * 100.0 / total, 1);
+            double Pct(int v) => Math.Round(v * 100.0 / Math.Max(total, 1), 1);
 
             var ticketCountsDto = new TicketCountsDto(
                 Open: open,
@@ -85,16 +97,23 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
                 OffsetCritical: 0,
                 OffsetRejected: Pct(critical),
                 OffsetClosed: Pct(critical) + Pct(rejected),
-                OffsetInProgress: Pct(critical) + Pct(rejected) + Pct(closed)
+                OffsetInProgress: Pct(critical) + Pct(rejected) + Pct(closed),
+                Breached: breached,
+                Resolved: resolved
             );
 
             // =============================
             // 2️⃣ SLA ALERTS (PAGED)
             // =============================
+            // Includes overdue tickets; finished tickets (closed/resolved/rejected) can't be at risk
+            var now = DateTime.UtcNow;
+            var nearSlaCutoff = now.AddHours(2);
+
             var slaBase = ticketsQuery
                 .Where(t => t.DueDate != null &&
-                            t.DueDate > DateTime.UtcNow &&
-                            t.Status != TicketStatus.Closed);
+                            t.Status != TicketStatus.Closed &&
+                            t.Status != TicketStatus.Resolved &&
+                            t.Status != TicketStatus.Rejected);
 
             int page = Math.Max(1, request.SlaAlertsPage);
             int size = Math.Max(1, request.SlaAlertsPageSize);
@@ -102,7 +121,7 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
             int totalPages = (int)Math.Ceiling(totalSla / (double)size);
 
             var slaAlerts = await slaBase
-                .OrderByDescending(t => t.IsBreached)
+                .OrderByDescending(t => t.IsBreached || t.DueDate <= now)
                 .ThenBy(t => t.DueDate)
                 .Skip((page - 1) * size)
                 .Take(size)
@@ -118,11 +137,10 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
                     Subject = t.IssueTitle ?? "",
                     Severity = t.Priority.ToString(),
                     CreatedAt = t.DateReceived,
-                    SlaStatus = t.IsBreached
+                    // Past due counts as breached even before the background job flags it
+                    SlaStatus = t.IsBreached || t.DueDate <= now
                         ? "Breached"
-                        : (t.DueDate.HasValue &&
-                           (t.DueDate.Value - DateTime.UtcNow).TotalHours <= 2 &&
-                           (t.DueDate.Value - DateTime.UtcNow).TotalSeconds > 0)
+                        : t.DueDate <= nearSlaCutoff
                             ? "NearSLA"
                             : "OnTrack"
                 })
@@ -131,9 +149,19 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
             // =============================
             // 3️⃣ AGENT PRODUCTIVITY
             // =============================
+            // Project only what is needed: the agent's first reply is computed in SQL
+            // instead of loading every ticket with its full message history.
             var agentTickets = await ticketsQuery
                 .Where(t => t.SupportedById != null)
-                .Include(t => t.Messages)
+                .Select(t => new
+                {
+                    t.SupportedById,
+                    t.DateReceived,
+                    t.ResolvedDate,
+                    FirstReplyAt = t.Messages
+                        .Where(m => m.SenderId == t.SupportedById)
+                        .Min(m => m.DateCreated)
+                })
                 .ToListAsync(cancellationToken);
 
             var agentStats = agentTickets
@@ -143,22 +171,14 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
          var list = g.ToList();
          int count = list.Count;
 
+         double FirstResponseMinutes(DateTime? firstReplyAt, DateTime received) =>
+             firstReplyAt.HasValue ? (firstReplyAt.Value - received).TotalMinutes : 0.0;
+
          // -----------------------------
          // Avg First Response (minutes)
          // -----------------------------
          double avgFirstResponse = list
-             .Select(t =>
-             {
-                 var msg = t.Messages
-                     .Where(m => m.SenderId == t.SupportedById)
-                     .OrderBy(m => m.DateCreated)
-                     .FirstOrDefault();
-
-                 if (msg?.DateCreated == null || t.DateReceived == null)
-                     return 0.0;
-
-                 return (msg.DateCreated.Value - t.DateReceived).TotalMinutes;
-             })
+             .Select(t => FirstResponseMinutes(t.FirstReplyAt, t.DateReceived))
              .DefaultIfEmpty(0)
              .Average();
 
@@ -166,17 +186,8 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
          // Proactiveness %
          // -----------------------------
          double proactivePct = count == 0 ? 0 : list.Count(t =>
-         {
-             var msg = t.Messages
-                 .Where(m => m.SenderId == t.SupportedById)
-                 .OrderBy(m => m.DateCreated)
-                 .FirstOrDefault();
-
-             if (msg?.DateCreated == null || t.DateReceived == null)
-                 return false;
-
-             return (msg.DateCreated.Value - t.DateReceived).TotalMinutes <= 15;
-         }) * 100.0 / count;
+             t.FirstReplyAt.HasValue &&
+             FirstResponseMinutes(t.FirstReplyAt, t.DateReceived) <= 15) * 100.0 / count;
 
          return new
          {
@@ -195,6 +206,7 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
                 .ToList();
 
             var users = await _db.UserAccounts
+                .AsNoTracking()
                 .Where(u => agentIds.Contains(u.Id ?? 0))
                 .Select(u => new { u.Id, u.FullName })
                 .ToListAsync(cancellationToken);
@@ -239,11 +251,12 @@ namespace ChatUp.Application.Features.Dashboard.Handlers
             // =============================
             // 5️⃣ AVERAGES
             // =============================
-            var resolved = agentTickets
+            var resolvedDurations = agentTickets
                 .Where(t => t.ResolvedDate.HasValue)
-                .Select(t => (t.ResolvedDate.Value - t.DateReceived).TotalHours);
+                .Select(t => (t.ResolvedDate!.Value - t.DateReceived).TotalHours)
+                .ToList();
 
-            double avgResolution = resolved.Any() ? resolved.Average() : 0;
+            double avgResolution = resolvedDurations.Any() ? resolvedDurations.Average() : 0;
 
             // =============================
             // FINAL DTO

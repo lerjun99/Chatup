@@ -2,51 +2,25 @@
 
 @if (Show)
 {
-    <div class="modal-overlay">
-        <div class="modal-content" style="
-        max-width: 200px !important;
-        width: 100%; ">
-            <div class="text-center mb-3">
-                <i class="bi bi-exclamation-triangle text-warning display-4"></i>
-            </div>
-            <h4 class="fw-bold text-danger text-center mb-2">Session Expired</h4>
-            <p class="text-muted text-center mb-4">
-                Your session has expired or is no longer valid. Please log in again to continue.
-            </p>
-
-            <button class="btn btn-primary w-100" @onclick="GoToLogin">
-                Return to Login
+    <div class="se-backdrop">
+        <div class="se-card" role="alertdialog" aria-modal="true" aria-labelledby="se-title" aria-describedby="se-text">
+            <div class="se-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
+            <h2 id="se-title">Your session has expired</h2>
+            <p id="se-text">For your security you've been signed out. Sign in again to pick up where you left off.</p>
+            <button class="se-btn" @onclick="GoToLogin">
+                <i class="fa-solid fa-right-to-bracket"></i> Sign in again
             </button>
         </div>
     </div>
 }
-<style>
-    .modal-overlay {
-        position: fixed;
-        inset: 0;
-        background-color: rgba(0, 0, 0, 0.6);
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        backdrop-filter: blur(2px);
-    }
 
-    .modal-content {
-        background-color: #fff;
-        border-radius: 12px;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
-        min-width: 400px;
-    }
-
-</style>
 @code {
     [Parameter] public bool Show { get; set; }
     [Parameter] public EventCallback<bool> ShowChanged { get; set; }
 
-    private void GoToLogin()
+    private async Task GoToLogin()
     {
-        ShowChanged.InvokeAsync(false);
+        await ShowChanged.InvokeAsync(false);
         Navigation.NavigateTo("/login", forceLoad: true);
     }
 }

@@ -1,0 +1,73 @@
+<div class="ix-emoji" role="dialog" aria-label="Emoji picker" @onclick:stopPropagation="true">
+    <div class="ix-emoji-tabs" role="tablist">
+        @if (Recent.Count > 0)
+        {
+            <button type="button" role="tab" title="Recently used"
+                    class="@(_active == RecentKey ? "is-active" : "")"
+                    aria-selected="@(_active == RecentKey)"
+                    @onclick="() => _active = RecentKey">
+                🕘
+            </button>
+        }
+        @foreach (var cat in Categories)
+        {
+            <button type="button" role="tab" title="@cat.Label"
+                    class="@(_active == cat.Key ? "is-active" : "")"
+                    aria-selected="@(_active == cat.Key)"
+                    @onclick="() => _active = cat.Key">
+                @cat.Icon
+            </button>
+        }
+    </div>
+
+    <div class="ix-emoji-title">@ActiveLabel</div>
+
+    <div class="ix-emoji-grid">
+        @foreach (var emoji in ActiveEmojis)
+        {
+            <button type="button" class="ix-emoji-btn" title="@emoji" @onclick="() => Pick(emoji)">@emoji</button>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Raised with the chosen emoji.</summary>
+    [Parameter] public EventCallback<string> OnPick { get; set; }
+
+    /// <summary>Recently used emoji, owned by the parent so it survives closing the picker.</summary>
+    [Parameter] public List<string> Recent { get; set; } = new();
+
+    private const string RecentKey = "recent";
+    private string? _active;
+
+    private sealed record Category(string Key, string Icon, string Label, string[] Emojis);
+
+    private static readonly Category[] Categories =
+    {
+        new("smileys", "😀", "Smileys",
+            Split("😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😋 😛 😜 🤪 😝 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 😌 😔 😪 😴 😷 🤒 🤕 🥵 🥶 😵 🤯 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬")),
+        new("gestures", "👍", "Gestures",
+            Split("👍 👎 👌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👋 🤚 🖐️ ✋ 🖖 👏 🙌 👐 🤲 🙏 🤝 💪 ✍️ 👀 🧠 🫡 🤷 🤦 🙋 🙆 🙅")),
+        new("celebrate", "❤️", "Hearts & celebration",
+            Split("❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💕 💞 💓 💗 💖 💘 💝 🎉 🎊 🎁 🏆 🥇 🏅 ⭐ 🌟 ✨ 🔥 💯 🎯 🙌 🍀 🌈 ☀️")),
+        new("work", "💻", "Work & tech",
+            Split("💻 🖥️ ⌨️ 🖱️ 📱 📞 ☎️ 📧 📩 📨 📎 📌 📍 📝 📄 📃 📊 📈 📉 🗂️ 📁 🗓️ 📅 ⏰ ⏳ ⌛ 🔧 🔨 🛠️ ⚙️ 🔒 🔓 🔑 💡 🐛 🚀 📦 🧾 🔍 ☕ 🍕")),
+        new("symbols", "✅", "Symbols",
+            Split("✅ ☑️ ✔️ ❌ ❎ ⚠️ ⛔ 🚫 ❓ ❔ ❗ ❕ ‼️ ⁉️ 💬 💭 🔔 🔕 ➡️ ⬅️ ⬆️ ⬇️ 🔄 🔁 ➕ ➖ 🆗 🆕 🆙 🔴 🟠 🟡 🟢 🔵 🟣 ⚫ ⚪"))
+    };
+
+    private string ActiveKey => _active ?? (Recent.Count > 0 ? RecentKey : Categories[0].Key);
+
+    private IEnumerable<string> ActiveEmojis =>
+        ActiveKey == RecentKey ? Recent : Categories.First(c => c.Key == ActiveKey).Emojis;
+
+    private string ActiveLabel =>
+        ActiveKey == RecentKey ? "Recently used" : Categories.First(c => c.Key == ActiveKey).Label;
+
+    protected override void OnInitialized() => _active = ActiveKey;
+
+    private Task Pick(string emoji) => OnPick.InvokeAsync(emoji);
+
+    private static string[] Split(string emojis) =>
+        emojis.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+}

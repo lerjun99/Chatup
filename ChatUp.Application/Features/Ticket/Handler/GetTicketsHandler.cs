@@ -131,52 +131,48 @@ public class GetTicketsHandler : IRequestHandler<GetTicketsQuery, PaginatedRespo
         // 7️⃣ Count total after filters
         var totalCount = await query.CountAsync(cancellationToken);
 
-        // 8️⃣ Pagination + eager loading
-        var tickets = await query
+        // 8️⃣ Pagination + projection: a single SQL query selecting only the list columns,
+        //    instead of loading every project member's full account to find one developer.
+        //    Concern/Description are left out — the list never shows them and they can be large.
+        var items = await query
             .OrderByDescending(t => t.DateReceived)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
-            .Include(t => t.RequestedBy)
-            .Include(t => t.SupportedBy)
-            .Include(t => t.Client)
-            .Include(t => t.Project)
-                .ThenInclude(p => p.UserProjects)
-                    .ThenInclude(up => up.UserAccount)
-            .AsNoTracking()
-            .ToListAsync(cancellationToken);
-
-        // 9️⃣ Map to DTO
-        var items = tickets.Select(t =>
-        {
-            var dev = t.Project?.UserProjects
-                        .Select(up => up.UserAccount)
-                        .FirstOrDefault(u => u.UserType == 4); // Developer
-
-            return new TicketDto(
+            .Select(t => new TicketDto(
                 t.Id,
                 t.TicketNo,
                 t.DateReceived,
                 t.IssueTitle,
-                t.Concern,
-                t.Description,
+                string.Empty,
+                string.Empty,
                 t.RequestedById,
-                t.RequestedBy?.FullName ?? "",
+                t.RequestedBy!.FullName ?? "",
                 t.ClientId,
-                t.Client?.ClientName ?? "",
+                t.Client!.ClientName ?? "",
                 t.ProjectId,
-                t.Project?.Title ?? "",
+                t.Project!.Title ?? "",
                 t.Status ?? TicketStatus.Open,
                 t.SupportedById,
-                t.SupportedBy?.FullName ?? "",
+                t.SupportedBy!.FullName ?? "",
                 t.Priority,
                 t.DueDate,
-                t.DueDate < DateTime.UtcNow || t.IsBreached,
+                // Persisted flag only: the client computes live SLA state from DueDate,
+                // and for finished tickets this tells "missed" apart from "met"
+                t.IsBreached,
                 t.IsArchived,
-                t.Client?.EmailAddress,
-                dev?.EmailAddress,
-                dev?.FullName
-            );
-        }).ToList();
+                string.Empty,
+                string.Empty,
+                t.RequestedBy!.EmailAddress,
+                t.Client!.EmailAddress,
+                t.Project!.UserProjects
+                    .Where(up => up.UserAccount.UserType == 4) // Developer
+                    .Select(up => up.UserAccount.EmailAddress)
+                    .FirstOrDefault(),
+                t.Project!.UserProjects
+                    .Where(up => up.UserAccount.UserType == 4)
+                    .Select(up => up.UserAccount.FullName)
+                    .FirstOrDefault()))
+            .ToListAsync(cancellationToken);
 
         return new PaginatedResponse<TicketDto>
         {

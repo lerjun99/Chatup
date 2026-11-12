@@ -1,0 +1,201 @@
+/* =========================================================
+   LOGIN LAYOUT (scoped) — split screen on desktop,
+   single scrolling column on phones
+========================================================= */
+
+.lg {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: #07121a;
+    font-family: "Segoe UI", Inter, system-ui, -apple-system, Roboto, sans-serif;
+}
+
+/* ---------- brand panel ---------- */
+.lg-brand { position: relative; overflow: hidden; }
+
+.lg-brand-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+.lg-brand-overlay {
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(11, 20, 55, .15) 0%, rgba(11, 20, 55, .55) 55%, rgba(11, 20, 55, .92) 100%),
+        linear-gradient(90deg, rgba(79, 70, 229, .25), transparent 60%);
+}
+
+.lg-brand-content {
+    position: absolute;
+    left: 48px;
+    right: 48px;
+    bottom: 100px;
+    color: #e2e8f0;
+}
+
+.lg-brand-logo { width: 150px; margin-bottom: 22px; filter: drop-shadow(0 2px 10px rgba(0,0,0,.35)); }
+
+.lg-brand-content h1 {
+    max-width: 460px;
+    margin: 0 0 18px;
+    color: #fff;
+    font-size: clamp(26px, 2.6vw, 36px);
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -.02em;
+}
+
+    .lg-brand-content h1 span {
+        background: linear-gradient(90deg, #a5b4fc, #67e8f9);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+
+.lg-brand-content ul { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.lg-brand-content li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14.5px;
+    color: #cbd5e1;
+}
+
+    .lg-brand-content li i {
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, .1);
+        color: #67e8f9;
+        font-size: 13px;
+        backdrop-filter: blur(6px);
+    }
+
+/* ---------- form panel ---------- */
+.lg-form {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 32px 24px;
+    background: radial-gradient(800px 500px at 50% 0%, #10204a 0%, #07121a 70%);
+}
+
+.aurora {
+    position: absolute;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    filter: blur(70px);
+    opacity: .55;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    animation: lg-float 14s ease-in-out infinite alternate;
+}
+
+.aurora-1 { top: -120px; left: -80px; background: #4f46e5; }
+.aurora-2 { right: -140px; bottom: -120px; background: #06b6d4; animation-delay: -5s; }
+.aurora-3 { top: 40%; left: 30%; width: 300px; height: 300px; background: #7c3aed; opacity: .35; animation-delay: -9s; }
+
+@keyframes lg-float {
+    from { transform: translate(0, 0) scale(1); }
+    to { transform: translate(40px, 30px) scale(1.12); }
+}
+
+.lg-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255,255,255,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(circle at 50% 40%, #000, transparent 75%);
+    -webkit-mask-image: radial-gradient(circle at 50% 40%, #000, transparent 75%);
+    pointer-events: none;
+}
+
+.falling-container {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.lg-mobile-brand { display: none; }
+
+.login-content {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    max-width: 440px;
+    color: #fff;
+}
+
+.lg-foot {
+    position: absolute;
+    bottom: 16px;
+    z-index: 2;
+    color: rgba(203, 213, 225, .55);
+    font-size: 12px;
+}
+
+/* falling shapes are created by falling.js outside Blazor's render tree,
+   so their rules can't be scoped — target them through the container */
+.falling-container ::deep .fall-wrap,
+::deep .fall-wrap {
+    position: absolute;
+    top: -10%;
+    left: 0;
+    animation: lg-drift 4s ease-in-out infinite;
+}
+
+::deep .fall {
+    display: inline-block;
+    color: rgba(255, 255, 255, .85);
+    text-shadow: 0 0 8px rgba(165, 180, 252, .5);
+    animation: lg-fall 5s linear forwards;
+}
+
+@keyframes lg-drift {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(30px); }
+}
+
+@keyframes lg-fall {
+    0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(360deg); opacity: .15; }
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 899.98px) {
+    .lg { grid-template-columns: minmax(0, 1fr); }
+    .lg-brand { display: none; }
+
+    .lg-form {
+        justify-content: flex-start;
+        min-height: 100dvh;
+        padding: 28px 16px 56px;
+        overflow: visible;
+    }
+
+    .lg-mobile-brand {
+        position: relative;
+        z-index: 2;
+        display: block;
+        margin: 8px 0 24px;
+    }
+
+        .lg-mobile-brand img { width: 140px; }
+
+    .aurora { width: 280px; height: 280px; filter: blur(50px); opacity: .45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .aurora, ::deep .fall-wrap, ::deep .fall { animation: none !important; }
+}

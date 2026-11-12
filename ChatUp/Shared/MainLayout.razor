@@ -1,13 +1,13 @@
 ﻿@inherits LayoutComponentBase
-@inject ChatUp.Services.SessionService SessionService
-@inject NavigationManager NavigationManager
 @implements IDisposable
 @attribute [StreamRendering]
-@inject IDialogService DialogService
 @using ChatUp.Application.Auth.Commands
-@using Microsoft.JSInterop;
-@inject TitleService TitleService
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.SignalR.Client
+@inject ChatUp.Services.SessionService SessionService
 @inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject TitleService TitleService
 @inject UserState UserState
 @inject IJSRuntime JS
 @inject HttpClient Http
@@ -21,284 +21,358 @@
 <FluentTooltipProvider />
 <FluentMessageBarProvider />
 <FluentMenuProvider />
-<link href="fontawesome/css/all.min.css" rel="stylesheet" asp-append-version="true" />
-<div class="page">
-<div class="page d-flex flex-column flex-md-row">
-    @* ── Drawer overlay (shown only when drawer open on mobile) ── *@
-    @if (_drawerOpen)
-    {
-        <div class="drawer-overlay" @onclick="CloseDrawer"></div>
-    }
 
-    @* ── Sidebar / Drawer ── *@
-    <div id="sidebarNav"
-         class="@SidebarCss"
-         role="navigation"
-         tabindex="-1"
-         @ref="_sidebar">
-        <NavMenu OnNavigate="CloseDrawer" />
-    </div>
+<div class="app @(_navCollapsed ? "is-nav-collapsed" : "") @(_drawerOpen ? "is-drawer-open" : "")"
+     @onkeydown="OnKeyDown">
 
-    @* ── Main content ── *@
-    <main class="layout-main flex-grow-1 d-flex flex-column">
-        <div class="top-row d-flex align-items-center gap-3 px-3 px-md-4">
-            <button class="btn btn-link d-md-none p-0" style="max-width:70px"
-                    @onclick="OpenDrawer"
-                    aria-controls="sidebarNav"
-                    aria-expanded="@_drawerOpen"
-                    aria-label="Open navigation">
-                <i class="fa-solid fa-window-maximize"></i>
+    <!-- ============ SIDEBAR / DRAWER ============ -->
+    <aside id="sidebarNav" class="app-sidebar" tabindex="-1" @ref="_sidebar">
+        <NavMenu Collapsed="@(_navCollapsed && !_drawerOpen)"
+                 ActiveKey="@ActiveItem?.Key"
+                 OpenTicketCount="_openTicketCount"
+                 OnNavigate="CloseDrawer"
+                 OnLogout="NavigateToLogout"
+                 OnToggleCollapse="ToggleCollapse" />
+    </aside>
+    <div class="app-scrim" @onclick="CloseDrawer"></div>
+
+    <!-- ============ MAIN ============ -->
+    <div class="app-main">
+        <header class="app-topbar">
+            <button class="app-icon-btn app-only-mobile" title="Open menu"
+                    aria-controls="sidebarNav" aria-expanded="@_drawerOpen" @onclick="OpenDrawer">
+                <i class="fa-solid fa-bars"></i>
             </button>
-          @*   <button class="btn btn-link" style="color: black !important;"
-                    @onclick="NavigateBack">
-                <i class="fa-solid fa-arrow-left"></i> 
-            </button> *@
-            <h2 class="page-title flex-grow-1 mb-0 text-truncate">@PageTitle</h2>
 
-           <div class="d-flex flex-column align-items-end">
-            <small class="text-success lh-sm" style="display: flex; align-items: center;">
-                <img src="@(!string.IsNullOrEmpty(UserState.AvatarUrl) ? UserState.AvatarUrl : "/images/default-avatar.png")"
-                     class="rounded-circle"
-                     style="width: 40px; height: 40px; object-fit: cover; margin-right: 20px; cursor: pointer;"
-                     @onclick="NavigateAccount" />
-                Hi, <b>@UserState.Username</b>
-            </small>
-        </div>
-        </div>
+            <div class="app-title">
+                <div class="app-crumb">
+                    <span>@(ActiveItem?.Section ?? "ChatUp")</span>
+                    @if (ActiveItem != null)
+                    {
+                        <i class="fa-solid fa-chevron-right"></i>
+                        <span>@ActiveItem.Label</span>
+                    }
+                </div>
+                <h1 title="@PageTitle">@PageTitle</h1>
+            </div>
 
-        <article class="form-scrollable flex-grow-1 overflow-auto px-3 px-md-4 py-3">
+            <div class="app-actions">
+                @if (InboxUrl != null)
+                {
+                    <a class="app-icon-btn app-bell" href="@InboxUrl" title="@(_openTicketCount > 0 ? $"{_openTicketCount} open tickets" : "Inbox")">
+                        <i class="fa-regular fa-bell"></i>
+                        @if (_openTicketCount > 0)
+                        {
+                            <span class="app-bell-badge">@(_openTicketCount > 99 ? "99+" : _openTicketCount.ToString())</span>
+                        }
+                    </a>
+                }
+
+                <div class="app-user">
+                    <button class="app-user-btn" aria-haspopup="menu" aria-expanded="@_userMenuOpen" @onclick="ToggleUserMenu">
+                        <span class="app-avatar">
+                            @if (!string.IsNullOrEmpty(UserState.AvatarUrl))
+                            {
+                                <img src="@UserState.AvatarUrl" alt="" />
+                            }
+                            else
+                            {
+                                @Initials(UserState.Username)
+                            }
+                        </span>
+                        <span class="app-user-text">
+                            <strong>@(UserState.Username ?? "Account")</strong>
+                            <small>@ChatUp.Shared.NavCatalog.RoleLabel(UserState.UserType)</small>
+                        </span>
+                        <i class="fa-solid fa-chevron-down app-user-caret"></i>
+                    </button>
+
+                    @if (_userMenuOpen)
+                    {
+                        <div class="app-menu-backdrop" @onclick="CloseUserMenu"></div>
+                        <div class="app-menu" role="menu">
+                            <div class="app-menu-head">
+                                <span class="app-avatar app-avatar-lg">
+                                    @if (!string.IsNullOrEmpty(UserState.AvatarUrl))
+                                    {
+                                        <img src="@UserState.AvatarUrl" alt="" />
+                                    }
+                                    else
+                                    {
+                                        @Initials(UserState.Username)
+                                    }
+                                </span>
+                                <div>
+                                    <strong>@UserState.Username</strong>
+                                    <small><span class="app-dot"></span> @ChatUp.Shared.NavCatalog.RoleLabel(UserState.UserType) · Online</small>
+                                </div>
+                            </div>
+                            <button role="menuitem" class="app-menu-item" @onclick="NavigateAccount">
+                                <i class="fa-regular fa-user"></i> My profile
+                            </button>
+                            <button role="menuitem" class="app-menu-item" @onclick="NavigateChangePassword">
+                                <i class="fa-solid fa-key"></i> Change password
+                            </button>
+                            <div class="app-menu-sep"></div>
+                            <button role="menuitem" class="app-menu-item is-danger" @onclick="NavigateToLogout">
+                                <i class="fa-solid fa-right-from-bracket"></i> Log out
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        </header>
+
+        <article class="app-content">
             @Body
         </article>
-    </main>
+    </div>
 
-    @* ── Bottom nav (mobile only) ── *@
-    @if (!_drawerOpen)  @* hide while drawer is open *@
-    {
-            <nav class="mobile-tabbar d-md-none" role="navigation">
-
-               @*  <a class='@BottomClass("/dashboard") nav-link' @onclick="NavigateDashboard" title="Dashboard">
-                    <i class="fa-solid fa-chart-simple"></i>
-                    <span class="d-none d-sm-inline">Dashboard</span>
-                </a> *@
-                 @if (UserState != null && UserState.UserType != 5)
-                {
-           
-                   <NavLink href="#"
-                         class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateDashboard">
-                    <i class="fa-solid fa-chart-simple"></i>
-                    <span style="color:white !important"></span>
-                </NavLink>
-                <NavLink href="#"
-                         class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateTicketList">
-                    <i class="fa-solid fa-list"></i>
-                    <span style="color:white !important"></span>
-                </NavLink>
-                <NavLink href="#"
-                         class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateInbox">
-                    <i class="fa-solid fa-comment"></i>
-                    <span style="color:white !important"></span>
-                </NavLink>
-                }
-           @*      <NavLink href="#"
-                         class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateChat">
-                    <i class="fa-solid fa-headset"></i>
-                    <span style="color:white !important"></span>
-                </NavLink> *@
-                @if (UserState != null && UserState.UserType is 1 or 5)
-                {
-                    <NavLink href="#"
-                    class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateApplicant">
-                    <i class="fa-solid fa-file-contract"></i>
-                    <span class="d-none d-sm-inline">Applicant</span>
-                 </NavLink>
-                }
-                @if (UserState != null && UserState.UserType == 1)
-                {   
-                <NavLink href="#"
-                         class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateContracts">
-                    <i class="fa-solid fa-file-contract"></i>
-                    <span class="d-none d-sm-inline">Contracts</span>
-                </NavLink>
-                <NavLink href="#"
-                         class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateAssign">
-                    <i class="fa-solid fa-tags"></i>
-                    <span class="d-none d-sm-inline">Account Assignment</span>
-                </NavLink>
-                <NavLink href="#"
-                         class="sidebar-link nav-link"
-                         Match="NavLinkMatch.Prefix"
-                         @onclick="NavigateRegister">
-                    <i class="fa-solid fa-address-card"></i>
-                    <span class="d-none d-sm-inline">Registration</span>
-                </NavLink>
-                }
-           @*      <a class="sidebar-link nav-link" @onclick="NavigateApplicant" title="Log Out">
-                  <i class="fa-solid fa-users"></i>>
-                    <span class="d-none d-sm-inline">Applicants</span>
-                </a> *@
-                <a class="sidebar-link nav-link" @onclick="NavigateToLogout" title="Log Out">
-                    <i class="fa-solid fa-right-from-bracket"></i>
-                    <span class="d-none d-sm-inline">Log Out</span>
-                </a>
-            </nav>
-    }
-
-</div>
+    <!-- ============ MOBILE TAB BAR ============ -->
+    <nav class="app-tabbar" aria-label="Quick navigation">
+        @foreach (var item in TabItems)
+        {
+            var url = ChatUp.Shared.NavCatalog.BuildUrl(item, UserState.UserId, LinkService);
+            var isActive = item.Key == ActiveItem?.Key;
+            <a @key="item.Key" href="@(url ?? "#")" class="app-tab @(isActive ? "is-active" : "")" aria-current="@(isActive ? "page" : null)">
+                <span class="app-tab-icon">
+                    <i class="@item.Icon"></i>
+                    @if (item.Key == "inbox" && _openTicketCount > 0)
+                    {
+                        <span class="app-tab-badge">@(_openTicketCount > 99 ? "99+" : _openTicketCount.ToString())</span>
+                    }
+                </span>
+                <span>@item.Label</span>
+            </a>
+        }
+        <button class="app-tab @(_drawerOpen ? "is-active" : "")" @onclick="OpenDrawer">
+            <span class="app-tab-icon"><i class="fa-solid fa-grip"></i></span>
+            <span>More</span>
+        </button>
+    </nav>
 </div>
 
-@* <div id="blazor-error-ui">
-    An unhandled error has occurred.
-    <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
-</div> *@
 <SessionExpiredModal @bind-Show="_showSessionExpired" />
 
-<script>
-    window.setupDropZone = (zoneId, inputId) => {
-      const zone = document.getElementById(zoneId);
-      const input = document.getElementById(inputId);
-
-      zone.addEventListener('dragover', e => e.preventDefault());
-      zone.addEventListener('drop', e => {
-        e.preventDefault();
-        if (!e.dataTransfer.files.length) return;
-
-        input.files = e.dataTransfer.files;
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-      });
-    };
-        window.triggerFileInput = id => {
-        const el = document.getElementById(id);
-        if (el) el.click();
-    };
-</script>
-
 @code {
-    private bool _showSessionExpired = false;
-    private bool _loaded;
-    // private void NavigateDashboard() => Navigate("/dashboard");
-    private void NavigateCalendar()
-    {
-        if (UserState.UserId.HasValue)
-        {
-            // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
-            var encodedToken = Uri.EscapeDataString(token);
-            Navigate($"/calendar/{encodedToken}");
-        }
-    }
-    private void NavigateDashboard()
-    {
-        if (UserState.UserId.HasValue)
-        {
-            // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
-            var encodedToken = Uri.EscapeDataString(token);
-            Navigate($"/dashboard/{encodedToken}");
-        }
-    }
-    // private void NavigateTicketList() => Navigate("/ticketlist");
-    private void NavigateApplicant() => Navigate("/applicants");
-    private void NavigateToUsers() => Navigate("/usermanagement");
-    private void NavigateContracts() => Navigate("/contractlist");
-    private void NavigateRegister() => Navigate("/users");
-    // private void NavigateInbox() => Navigate("/inbox");
-    private void NavigateInbox()
-    {
-        if (UserState.UserId.HasValue)
-        {
-            // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
-            var encodedToken = Uri.EscapeDataString(token);
-            Navigate($"/inbox/{encodedToken}");
-        }
-    }
-    private void NavigateTicketList()
-    {
-        if (UserState.UserId.HasValue)
-        {
-            // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
-            var encodedToken = Uri.EscapeDataString(token);
-            Navigate($"/ticketlist/{encodedToken}");
-        }
-    }
-    // private void NavigateRegister()
-    // {
-    //     if (UserState.UserId.HasValue)
-    //     {
-    //         // 🔐 Encrypt user ID
-    //         var token = LinkService.Protect(UserState.UserId.Value.ToString());
-    //         var encodedToken = Uri.EscapeDataString(token);
-    //         Navigate($"/user-registers/{encodedToken}");
-    //     }
-    // }
-    // private void NavigateAssign() => Navigate("/assignments");
-    private void NavigateAssign()
-    {
-        if (UserState.UserId.HasValue)
-        {
-            // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
-            var encodedToken = Uri.EscapeDataString(token);
-            Navigate($"/assignments/{encodedToken}");
-        }
-    }
-    // private void NavigateChat() => Navigate($"/chat/{UserState.UserId}");
-    private void NavigateChat()
-    {
-        if (UserState.UserId.HasValue)
-        {
-            // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
-            var encodedToken = Uri.EscapeDataString(token);
-            Navigate($"/chat/{encodedToken}");
-        }
-    }
-    /* ── Drawer state ── */
-    private bool _drawerOpen;
-    bool? canceled;
-    private ElementReference _sidebar;
+    private const string CollapsedStorageKey = "navCollapsed";
 
-    private void OpenDrawer() => _drawerOpen = true;
-    private void CloseDrawer() => _drawerOpen = false;
-    private void NavigateBack()
+    private bool _showSessionExpired;
+    private bool _drawerOpen;
+    private bool _focusSidebar;
+    private bool _navCollapsed;
+    private bool _userMenuOpen;
+    private int _openTicketCount;
+    private int? _countUserId;
+    private IDisposable? _ticketUpdateSubscription;
+    private ElementReference _sidebar;
+    private string PageTitle = string.Empty;
+
+    private ChatUp.Shared.NavItem? ActiveItem => ChatUp.Shared.NavCatalog.Active(Navigation.Uri);
+
+    // The bottom bar shows the first four destinations; everything else lives behind "More"
+    private IEnumerable<ChatUp.Shared.NavItem> TabItems =>
+        ChatUp.Shared.NavCatalog.VisibleFor(UserState.UserType).Take(4);
+
+    private string? InboxUrl
     {
-        Navigation.NavigateTo("/dashboard");
-    }
-    private async Task NavigateAccount()
-    {
-        if (UserState.UserId.HasValue)
+        get
         {
-            // 🔐 Encrypt user ID
-            var token = LinkService.Protect(UserState.UserId.Value.ToString());
-            var encodedToken = Uri.EscapeDataString(token);
-            int id = UserState.UserId ?? 0;
-            Navigation.NavigateTo($"/user-registers/{encodedToken}");
+            var inbox = ChatUp.Shared.NavCatalog.Items.First(i => i.Key == "inbox");
+            return inbox.IsVisibleFor(UserState.UserType)
+                ? ChatUp.Shared.NavCatalog.BuildUrl(inbox, UserState.UserId, LinkService)
+                : null;
         }
-       
-           
-        
     }
-    private async Task NavigateToLogout()
+
+    // =============================
+    // LIFECYCLE
+    // =============================
+    protected override void OnInitialized()
     {
+        PageTitle = TitleService.Title == "Default Title" ? string.Empty : TitleService.Title;
+        TitleService.OnTitleChanged += HandleTitleChanged;
+        UserState.OnChange += HandleUserStateChanged;
+        SessionService.OnSessionExpired += HandleSessionExpired;
+        ChatService.OnOpenTicketCountChanged += HandleOpenTicketCountChanged;
+        Navigation.LocationChanged += HandleLocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await UserState.LoadAsync();
+
+            try
+            {
+                _navCollapsed = await LocalStorage.GetItemAsync<bool>(CollapsedStorageKey);
+            }
+            catch
+            {
+                // Storage unavailable — keep the default expanded sidebar
+            }
+
+            await LoadTicketCountAsync();
+
+            // Re-render once with the loaded user — previously this ran after *every* render,
+            // which kept the whole layout re-rendering in a loop
+            StateHasChanged();
+        }
+
+        if (_focusSidebar)
+        {
+            _focusSidebar = false;
+            await _sidebar.FocusAsync(); // move focus into the drawer for keyboard/screen-reader users
+        }
+    }
+
+    private async Task LoadTicketCountAsync()
+    {
+        var userId = UserState.UserId;
+
+        // Fall back to the encrypted id kept in session storage
+        if (!userId.HasValue)
+        {
+            var savedUserId = await SessionStorage.GetItemAsync<string>("UserId");
+            if (!string.IsNullOrEmpty(savedUserId) &&
+                int.TryParse(LinkService.Unprotect(Uri.UnescapeDataString(savedUserId)), out var parsed))
+            {
+                userId = parsed;
+                UserState.UserId = parsed;
+            }
+        }
+
+        if (!userId.HasValue || UserState.UserType == 5)
+            return;
+
+        _countUserId = userId;
+
         try
         {
-            var dialog = await DialogService.ShowConfirmationAsync("Are you sure you want to log out?", "Yes", "No", "Warning");
+            await ChatService.LoadOpenTicketCount(userId.Value);
+
+            // Keep the count fresh — one subscription, disposed with the layout
+            _ticketUpdateSubscription ??= ChatService.HubConnection?.On("ReceiveTicketUpdate", async () =>
+            {
+                if (_countUserId.HasValue)
+                    await ChatService.LoadOpenTicketCount(_countUserId.Value);
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Open ticket count failed: {ex.Message}");
+        }
+    }
+
+    public void Dispose()
+    {
+        TitleService.OnTitleChanged -= HandleTitleChanged;
+        UserState.OnChange -= HandleUserStateChanged;
+        SessionService.OnSessionExpired -= HandleSessionExpired;
+        ChatService.OnOpenTicketCountChanged -= HandleOpenTicketCountChanged;
+        Navigation.LocationChanged -= HandleLocationChanged;
+        _ticketUpdateSubscription?.Dispose();
+    }
+
+    // =============================
+    // EVENT HANDLERS
+    // =============================
+    private void HandleTitleChanged(string title)
+    {
+        PageTitle = title;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleUserStateChanged() => InvokeAsync(StateHasChanged);
+
+    private void HandleOpenTicketCountChanged(int count)
+    {
+        _openTicketCount = count;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // Close overlays on navigation and refresh the active item
+        _drawerOpen = false;
+        _userMenuOpen = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async void HandleSessionExpired()
+    {
+        await InvokeAsync(() =>
+        {
+            _showSessionExpired = true;
+            StateHasChanged();
+        });
+    }
+
+    private void OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            _drawerOpen = false;
+            _userMenuOpen = false;
+        }
+    }
+
+    // =============================
+    // NAV STATE
+    // =============================
+    private void OpenDrawer()
+    {
+        _drawerOpen = true;
+        _userMenuOpen = false;
+        _focusSidebar = true;
+    }
+
+    private void CloseDrawer() => _drawerOpen = false;
+
+    private async Task ToggleCollapse()
+    {
+        _navCollapsed = !_navCollapsed;
+        try
+        {
+            await LocalStorage.SetItemAsync(CollapsedStorageKey, _navCollapsed);
+        }
+        catch
+        {
+            // Not persisted — still works for this session
+        }
+    }
+
+    private void ToggleUserMenu() => _userMenuOpen = !_userMenuOpen;
+    private void CloseUserMenu() => _userMenuOpen = false;
+
+    // =============================
+    // ACCOUNT
+    // =============================
+    private string? OwnToken =>
+        UserState.UserId.HasValue ? Uri.EscapeDataString(LinkService.Protect(UserState.UserId.Value.ToString())) : null;
+
+    private void NavigateAccount()
+    {
+        _userMenuOpen = false;
+        if (OwnToken is string token)
+            Navigation.NavigateTo($"/user-registers/{token}");
+    }
+
+    private void NavigateChangePassword()
+    {
+        _userMenuOpen = false;
+        if (OwnToken is string token)
+            Navigation.NavigateTo($"/change-password/{token}", true);
+    }
+
+    private async Task NavigateToLogout()
+    {
+        _userMenuOpen = false;
+
+        try
+        {
+            var dialog = await DialogService.ShowConfirmationAsync("Are you sure you want to log out?", "Log out", "Cancel", "Log out");
             var result = await dialog.Result;
             if (result.Cancelled) return;
 
@@ -307,6 +381,7 @@
             {
                 try
                 {
+                    // 🟢 Notify chat service user is offline, then the backend
                     if (ChatService != null)
                         await ChatService.SetUserOfflineAsync(userId.Value);
 
@@ -319,11 +394,10 @@
                     Console.WriteLine($"Logout service error: {ex.Message}");
                 }
             }
-            if (SessionStorage != null)
-                await SessionStorage.ClearAsync();
 
-            if (LocalStorage != null)
-                await LocalStorage.ClearAsync();
+            // 🧹 Clear both session & local storage
+            await SessionStorage.ClearAsync();
+            await LocalStorage.ClearAsync();
 
             if (UserState != null)
             {
@@ -338,8 +412,6 @@
             if (ChatService != null)
                 await ChatService.DisposeAsync();
 
-            await JS.InvokeVoidAsync("console.log", "User logged out.");
-
             Navigation.NavigateTo("/", forceLoad: true);
         }
         catch (Exception ex)
@@ -349,74 +421,14 @@
         }
     }
 
-    private string PageTitle = "Councilor List Page";
-
-    protected override void OnInitialized()
+    private static string Initials(string? name)
     {
-        TitleService.OnTitleChanged += HandleTitleChanged;
-        PageTitle = TitleService.Title;
-        UserState.OnChange += StateHasChanged;
-        SessionService.OnSessionExpired += HandleSessionExpired;
-    }
-    private async void HandleSessionExpired()
-    {
-        await InvokeAsync(() =>
+        var parts = (name ?? string.Empty).Split(new[] { ' ', '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
         {
-            _showSessionExpired = true;
-            StateHasChanged();
-        });
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
     }
-    private void HandleTitleChanged(string title)
-    {
-        PageTitle = title;
-        InvokeAsync(StateHasChanged);
-    }
-
-    public void Dispose()
-    {
-        TitleService.OnTitleChanged -= HandleTitleChanged;
-        UserState.OnChange -= StateHasChanged;
-        SessionService.OnSessionExpired -= HandleSessionExpired;
-    }
-    protected override async Task OnAfterRenderAsync(bool first)
-    {
-        if (first)
-            await UserState.LoadAsync(); // safe here
-        _loaded = true;
-        StateHasChanged(); // re-render after loading
-        if (_drawerOpen)
-            await _sidebar.FocusAsync();  // focus trap for a11y
-    }
-    private void Navigate(string url)
-    {
-        _drawerOpen = false;               // ensure drawer closed
-        NavigationManager.NavigateTo(url);
-    }
-
-    private void Logout()
-    {
-        NavigationManager.NavigateTo("/logout");
-    }
-
-    private string BottomClass(string href) =>
-        NavigationManager.Uri.EndsWith(href, StringComparison.OrdinalIgnoreCase)
-            ? "nav-item active"
-            : "nav-item";
-
-    private string GetPageNameFromUri()
-    {
-        var uri = new Uri(NavigationManager.Uri);
-        var segments = uri.Segments
-            .Select(s => s.Trim('/'))
-            .Where(s => !string.IsNullOrWhiteSpace(s) && !int.TryParse(s, out _)) // Exclude numeric parts
-            .ToList();
-
-        return segments.LastOrDefault() ?? "Untitled";
-    }
-
-    private string SidebarCss => _drawerOpen ? "sidebar-drawer open" : "sidebar-drawer";
 }
-
-<script>
-    window.isOnline = () => navigator.onLine;
-</script>

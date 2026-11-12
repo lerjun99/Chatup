@@ -43,7 +43,9 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
-
+    <!-- Odecci Monitor -->
+    <script src="js/monitor-config.js"></script>
+    <script async src="https://monitoring.odecci.tech/sdk/v1/monitor.js"></script>
     <!-- CORE SCRIPTS -->
     <script src="js/bootstrap.bundle.min.js"></script>
     <script src="js/intro.min.js"></script>
@@ -58,18 +60,7 @@
     <script src="js/activityTracker.js" defer></script>
     <script src="js/calendar.js" defer></script>
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
-    <!-- INLINE HELPERS -->
-    <script>
-        window.getScrollData = function (elementId) {
-            const el = document.getElementById(elementId);
-            if (!el) return null;
-
-            return {
-                scrollTop: el.scrollTop,
-                scrollHeight: el.scrollHeight,
-                clientHeight: el.clientHeight
-            };
-        };
-    </script>
+    <!-- HELPERS (a file, not inline: the Content-Security-Policy blocks inline scripts) -->
+    <script src="js/helpers.js"></script>
 </body>
 </html>

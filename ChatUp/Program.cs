@@ -2,12 +2,14 @@
 using Blazored.SessionStorage;
 using ChatUp.ChatHub;
 using ChatUp.Services;
+using ChatUp.Services.Security;
 using ChatUp.UserStatusHub;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Fast.Components.FluentUI;
+using Odecci.Monitor;
 var builder = WebApplication.CreateBuilder(args);
-
+builder.Services.AddOdecciMonitor(builder.Configuration);
 builder.Services.AddRazorPages();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -19,7 +21,14 @@ builder.Services.AddServerSideBlazor()
     });
 
 builder.Services.AddSignalR();
+
+// API key: every HttpClient (including the injected one) sends this UI's key to the ChatUp API
+builder.Services.AddSingleton<UiApiKeyStore>();
+builder.Services.AddTransient<ApiKeyMessageHandler>();
+builder.Services.ConfigureHttpClientDefaults(http => http.AddHttpMessageHandler<ApiKeyMessageHandler>());
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<ApiKeyAdminService>();
+
 builder.Services.AddDataProtection();
 
 builder.Services.AddControllers()
@@ -31,6 +40,7 @@ builder.Services.AddControllers()
 builder.Services.AddScoped<LinkService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<TitleService>();
+builder.Services.AddScoped<SlaService>();
 builder.Services.AddScoped<ContractService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<UserClientAssignmentService>();
@@ -38,7 +48,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ProjectAssignmentService>();
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddScoped<TicketNotificationService>();
-builder.Services.AddHostedService<ContractExpiryBackgroundService>();
+//builder.Services.AddHostedService<ContractExpiryBackgroundService>();
 builder.Services.AddScoped<PasswordRecoveryService>();
 builder.Services.AddScoped<ApplicantApiService>();
 //builder.Services.AddScoped<BusinessCalendarService>();
@@ -50,7 +60,12 @@ builder.Services.AddScoped<UserState>();
 
 builder.Services.AddFluentUIComponents();
 
+// Don't advertise the server software (Kestrel); IIS's own header is removed in web.config
+builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+
 var app = builder.Build();
+app.UseMiddleware<SecurityHeadersMiddleware>();
+app.UseOdecciMonitor();
 app.UseCors("AllowAll");
 app.UseHttpsRedirection();
 app.UseStaticFiles();

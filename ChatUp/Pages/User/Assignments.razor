@@ -7,656 +7,778 @@
 @using ChatUp.Services
 @inject HttpClient Http
 @inject NavigationManager Navigation
-@inject IJSRuntime JS
 @inject ChatUp.Services.UserClientAssignmentService AssignmentService
 @inject ChatUp.Services.ProjectAssignmentService ProjectAssignmentService
 @inject IDialogService DialogService
-<h3 class="text-primary fw-bold mb-3">
-    👥 Account Assignment
-</h3>
+<link href="css/assignments.css" rel="stylesheet" />
 
-<!-- 🔥 NEW: Added TAB Navigation -->
-<div class="elegant-tabs-wrapper mb-4">
-    <div class="elegant-tabs">
-        <button class='elegant-tab @(activeTab == "client" ? "active" : "")'
-                @onclick='() => SwitchTab("client")'>
-            <i class="fa-solid fa-users me-2"></i> Suppoprt Assignment
-        </button>
+<div class="as">
 
-        <button class='elegant-tab @(activeTab == "dev" ? "active" : "")'
-                @onclick='() => SwitchTab("dev")'>
-            <i class="fa-solid fa-laptop-code me-2"></i> DevTeam Assignment
-        </button>
-
-        <div class="elegant-tab-indicator"
-             style='--tab-index:@(activeTab == "client" ? 0 : 1);'>
+    <!-- ============ HEADER ============ -->
+    <header class="as-hero">
+        <div>
+            <div class="as-eyebrow"><i class="fa-solid fa-shield-halved"></i> Access control</div>
+            <h1>Account Assignments</h1>
+            <p>Decide which support agents handle which clients, and which developers work on which projects.</p>
         </div>
-    </div>
-</div>
-<div class="tab-content">
+        <button class="as-btn as-btn-glass" @onclick="AddNewAssignment" disabled="@isLoading">
+            <i class="fa-solid fa-plus"></i> @(activeTab == "dev" ? "Assign developer" : "Assign support agent")
+        </button>
+    </header>
 
-    <!-- =============================== -->
-    <!--       CLIENT ASSIGNMENTS TAB    -->
-    <!-- =============================== -->
-    <div class="tab-pane fade @(activeTab == "client" ? "show active" : "")" id="clientsTab" role="tabpanel">
+    <!-- ============ STATS ============ -->
+    <section class="as-stats" aria-label="Summary">
+        <div class="as-stat">
+            <span class="as-stat-icon"><i class="fa-solid fa-headset"></i></span>
+            <div><strong>@SupportGroups.Count</strong><span>Support agents</span></div>
+        </div>
+        <div class="as-stat">
+            <span class="as-stat-icon"><i class="fa-solid fa-building"></i></span>
+            <div><strong>@CoveredClientCount</strong><span>Clients covered</span></div>
+        </div>
+        <div class="as-stat">
+            <span class="as-stat-icon"><i class="fa-solid fa-diagram-project"></i></span>
+            <div><strong>@projectAssignments.Count</strong><span>Projects</span></div>
+        </div>
+        <div class="as-stat">
+            <span class="as-stat-icon"><i class="fa-solid fa-laptop-code"></i></span>
+            <div><strong>@DeveloperCount</strong><span>Developers assigned</span></div>
+        </div>
+    </section>
 
-        <div class="mb-3 d-flex justify-content-end">
-            <button class="btn btn-success rounded-pill px-3" @onclick="AddNewAssignment">
-                <i class="fa-solid fa-thumbtack"></i> Add New Assignment
+    <!-- ============ TOOLBAR ============ -->
+    <section class="as-toolbar">
+        <div class="as-tabs" role="tablist">
+            <button role="tab" class="@(activeTab == "client" ? "is-active" : "")" aria-selected="@(activeTab == "client")" @onclick='() => SwitchTab("client")'>
+                <i class="fa-solid fa-users"></i> Support ↔ Clients <span>@SupportGroups.Count</span>
+            </button>
+            <button role="tab" class="@(activeTab == "dev" ? "is-active" : "")" aria-selected="@(activeTab == "dev")" @onclick='() => SwitchTab("dev")'>
+                <i class="fa-solid fa-laptop-code"></i> Dev team ↔ Projects <span>@projectAssignments.Count</span>
             </button>
         </div>
 
-        @if (isLoading)
+        <div class="as-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search" aria-label="Search"
+                   placeholder="@(activeTab == "dev" ? "Search project, client or developer…" : "Search agent or client…")"
+                   @bind="searchText" @bind:event="oninput" />
+            @if (!string.IsNullOrEmpty(searchText))
+            {
+                <button class="as-search-clear" title="Clear search" @onclick='() => searchText = string.Empty'>
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+        </div>
+
+        <button class="as-btn as-btn-ghost" @onclick="ToggleAll">
+            <i class="fa-solid @(AllExpanded ? "fa-compress" : "fa-expand")"></i>
+            <span class="as-hide-sm">@(AllExpanded ? "Collapse all" : "Expand all")</span>
+        </button>
+    </section>
+
+    @if (notice != null)
+    {
+        <div class="as-alert as-alert-ok" role="status">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>@notice</span>
+            <button class="as-icon-btn" title="Dismiss" @onclick="() => notice = null"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    }
+    @if (loadError != null)
+    {
+        <div class="as-alert as-alert-error" role="alert">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>@loadError</span>
+            <button class="as-btn as-btn-ghost as-btn-sm" @onclick="ReloadAllAsync">Try again</button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        for (var i = 0; i < 4; i++)
         {
-            <div class="text-center text-muted py-5">
-                <div class="spinner-border text-primary" role="status"></div>
-                <div>Loading assignments...</div>
-            </div>
+            <div class="as-skel"></div>
         }
-        else if (assignments == null || !assignments.Any())
+    }
+    else if (activeTab == "client")
+    {
+        <!-- ============ SUPPORT ↔ CLIENTS ============ -->
+        @if (!VisibleSupportGroups.Any())
         {
-            <div class="alert alert-warning text-center mt-3">
-                No client assignments found.
+            <div class="as-empty">
+                <i class="fa-solid fa-user-plus"></i>
+                <p>@(string.IsNullOrWhiteSpace(searchText) ? "No support agents are assigned to clients yet." : $"Nothing matches “{searchText}”.")</p>
+                @if (string.IsNullOrWhiteSpace(searchText))
+                {
+                    <button class="as-btn as-btn-primary" @onclick="AddNewAssignment"><i class="fa-solid fa-plus"></i> Assign a support agent</button>
+                }
             </div>
         }
         else
         {
-            @foreach (var userGroup in assignments
-                    .Where(a => a.UserType == 2) // Support users only
-                    .GroupBy(a => a.UserName))
+            @foreach (var group in VisibleSupportGroups)
             {
-                var userId = userGroup.Key.Replace(" ", "_").Replace(".", "_").Replace("@", "_");
-                var collapseId = $"user_{userId}";
-                var assignedCount = userGroup.Count();
-                var iconId = $"icon_{collapseId}";
+                var key = $"s_{group.Key}";
+                var isOpen = IsExpanded(key);
 
-                <div class="mb-3 rounded shadow-sm user-collapse">
-                    <button class="btn w-100 d-flex justify-content-between align-items-center user-btn"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#@collapseId"
-                            aria-expanded="true"
-                            @onclick="@(() => ToggleIcon(collapseId))">
-                        <span>
-                            <strong>@userGroup.First().FullName</strong> (@userGroup.Key)
-                            <span class="badge bg-light text-dark ms-2">@assignedCount client(s)</span>
+                <article @key="key" class="as-group @(isOpen ? "is-open" : "")">
+                    <button class="as-group-head" aria-expanded="@isOpen" @onclick="() => Toggle(key)">
+                        <span class="as-avatar">
+                            @if (AvatarSrc(group.AvatarUrl) is string src)
+                            {
+                                <img src="@src" alt="" />
+                            }
+                            else
+                            {
+                                @Initials(group.FullName)
+                            }
                         </span>
-                        <i class="fa-solid fa-chevron-down rotate-icon" id="@iconId"></i>
+                        <span class="as-group-text">
+                            <strong>@Fallback(group.FullName, group.UserName)</strong>
+                            <small>@@@group.UserName</small>
+                        </span>
+                        <span class="as-chip">@Plural(group.Items.Count, "client")</span>
+                        <i class="fa-solid fa-chevron-down as-caret"></i>
                     </button>
 
-                    <div class="collapse mt-2" id="@collapseId">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-secondary">
-                                    <tr>
-                                        <th>Client Name</th>
-                                        <th>Email</th>
-                                        <th>Location</th>
-                                        <th>Client User Accounts</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (var item in userGroup)
-                                    {
-                                        <tr>
-                                            <td class="fw-semibold">@item.ClientName</td>
-                                            <td>@item.UserEmail</td>
-                                            <td>@item.Location</td>
-                                            <td>
-                                                @if (item.UserAccounts != null && item.UserAccounts.Any())
-                                                {
-                                                    var rowCollapseId = $"accounts_{item.ClientName}_{item.UserName}"
-                                                    .Replace(" ", "_").Replace(".", "_").Replace("@", "_");
+                    @if (isOpen)
+                    {
+                        <div class="as-group-body">
+                            <div class="as-rows">
+                                <div class="as-row as-row-head as-cols-client">
+                                    <span>Client</span>
+                                    <span>Location</span>
+                                    <span>Client user accounts</span>
+                                    <span></span>
+                                </div>
 
-                                                    var rowIconId = $"icon_{rowCollapseId}";
-
-                                                    <button class="btn btn-sm btn-outline-primary w-100 d-flex justify-content-between align-items-center"
-                                                            type="button"
-                                                            data-bs-toggle="collapse"
-                                                            data-bs-target="#@rowCollapseId"
-                                                            aria-expanded="false"
-                                                            @onclick="@(() => ToggleRowIcon(rowCollapseId))">
-                                                        User Accounts (@item.UserAccounts.Count)
-                                                        <i class="fa-solid fa-chevron-down rotate-icon" id="@rowIconId"></i>
-                                                    </button>
-                                                }
-                                                else
-                                                {
-                                                    <span class="text-muted fst-italic">No Account users</span>
-                                                }
-                                            </td>
-
-                                            <td class="d-flex gap-2">
-                                                <button class="btn btn-sm btn-info text-white rounded-pill px-3" @onclick="() => EditAssignment(item)">
-                                                    <i class="fa-solid fa-pencil"></i> Edit
-                                                </button>
-                                                <button class="btn btn-danger rounded-pill px-3" @onclick="() => DeleteAssignment(item.Id)">
-                                                    <i class="fa-solid fa-trash"></i> Delete
-                                                </button>
-                                            </td>
-                                        </tr>
-
-                                        @if (item.UserAccounts != null && item.UserAccounts.Any())
-                                        {
-                                            <tr class="collapse" id="@($"accounts_{item.ClientName}_{item.UserName}".Replace(" ", "_").Replace(".", "_").Replace("@", "_"))">
-                                                <td colspan="5">
-                                                    <div class="p-2 rounded bg-light">
-                                                        <ul class="mb-0 ps-3">
-                                                            @foreach (var u in item.UserAccounts)
-                                                            {
-                                                                <li>
-                                                                    <strong>@u.FullName</strong>
-                                                                    <span class="text-muted">(@u.Username)</span><br />
-                                                                    <small>@u.EmailAddress</small>
-                                                                </li>
-                                                            }
-                                                        </ul>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            }
-        }
-    </div>
-    <div class="tab-pane fade @(activeTab == "dev" ? "show active" : "")" id="devTab" role="tabpanel" style="overflow: auto;height: 800px;">
-
-        <div class="mb-3 d-flex justify-content-end">
-            <button class="btn btn-success rounded-pill px-3" @onclick="AddNewAssignment">
-                <i class="fa-solid fa-thumbtack"></i> Add New DevTeam Assignment
-            </button>
-        </div>
-
-        @if (isLoading)
-        {
-            <div class="text-center text-muted py-5">
-                <div class="spinner-border text-primary" role="status"></div>
-                <div>Loading developer assignments...</div>
-            </div>
-        }
-        else if (projectAssignments == null || !projectAssignments.Any())
-        {
-            <div class="alert alert-warning text-center mt-3">
-                No developer assignments found.
-            </div>
-        }
-        else
-        {
-            @foreach (var project in projectAssignments)
-            {
-                var collapseId = $"devproj_{project.Id}";
-                var iconId = $"icon_{collapseId}";
-
-                <div class="mb-3 rounded shadow-sm user-collapse">
-                    <button class="btn w-100 d-flex justify-content-between align-items-center user-btn"
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#@collapseId"
-                            aria-expanded="true"
-                            @onclick="@(() => ToggleIcon(collapseId))">
-
-                        <span style="text-align: start; ">
-                            <strong>@project.Title</strong>
-                            <span class="badge bg-light text-dark ms-2">
-                                @project.Users.Count user(s)
-                            </span>
-                            <br />
-                            <small class="text-muteds">@project.ClientName</small>
-                        </span>
-
-                        <i class="fa-solid fa-chevron-down rotate-icon" id="@iconId"></i>
-                    </button>
-
-                    <div class="collapse mt-2" id="@collapseId">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-secondary">
-                                    <tr>
-                                        <th>User Name</th>
-                                        <th>User Type</th>
-                                        <th>Team</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody>
-                                    @if (project.Users.Any())
-                                    {
-                                        @foreach (var dev in project.Users)
-                                        {
-                                            <tr>
-                                                <td>@dev.FullName</td>
-                                                <td>@dev.UserType</td>
-                                                <td>@dev.TeamName</td>
-                                                <td>
-                                                    <button class="btn btn-sm btn-info text-white rounded-pill px-3"
-                                                            @onclick="() => EditDevAssignment(project.Id, dev.Id )">
-                                                        <i class="fa-solid fa-pencil"></i> Edit
-                                                    </button>
-
-                                                    <button class="btn btn-danger rounded-pill px-3"
-                                                            @onclick="() => DeleteDevAssignment(project.Id, dev.Id)">
-                                                        <i class="fa-solid fa-trash"></i> Remove
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        <tr>
-                                            <td colspan="4" class="text-center text-muted fst-italic py-3">
-                                                No dev users assigned to this project.
-                                            </td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                </div>
-            }
-        }
-    </div>
-
-</div>
-@if (isModalVisible)
-{
-    <div class="modal show d-block custom-modal-overlay" tabindex="-1">
-        <div class="modal-dialog modal-dialog-centered modal-lg">
-            <div class="modal-content custom-modal-content p-4">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-semibold mb-0 text-primary">@((isEdit ? "Edit" : "New") + " Assignment")</h5>
-                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
-                </div>
-
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">User</label>
-                    <div class="dropdown user-dropdown">
-                        <button class="btn border w-100 text-start d-flex align-items-center justify-content-between"
-                                type="button" @onclick="ToggleUserDropdown">
-                            <div class="d-flex align-items-center">
-                                @if (selectedUser != null)
+                                @foreach (var item in group.Items)
                                 {
-                                    <img src="@selectedUser.AvatarUrl" class="client-avatar me-2" />
-                                    <span>@selectedUser.Name</span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">-- Select User --</span>
+                                    var accountsKey = $"a_{item.Id}";
+                                    var accountsOpen = IsExpanded(accountsKey);
+
+                                    <div @key="item.Id" class="as-row as-cols-client">
+                                        <div class="as-cell-main">
+                                            <span class="as-avatar as-avatar-sm as-avatar-client">@Initials(item.ClientName)</span>
+                                            <div>
+                                                <div class="as-strong">@Fallback(item.ClientName)</div>
+                                                <div class="as-muted as-small">@Fallback(item.UserEmail, "No email")</div>
+                                            </div>
+                                        </div>
+                                        <div class="as-cell" data-label="Location">
+                                            <i class="fa-solid fa-location-dot as-muted"></i> @Fallback(item.Location)
+                                        </div>
+                                        <div class="as-cell" data-label="Accounts">
+                                            @if (item.UserAccounts?.Any() == true)
+                                            {
+                                                <button class="as-pill-btn @(accountsOpen ? "is-open" : "")" @onclick="() => Toggle(accountsKey)">
+                                                    <i class="fa-solid fa-user-group"></i> @Plural(item.UserAccounts.Count, "account")
+                                                    <i class="fa-solid fa-chevron-down as-caret-sm"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="as-muted as-small">No client accounts</span>
+                                            }
+                                        </div>
+                                        <div class="as-actions">
+                                            <button class="as-icon-btn" title="Change assignment" @onclick="() => EditAssignment(item)">
+                                                <i class="fa-solid fa-pen"></i>
+                                            </button>
+                                            <button class="as-icon-btn is-danger" title="Remove assignment"
+                                                    disabled="@(busyId == item.Id)"
+                                                    @onclick="() => DeleteAssignment(item)">
+                                                <i class="fa-solid @(busyId == item.Id ? "fa-circle-notch fa-spin" : "fa-trash-can")"></i>
+                                            </button>
+                                        </div>
+
+                                        @if (accountsOpen && item.UserAccounts?.Any() == true)
+                                        {
+                                            <ul class="as-accounts">
+                                                @foreach (var u in item.UserAccounts)
+                                                {
+                                                    <li>
+                                                        <span class="as-avatar as-avatar-xs">@Initials(u.FullName)</span>
+                                                        <div>
+                                                            <div class="as-strong">@Fallback(u.FullName) <span class="as-muted">@@@u.Username</span></div>
+                                                            <div class="as-muted as-small">@Fallback(u.EmailAddress, "No email")</div>
+                                                        </div>
+                                                        @if (u.isLoggedIn == 1)
+                                                        {
+                                                            <span class="as-online" title="Online"></span>
+                                                        }
+                                                    </li>
+                                                }
+                                            </ul>
+                                        }
+                                    </div>
                                 }
                             </div>
-                            <i class="bi bi-chevron-down text-muted"></i>
+                        </div>
+                    }
+                </article>
+            }
+        }
+    }
+    else
+    {
+        <!-- ============ DEV TEAM ↔ PROJECTS ============ -->
+        @if (!VisibleProjects.Any())
+        {
+            <div class="as-empty">
+                <i class="fa-solid fa-laptop-code"></i>
+                <p>@(string.IsNullOrWhiteSpace(searchText) ? "No projects found." : $"Nothing matches “{searchText}”.")</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var project in VisibleProjects)
+            {
+                var key = $"p_{project.Id}";
+                var isOpen = IsExpanded(key);
+
+                <article @key="key" class="as-group @(isOpen ? "is-open" : "")">
+                    <button class="as-group-head" aria-expanded="@isOpen" @onclick="() => Toggle(key)">
+                        <span class="as-avatar as-avatar-project"><i class="fa-solid fa-diagram-project"></i></span>
+                        <span class="as-group-text">
+                            <strong>@Fallback(project.Title)</strong>
+                            <small><i class="fa-solid fa-building"></i> @Fallback(project.ClientName, "No client")</small>
+                        </span>
+                        <span class="as-chip @(project.Users.Count == 0 ? "is-warn" : "")">@Plural(project.Users.Count, "member")</span>
+                        <i class="fa-solid fa-chevron-down as-caret"></i>
+                    </button>
+
+                    @if (isOpen)
+                    {
+                        <div class="as-group-body">
+                            @if (!project.Users.Any())
+                            {
+                                <div class="as-group-empty">
+                                    <span><i class="fa-solid fa-triangle-exclamation"></i> Nobody is assigned to this project yet.</span>
+                                    <button class="as-btn as-btn-ghost as-btn-sm" @onclick="() => AddDeveloperToProject(project)">
+                                        <i class="fa-solid fa-plus"></i> Assign developer
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="as-rows">
+                                    <div class="as-row as-row-head as-cols-dev">
+                                        <span>Member</span>
+                                        <span>Role</span>
+                                        <span>Team</span>
+                                        <span></span>
+                                    </div>
+
+                                    @foreach (var dev in project.Users)
+                                    {
+                                        <div @key="dev.Id" class="as-row as-cols-dev">
+                                            <div class="as-cell-main">
+                                                <span class="as-avatar as-avatar-sm">
+                                                    @if (AvatarSrc(dev.AvatarUrl) is string src)
+                                                    {
+                                                        <img src="@src" alt="" />
+                                                    }
+                                                    else
+                                                    {
+                                                        @Initials(dev.FullName)
+                                                    }
+                                                </span>
+                                                <span class="as-strong">@Fallback(dev.FullName)</span>
+                                            </div>
+                                            <div class="as-cell" data-label="Role">
+                                                <span class="as-role as-role-@dev.UserType">@RoleLabel(dev.UserType)</span>
+                                            </div>
+                                            <div class="as-cell" data-label="Team">@Fallback(dev.TeamName, "No team")</div>
+                                            <div class="as-actions">
+                                                <button class="as-icon-btn" title="Change assignment" @onclick="() => EditDevAssignment(project, dev)">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </button>
+                                                <button class="as-icon-btn is-danger" title="Remove from project"
+                                                        disabled="@(busyId == dev.Id)"
+                                                        @onclick="() => DeleteDevAssignment(project, dev)">
+                                                    <i class="fa-solid @(busyId == dev.Id ? "fa-circle-notch fa-spin" : "fa-user-minus")"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </article>
+            }
+        }
+    }
+</div>
+
+<!-- ============ ASSIGNMENT MODAL ============ -->
+@if (isModalVisible)
+{
+    <div class="as-modal-backdrop" @onclick="CloseModal">
+        <div class="as-modal" role="dialog" aria-modal="true" aria-labelledby="as-modal-title" @onclick:stopPropagation="true">
+            <header class="as-modal-head">
+                <div>
+                    <h2 id="as-modal-title">@(isEdit ? "Change" : "New") @(activeTab == "dev" ? "developer assignment" : "support assignment")</h2>
+                    <p>@(activeTab == "dev" ? "Give a developer access to a client's project." : "Make a support agent responsible for a client.")</p>
+                </div>
+                <button class="as-icon-btn" title="Close" @onclick="CloseModal"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+
+            <div class="as-modal-body">
+                <!-- USER -->
+                <div class="as-field">
+                    <label>@(activeTab == "dev" ? "Developer" : "Support agent")</label>
+                    <div class="as-select-wrap">
+                        <button type="button" class="as-select @(validationTried && selectedUser == null ? "is-invalid" : "")" @onclick="ToggleUserDropdown">
+                            @if (selectedUser != null)
+                            {
+                                <span class="as-avatar as-avatar-xs">@Initials(selectedUser.Name)</span>
+                                <span class="as-select-value">@selectedUser.Name</span>
+                            }
+                            else
+                            {
+                                <span class="as-muted">Select a @(activeTab == "dev" ? "developer" : "support agent")…</span>
+                            }
+                            <i class="fa-solid fa-chevron-down"></i>
                         </button>
 
                         @if (isUserDropdownOpen)
                         {
-                            <div class="dropdown-menu show w-100 shadow-lg border-0 rounded-3 mt-2 p-2" style="max-height: 300px; overflow-y: auto;">
-                                <input type="text"
-                                       class="form-control form-control-sm mb-2"
-                                       placeholder="🔍 Search user..."
-                                       @bind="userSearchText"
-                                       @bind:event="oninput" />
-
-                                @if (isLoadingUsers)
-                                {
-                                    <div class="dropdown-item text-center text-muted py-2">Loading users...</div>
-                                }
-                                else if (FilteredUsers.Any())
-                                {
-                                    @foreach (var u in FilteredUsers)
+                            <div class="as-menu">
+                                <input class="as-menu-search" type="search" placeholder="Search by name…" @bind="userSearchText" @bind:event="oninput" />
+                                <div class="as-menu-list">
+                                    @if (FilteredUsers.Any())
                                     {
-                                        <div class="dropdown-item d-flex align-items-center client-option py-2 @(selectedUser?.Id == u.Id ? "active" : "")"
-                                             @onclick="() => SelectUser(u)">
-                                            <img src="@u.AvatarUrl" class="client-avatar me-2" />
-                                            <span>@u.Name</span>
-                                        </div>
+                                        @foreach (var u in FilteredUsers)
+                                        {
+                                            <button type="button" class="as-menu-item @(selectedUser?.Id == u.Id ? "is-selected" : "")" @onclick="() => SelectUser(u)">
+                                                <span class="as-avatar as-avatar-xs">@Initials(u.Name)</span>
+                                                <span>@u.Name</span>
+                                                @if (selectedUser?.Id == u.Id)
+                                                {
+                                                    <i class="fa-solid fa-check"></i>
+                                                }
+                                            </button>
+                                        }
                                     }
-                                }
-                                else
-                                {
-                                    <div class="dropdown-item text-center text-muted py-2">No users found.</div>
-                                }
+                                    else
+                                    {
+                                        <div class="as-menu-empty">No matching users.</div>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
+                    @if (validationTried && selectedUser == null)
+                    {
+                        <small class="as-error">Please choose a user.</small>
+                    }
                 </div>
 
-                <!-- Client Dropdown -->
-                <div class="mb-3">
-                    <label class="form-label fw-semibold">Client</label>
-                    <div class="dropdown client-dropdown">
-                        <button class="btn border w-100 text-start d-flex align-items-center justify-content-between"
-                                type="button" @onclick="ToggleClientDropdown">
-                            <div class="d-flex align-items-center">
-                                @if (selectedClient != null)
-                                {
-                                    <img src="@selectedClient.PhotoUrl" class="client-avatar me-2" />
-                                    <span>@selectedClient.ClientName</span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">-- Select Client --</span>
-                                }
-                            </div>
-                            <i class="bi bi-chevron-down text-muted"></i>
+                <!-- CLIENT -->
+                <div class="as-field">
+                    <label>Client</label>
+                    <div class="as-select-wrap">
+                        <button type="button" class="as-select @(validationTried && selectedClient == null ? "is-invalid" : "")" @onclick="ToggleClientDropdown">
+                            @if (selectedClient != null)
+                            {
+                                <span class="as-avatar as-avatar-xs as-avatar-client">@Initials(selectedClient.ClientName)</span>
+                                <span class="as-select-value">@selectedClient.ClientName</span>
+                            }
+                            else
+                            {
+                                <span class="as-muted">Select a client…</span>
+                            }
+                            <i class="fa-solid fa-chevron-down"></i>
                         </button>
 
                         @if (isClientDropdownOpen)
                         {
-                            <div class="dropdown-menu show w-100 shadow-lg border-0 rounded-3 mt-2 p-2" style="max-height: 300px; overflow-y: auto;">
-                                <input type="text"
-                                       class="form-control form-control-sm mb-2"
-                                       placeholder="🔍 Search client..."
-                                       @bind="clientSearchText"
-                                       @bind:event="oninput" />
-
-                                @if (FilteredClients.Any())
-                                {
-                                    @foreach (var c in FilteredClients)
+                            <div class="as-menu">
+                                <input class="as-menu-search" type="search" placeholder="Search clients…" @bind="clientSearchText" @bind:event="oninput" />
+                                <div class="as-menu-list">
+                                    @if (FilteredClients.Any())
                                     {
-                                        <div class="dropdown-item d-flex align-items-center client-option py-2 @(selectedClient?.Id == c.Id ? "active" : "")"
-                                             @onclick="() => SelectClient(c)">
-                                            <img src="@c.PhotoUrl" class="client-avatar me-2" />
-                                            <span>@c.ClientName</span>
-                                        </div>
+                                        @foreach (var c in FilteredClients)
+                                        {
+                                            <button type="button" class="as-menu-item @(selectedClient?.Id == c.Id ? "is-selected" : "")" @onclick="() => SelectClient(c)">
+                                                <span class="as-avatar as-avatar-xs as-avatar-client">@Initials(c.ClientName)</span>
+                                                <span>@c.ClientName</span>
+                                                @if (selectedClient?.Id == c.Id)
+                                                {
+                                                    <i class="fa-solid fa-check"></i>
+                                                }
+                                            </button>
+                                        }
                                     }
-                                }
-                                else
-                                {
-                                    <div class="dropdown-item text-center text-muted py-2">No clients found.</div>
-                                }
+                                    else
+                                    {
+                                        <div class="as-menu-empty">No matching clients.</div>
+                                    }
+                                </div>
                             </div>
                         }
                     </div>
-                    @if (activeTab == "dev")
+                    @if (validationTried && selectedClient == null)
                     {
-                    <div class="mb-3">
+                        <small class="as-error">Please choose a client.</small>
+                    }
+                </div>
+
+                <!-- PROJECT (dev only) -->
+                @if (activeTab == "dev")
+                {
+                    <div class="as-field">
                         <label>Project</label>
-                        @if (isLoadingProjects)
+                        @if (selectedClient == null)
                         {
-                            <div class="text-muted fst-italic">Loading projects...</div>
+                            <div class="as-hint"><i class="fa-solid fa-circle-info"></i> Choose a client first to see its projects.</div>
+                        }
+                        else if (isLoadingProjects)
+                        {
+                            <div class="as-hint"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading projects…</div>
+                        }
+                        else if (!projects.Any())
+                        {
+                            <div class="as-hint"><i class="fa-solid fa-triangle-exclamation"></i> This client has no projects yet.</div>
                         }
                         else
                         {
-                            <InputSelect class="form-select" @bind-Value="selectedProjectId">
-                                <option value="0">-- Select Project --</option>
+                            <select class="as-native-select @(validationTried && selectedProjectId == 0 ? "is-invalid" : "")" @bind="selectedProjectId">
+                                <option value="0">Select a project…</option>
                                 @foreach (var p in projects)
                                 {
                                     <option value="@p.Id">@p.Title</option>
                                 }
-                            </InputSelect>
+                            </select>
+                        }
+                        @if (validationTried && selectedClient != null && selectedProjectId == 0 && projects.Any())
+                        {
+                            <small class="as-error">Please choose a project.</small>
                         }
                     </div>
-                    }
-                </div>
+                }
 
-
-                <div class="d-flex justify-content-end mt-4">
-                    <button class="btn btn-light border me-2" @onclick="CloseModal">Cancel</button>
-                    <button class="btn btn-primary px-4" @onclick="SaveAssignment">
-                        <i class="bi bi-save me-1"></i> Save
-                    </button>
-                </div>
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="as-alert as-alert-error"><i class="fa-solid fa-circle-exclamation"></i><span>@errorMessage</span></div>
+                }
             </div>
+
+            <footer class="as-modal-foot">
+                <button class="as-btn as-btn-ghost" @onclick="CloseModal" disabled="@isSaving">Cancel</button>
+                <button class="as-btn as-btn-primary" @onclick="SaveAssignment" disabled="@isSaving">
+                    <i class="fa-solid @(isSaving ? "fa-circle-notch fa-spin" : "fa-floppy-disk")"></i>
+                    @(isSaving ? "Saving…" : isEdit ? "Save changes" : "Create assignment")
+                </button>
+            </footer>
         </div>
     </div>
 }
 
-
 @code {
-    private List<ProjectDto> projectAssignments { get; set; } = new();
-    private bool isLoadingProjects = true;
-    private bool isLoadingUsers = true;
-    private int selectedProjectId;
-    private List<ProjectDto> projects = new();
-    private List<UserClientAssignmentDto>? assignments;
-    private bool isLoading = true;
-    [Parameter] public string EncryptedId { get; set; }
-    [Inject] public LinkService LinkService { get; set; }
+    [Parameter] public string EncryptedId { get; set; } = string.Empty;
+    [Inject] public LinkService LinkService { get; set; } = default!;
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
     private int UserId;
-    private bool isModalVisible = false;
+
+    // Data
+    private List<UserClientAssignmentDto> assignments = new();
+    private List<ProjectDto> projectAssignments = new();
     private List<ClientDto> clients = new();
+    private List<UserDto> allUsers = new();
+    private List<ProjectDto> projects = new();
+
+    // Page state
+    private bool isLoading = true;
+    private string? loadError;
+    private string? notice;
+    private int? busyId;
+    private string activeTab = "client";
+    private string searchText = string.Empty;
+    private readonly HashSet<string> expanded = new();
+
+    // Modal state
+    private bool isModalVisible;
+    private bool isEdit;
+    private bool isSaving;
+    private bool validationTried;
+    private bool isLoadingProjects;
+    private int selectedProjectId;
     private UserClientAssignmentDto model = new();
-    private List<UserDto> users = new();
-    private bool isEdit = false;
     private UserDto? selectedUser;
     private ClientDto? selectedClient;
-    private string errorMessage;
-    private bool isUserDropdownOpen = false;
-    private bool isClientDropdownOpen = false;
-
+    private string? errorMessage;
+    private bool isUserDropdownOpen;
+    private bool isClientDropdownOpen;
     private string userSearchText = string.Empty;
     private string clientSearchText = string.Empty;
-    private string activeTab = "client";
 
-    private async Task SwitchTab(string tab)
+    private sealed record SupportGroup(string Key, string? UserName, string? FullName, string? AvatarUrl, List<UserClientAssignmentDto> Items);
+
+    // =============================
+    // DERIVED VIEW DATA
+    // =============================
+    private List<SupportGroup> SupportGroups => assignments
+        .Where(a => a.UserType == 2) // Support users only
+        .GroupBy(a => a.UserId?.ToString() ?? a.UserName ?? string.Empty)
+        .Select(g => new SupportGroup(g.Key, g.First().UserName, g.First().FullName, g.First().AvatarUrl, g.ToList()))
+        .OrderBy(g => g.FullName)
+        .ToList();
+
+    private IEnumerable<SupportGroup> VisibleSupportGroups
     {
-        activeTab = tab;
+        get
+        {
+            if (string.IsNullOrWhiteSpace(searchText))
+                return SupportGroups;
 
-
-        await LoadUsers(UserId);
+            return SupportGroups
+                .Select(g => Matches(g.FullName) || Matches(g.UserName)
+                    ? g
+                    : g with { Items = g.Items.Where(i => Matches(i.ClientName) || Matches(i.Location)).ToList() })
+                .Where(g => g.Items.Any());
+        }
     }
+
+    private IEnumerable<ProjectDto> VisibleProjects =>
+        string.IsNullOrWhiteSpace(searchText)
+            ? projectAssignments
+            : projectAssignments.Where(p => Matches(p.Title) || Matches(p.ClientName) || p.Users.Any(u => Matches(u.FullName)));
+
+    private int CoveredClientCount => assignments.Where(a => a.UserType == 2).Select(a => a.ClientId).Distinct().Count();
+    private int DeveloperCount => projectAssignments.SelectMany(p => p.Users).Select(u => u.UserId).Distinct().Count();
+
+    private IEnumerable<UserDto> TabUsers =>
+        allUsers.Where(u => u.UserType == (activeTab == "dev" ? 4 : 2)); // Dev users / Support users
+
     private IEnumerable<UserDto> FilteredUsers => string.IsNullOrWhiteSpace(userSearchText)
-        ? users
-        : users.Where(u => u.Name.Contains(userSearchText, StringComparison.OrdinalIgnoreCase));
+        ? TabUsers
+        : TabUsers.Where(u => (u.Name ?? string.Empty).Contains(userSearchText, StringComparison.OrdinalIgnoreCase));
 
     private IEnumerable<ClientDto> FilteredClients => string.IsNullOrWhiteSpace(clientSearchText)
         ? clients
-        : clients.Where(c => c.ClientName.Contains(clientSearchText, StringComparison.OrdinalIgnoreCase));
+        : clients.Where(c => (c.ClientName ?? string.Empty).Contains(clientSearchText, StringComparison.OrdinalIgnoreCase));
 
-    private void ToggleUserDropdown() => isUserDropdownOpen = !isUserDropdownOpen;
-    private void ToggleClientDropdown() => isClientDropdownOpen = !isClientDropdownOpen;
-    private void SelectUser(UserDto u)
+    private bool Matches(string? value) =>
+        !string.IsNullOrEmpty(value) && value.Contains(searchText.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    // =============================
+    // EXPAND / COLLAPSE (pure component state — no Bootstrap/JS)
+    // =============================
+    private IEnumerable<string> GroupKeys => activeTab == "dev"
+        ? VisibleProjects.Select(p => $"p_{p.Id}")
+        : VisibleSupportGroups.Select(g => $"s_{g.Key}");
+
+    // While searching, every matching group is shown open
+    private bool IsExpanded(string key) =>
+        expanded.Contains(key) || (!string.IsNullOrWhiteSpace(searchText) && !key.StartsWith("a_"));
+
+    private bool AllExpanded => GroupKeys.Any() && GroupKeys.All(IsExpanded);
+
+    private void Toggle(string key)
     {
-        selectedUser = u;
-        model.UserId = u.Id;
-        isUserDropdownOpen = false;
+        if (!expanded.Remove(key))
+            expanded.Add(key);
     }
 
-    private async Task SelectClient(ClientDto c)
+    private void ToggleAll()
     {
-        selectedClient = c;
-        model.ClientId = c.Id;
-        isClientDropdownOpen = false;
-        await LoadProjects(c.Id);
-        StateHasChanged();
+        if (AllExpanded)
+            expanded.Clear();
+        else
+            foreach (var key in GroupKeys)
+                expanded.Add(key);
     }
-    private async Task LoadProjects(int clientId)
+
+    private void SwitchTab(string tab)
     {
-        try
-        {
-            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Projects/GetByClient/{clientId}").ToString();
-            // var url = "https://localhost:7296/Projects/GetByClient/GetByClient/2";
-            var response = await Http.GetAsync(url);
-            if (!response.IsSuccessStatusCode) return;
-
-            var rawJson = await response.Content.ReadAsStringAsync();
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-
-            projects = JsonSerializer.Deserialize<List<ProjectDto>>(rawJson, options) ?? new List<ProjectDto>();
-            isLoadingProjects = false;
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Failed to load projects: {ex.Message}");
-        }
+        // Users are loaded once and filtered per tab — switching tabs is instant
+        activeTab = tab;
+        searchText = string.Empty;
     }
+
+    // =============================
+    // LOADING
+    // =============================
     protected override async Task OnInitializedAsync()
     {
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+        if (string.IsNullOrEmpty(decrypted) || !int.TryParse(decrypted, out UserId))
+        {
+            Navigation.NavigateTo("/unauthorized");
+            return;
+        }
+
+        await ReloadAllAsync();
+    }
+
+    private async Task ReloadAllAsync()
+    {
+        isLoading = true;
+        loadError = null;
+
         try
         {
-            isLoading = true;
-            var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
-            if (string.IsNullOrEmpty(decrypted))
-            {
-                Navigation.NavigateTo("/unauthorized");
-                return;
-            }
-
-            UserId = int.Parse(decrypted);
-            await LoadAssignments();
-            await LoadClients();
-            await LoadUserProjects();
-            await LoadUsers(UserId);
-
+            // Independent requests run concurrently instead of one after another
+            await Task.WhenAll(LoadAssignments(), LoadClients(), LoadUserProjects(), LoadUsers());
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error loading assignments: {ex.Message}");
-            assignments = new List<UserClientAssignmentDto>();
+            loadError = "Couldn't load assignments. Check your connection and try again.";
         }
         finally
         {
             isLoading = false;
         }
     }
-    private async Task LoadUsers(int? id = null)
+
+    private async Task LoadAssignments() =>
+        assignments = await AssignmentService.GetAllAsync() ?? new List<UserClientAssignmentDto>();
+
+    private async Task LoadUserProjects() =>
+        projectAssignments = await ProjectAssignmentService.GetAllAsync() ?? new List<ProjectDto>();
+
+    private async Task LoadClients() =>
+        clients = await Http.GetFromJsonAsync<List<ClientDto>>($"{AppConfig.ChatUrl}Client/GetAll") ?? new();
+
+    private async Task LoadUsers()
     {
-        isLoadingUsers = true;
-        StateHasChanged();
         try
         {
-            string endpoint;
-
-            // 🔹 Select API endpoint depending on tab
-       
-        
-                endpoint = $"{AppConfig.ChatUrl}User/GetUsers";
-         
-
-            string url = Navigation.ToAbsoluteUri(endpoint).ToString();
-
-            var response = await Http.GetAsync(url);
-            var rawJson = await response.Content.ReadAsStringAsync();
-
-            if (!response.IsSuccessStatusCode) return;
-
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var allUsers = JsonSerializer.Deserialize<List<UserDto>>(rawJson, options) ?? new List<UserDto>();
-
-            // 🔹 Filter users by active tab
-            users = activeTab == "dev"
-                ? allUsers.Where(u => u.UserType == 4).ToList()   // Dev users
-                : allUsers.Where(u => u.UserType == 2).ToList();  // Support users
+            allUsers = await Http.GetFromJsonAsync<List<UserDto>>($"{AppConfig.ChatUrl}User/GetUsers", JsonOptions) ?? new();
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Failed to load users: {ex.Message}");
         }
+    }
+
+    private async Task LoadProjects(int clientId)
+    {
+        isLoadingProjects = true;
+        projects = new();
+        StateHasChanged();
+
+        try
+        {
+            projects = await Http.GetFromJsonAsync<List<ProjectDto>>($"{AppConfig.ChatUrl}Projects/GetByClient/{clientId}", JsonOptions) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to load projects: {ex.Message}");
+        }
         finally
         {
-            isLoadingUsers = false;
-            StateHasChanged();
+            isLoadingProjects = false;
         }
     }
-    private async Task LoadAssignments()
+
+    // =============================
+    // MODAL
+    // =============================
+    private void ToggleUserDropdown()
     {
-        isLoading = true;
-        assignments = await AssignmentService.GetAllAsync();
-        assignments ??= new List<UserClientAssignmentDto>();
-        isLoading = false;
-    }
-    private async Task LoadUserProjects()
-    {
-        isLoading = true;
-        projectAssignments = await ProjectAssignmentService.GetAllAsync();
-        projectAssignments ??= new List<ProjectDto>();
-        isLoading = false;
-    }
-    private async Task LoadClients()
-    {
-        string url = $@"{AppConfig.ChatUrl}Client/GetAll";
-        clients = await Http.GetFromJsonAsync<List<ClientDto>>(url) ?? new();
+        isUserDropdownOpen = !isUserDropdownOpen;
+        isClientDropdownOpen = false;
     }
 
-    // private async Task LoadUsers()
-    // {
-    //     users = await Http.GetFromJsonAsync<List<UserDto>>("https://localhost:7296/User/GetAll") ?? new();
-    // }
-
-    private void ToggleIcon(string collapseId)
+    private void ToggleClientDropdown()
     {
-        var js = $@"
-            var icon = document.getElementById('icon_{collapseId}');
-            var collapseEl = document.getElementById('{collapseId}');
-            collapseEl.addEventListener('shown.bs.collapse', function () {{
-                icon.style.transform = 'rotate(180deg)';
-            }});
-            collapseEl.addEventListener('hidden.bs.collapse', function () {{
-                icon.style.transform = 'rotate(0deg)';
-            }});
-        ";
-        _ = JS.InvokeVoidAsync("eval", js);
+        isClientDropdownOpen = !isClientDropdownOpen;
+        isUserDropdownOpen = false;
     }
 
-    private void ToggleRowIcon(string collapseId)
+    private void SelectUser(UserDto u)
     {
-        var js = $@"
-            var icon = document.getElementById('icon_{collapseId}');
-            var collapseEl = document.getElementById('{collapseId}');
-            collapseEl.addEventListener('shown.bs.collapse', function () {{
-                icon.style.transform = 'rotate(180deg)';
-            }});
-            collapseEl.addEventListener('hidden.bs.collapse', function () {{
-                icon.style.transform = 'rotate(0deg)';
-            }});
-        ";
-        _ = JS.InvokeVoidAsync("eval", js);
+        selectedUser = u;
+        model.UserId = u.Id;
+        isUserDropdownOpen = false;
+        userSearchText = string.Empty;
+    }
+
+    private async Task SelectClient(ClientDto c)
+    {
+        var changed = selectedClient?.Id != c.Id;
+        selectedClient = c;
+        model.ClientId = c.Id;
+        isClientDropdownOpen = false;
+        clientSearchText = string.Empty;
+
+        if (activeTab == "dev" && changed)
+        {
+            selectedProjectId = 0;
+            await LoadProjects(c.Id);
+        }
+    }
+
+    private void ResetModal()
+    {
+        model = new UserClientAssignmentDto();
+        selectedUser = null;
+        selectedClient = null;
+        selectedProjectId = 0;
+        projects = new();
+        errorMessage = null;
+        validationTried = false;
+        isUserDropdownOpen = false;
+        isClientDropdownOpen = false;
+        userSearchText = string.Empty;
+        clientSearchText = string.Empty;
     }
 
     private void AddNewAssignment()
     {
-        model = new UserClientAssignmentDto();
+        ResetModal();
         isEdit = false;
         isModalVisible = true;
     }
 
+    private async Task AddDeveloperToProject(ProjectDto project)
+    {
+        ResetModal();
+        isEdit = false;
+        isModalVisible = true;
+        selectedClient = clients.FirstOrDefault(c => c.Id == project.ClientId);
+        if (selectedClient != null)
+        {
+            model.ClientId = selectedClient.Id;
+            await LoadProjects(selectedClient.Id);
+            selectedProjectId = project.Id;
+        }
+    }
+
     private void EditAssignment(UserClientAssignmentDto a)
     {
+        ResetModal();
         model = new UserClientAssignmentDto
         {
             Id = a.Id,
             UserId = a.UserId,
             ClientId = a.ClientId
         };
+
+        // Show the current values instead of empty pickers
+        selectedUser = allUsers.FirstOrDefault(u => u.Id == a.UserId)
+                       ?? new UserDto { Id = a.UserId ?? 0, Name = a.FullName ?? a.UserName ?? string.Empty };
+        selectedClient = clients.FirstOrDefault(c => c.Id == a.ClientId);
+
         isEdit = true;
         isModalVisible = true;
     }
-    private async Task EditDevAssignment(int projectId, int userId)
+
+    private async Task EditDevAssignment(ProjectDto project, ChatUp.Application.Features.Projects.DTOs.UserAccountDto dev)
     {
-        // Find the project
-        var project = projectAssignments.FirstOrDefault(p => p.Id == projectId);
-        if (project == null) return;
-        // Find the user in the project
-        var dev = project.Users.FirstOrDefault(u => u.Id == userId);
-        if (dev == null) return;
-        isLoadingProjects = false;
-        // Set modal values
-    
-        // Pre-select the user
-        selectedUser = new UserDto
-        {
+        ResetModal();
 
-            Id = dev.Id,
-            Name = dev.FullName,
-            AvatarUrl = dev.AvatarUrl
-        };
+        // dev.Id is the project-assignment id; dev.UserId is the user's account id
+        selectedUser = allUsers.FirstOrDefault(u => u.Id == dev.UserId)
+                       ?? new UserDto { Id = dev.UserId, Name = dev.FullName ?? string.Empty };
 
-
-        // Pre-select the client associated with the project
-        selectedClient = clients.FirstOrDefault(c => c.Id == project.ClientId);
-        await LoadProjects(selectedClient.Id);
-        selectedProjectId = projectId;
-    
-        // Fill the model for editing
         model = new UserClientAssignmentDto
         {
             Id = dev.Id,
@@ -668,139 +790,88 @@
         isEdit = true;
         isModalVisible = true;
 
-        // Trigger UI update
-        StateHasChanged();
+        selectedClient = clients.FirstOrDefault(c => c.Id == project.ClientId);
+        if (selectedClient != null)
+        {
+            await LoadProjects(selectedClient.Id);
+            selectedProjectId = project.Id;
+        }
     }
-    private async Task DeleteDevAssignment(int projectId, int userId)
+
+    private void CloseModal()
     {
-        try
-        {
-            var isSuccess = await ProjectAssignmentService.DeleteAsync(userId);
-
-            if (isSuccess)
-            {
-                projectAssignments = await ProjectAssignmentService.GetAllAsync();
-                await DialogService.ShowSuccessAsync("User removed successfully!");
-            }
-            else
-            {
-                await DialogService.ShowErrorAsync("Failed to remove user assignment.");
-            }
-        }
-        catch (Exception ex)
-        {
-            await DialogService.ShowErrorAsync($"Error deleting assignment: {ex.Message}");
-        }
-
-        StateHasChanged();
+        if (!isSaving)
+            isModalVisible = false;
     }
+
     private async Task SaveAssignment()
     {
+        validationTried = true;
+        errorMessage = null;
+
+        if (selectedUser == null || selectedClient == null || (activeTab == "dev" && selectedProjectId == 0))
+            return;
+
+        isSaving = true;
+        model.UserId = selectedUser.Id;
+        model.ClientId = selectedClient.Id;
+
         try
         {
-            errorMessage = string.Empty;
-
-            // Map selected user & client
-            if (selectedUser != null)
-                model.UserId = selectedUser.Id;
-
-            if (selectedClient != null)
-                model.ClientId = selectedClient.Id;
-
-            // Determine type
-            model.UserType = activeTab == "dev" ? 4 : 2;
-
             if (activeTab == "dev")
             {
-                // -------------------- DEV PROJECT ASSIGNMENT --------------------
                 var projectDto = new UserProjectAssignmentDto
                 {
                     Id = model.Id,
-                    UserId = model.UserId ?? 0,
+                    UserId = selectedUser.Id,
                     ProjectId = selectedProjectId,
                     UserType = 4
                 };
 
-                bool isSuccess;
-
                 if (isEdit)
-                {
                     await ProjectAssignmentService.UpdateAsync(projectDto);
-                    isSuccess = true;
-                }
                 else
-                {
                     await ProjectAssignmentService.CreateAsync(projectDto);
-                    isSuccess = true;
-                }
 
-                // Refresh UI list
-                projectAssignments = await ProjectAssignmentService.GetAllAsync();
-
-                if (isSuccess)
-                    await DialogService.ShowSuccessAsync(
-                        isEdit ? "Project assignment updated successfully!"
-                               : "Project assignment created successfully!");
+                await LoadUserProjects();
+                expanded.Add($"p_{selectedProjectId}");
+                notice = isEdit ? "Developer assignment updated." : $"{selectedUser.Name} was assigned to the project.";
             }
             else
             {
-                // -------------------- CLIENT ASSIGNMENT --------------------
                 var clientDto = new UserClientAssignmentDto
                 {
                     Id = model.Id,
-                    UserId = model.UserId,
-                    ClientId = model.ClientId,
+                    UserId = selectedUser.Id,
+                    ClientId = selectedClient.Id,
                     UserType = 2
                 };
 
-                bool isSuccess;
-
                 if (isEdit)
-                {
                     await AssignmentService.UpdateAsync(clientDto);
-                    isSuccess = true;
-                }
                 else
-                {
                     await AssignmentService.CreateAsync(clientDto);
-                    isSuccess = true;
-                }
 
-                // Refresh UI list
-                assignments = await AssignmentService.GetAllAsync();
-
-                if (isSuccess)
-                    await DialogService.ShowSuccessAsync(
-                        isEdit ? "Client assignment updated successfully!"
-                               : "Client assignment created successfully!");
+                await LoadAssignments();
+                expanded.Add($"s_{selectedUser.Id}");
+                notice = isEdit ? "Support assignment updated." : $"{selectedUser.Name} now supports {selectedClient.ClientName}.";
             }
 
-            // -------------------- FINAL UI RESET --------------------
             isModalVisible = false;
-            selectedUser = null;
-            selectedClient = null;
-            model = new UserClientAssignmentDto();
-            errorMessage = string.Empty;
-        }
-        catch (InvalidOperationException invalidEx)
-        {
-            errorMessage = ExtractMessage(invalidEx.Message);
-        }
-        catch (HttpRequestException httpEx)
-        {
-            errorMessage = ExtractMessage(httpEx.Message);
         }
         catch (Exception ex)
         {
             errorMessage = ExtractMessage(ex.Message);
+            if (string.IsNullOrWhiteSpace(errorMessage))
+                errorMessage = "Couldn't save the assignment. Please try again.";
         }
-
-        if (!string.IsNullOrWhiteSpace(errorMessage))
-            await DialogService.ShowWarningAsync(errorMessage);
-
-        StateHasChanged();
+        finally
+        {
+            isSaving = false;
+        }
     }
-    private string ExtractMessage(string rawMessage)
+
+    private static string ExtractMessage(string rawMessage)
     {
         if (string.IsNullOrWhiteSpace(rawMessage))
             return string.Empty;
@@ -818,11 +889,111 @@
 
         return rawMessage;
     }
-    private async Task DeleteAssignment(int id)
+
+    // =============================
+    // DELETE
+    // =============================
+    private async Task<bool> ConfirmAsync(string message)
     {
-        if (await AssignmentService.DeleteAsync(id))
-            await LoadAssignments();
+        var dialog = await DialogService.ShowConfirmationAsync(message, "Remove", "Cancel");
+        var result = await dialog.Result;
+        return !result.Cancelled;
     }
 
-    private void CloseModal() => isModalVisible = false;
+    private async Task DeleteAssignment(UserClientAssignmentDto item)
+    {
+        if (!await ConfirmAsync($"Remove {item.FullName ?? item.UserName} from {item.ClientName}?"))
+            return;
+
+        busyId = item.Id;
+        notice = null;
+        try
+        {
+            if (await AssignmentService.DeleteAsync(item.Id))
+            {
+                // Update locally instead of reloading everything
+                assignments.Remove(item);
+                notice = $"{item.FullName ?? item.UserName} no longer supports {item.ClientName}.";
+            }
+            else
+            {
+                await DialogService.ShowErrorAsync("Failed to remove the assignment.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowErrorAsync($"Error removing assignment: {ex.Message}");
+        }
+        finally
+        {
+            busyId = null;
+        }
+    }
+
+    private async Task DeleteDevAssignment(ProjectDto project, ChatUp.Application.Features.Projects.DTOs.UserAccountDto dev)
+    {
+        if (!await ConfirmAsync($"Remove {dev.FullName} from {project.Title}?"))
+            return;
+
+        busyId = dev.Id;
+        notice = null;
+        try
+        {
+            if (await ProjectAssignmentService.DeleteAsync(dev.Id))
+            {
+                project.Users.Remove(dev);
+                notice = $"{dev.FullName} was removed from {project.Title}.";
+            }
+            else
+            {
+                await DialogService.ShowErrorAsync("Failed to remove user assignment.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await DialogService.ShowErrorAsync($"Error removing assignment: {ex.Message}");
+        }
+        finally
+        {
+            busyId = null;
+        }
+    }
+
+    // =============================
+    // FORMATTING
+    // =============================
+    private static string Fallback(string? value, string? fallback = "—") =>
+        string.IsNullOrWhiteSpace(value) ? fallback ?? "—" : value;
+
+    private static string Plural(int n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")}";
+
+    private static string RoleLabel(int? userType) => userType switch
+    {
+        1 => "Admin",
+        2 => "Support",
+        3 => "Client",
+        4 => "Developer",
+        _ => "Member"
+    };
+
+    private static string Initials(string? name)
+    {
+        var parts = (name ?? string.Empty).Split(new[] { ' ', '.', '_' }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
+    }
+
+    // Avatars arrive as URLs, data URIs or raw base64; the default placeholder is shown as initials
+    private static string? AvatarSrc(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Contains("default", StringComparison.OrdinalIgnoreCase))
+            return null;
+        if (value.StartsWith("data:") || value.StartsWith("http") || value.StartsWith("/") || value.StartsWith("images/"))
+            return value;
+        return $"data:image/png;base64,{value}";
+    }
 }

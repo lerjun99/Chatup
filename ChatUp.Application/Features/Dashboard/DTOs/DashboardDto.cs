@@ -22,7 +22,9 @@ namespace ChatUp.Application.Features.Dashboard.DTOs
        double OffsetCritical,
        double OffsetRejected,
        double OffsetClosed,
-       double OffsetInProgress
+       double OffsetInProgress,
+       int Breached = 0,
+       int Resolved = 0
    );
 
     public record class TicketSummaryDto

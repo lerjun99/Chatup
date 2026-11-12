@@ -1,15 +1,16 @@
 ﻿@page "/users"
-@inject HttpClient Http
-@inject IJSRuntime JS
+@using System.Globalization
 @using System.Net.Http.Json
 @using ChatUp.Application.Features.User.DTOs
 @using ChatUp.Application.Features.UserRegistration.DTOs
 @using ChatUp.Services
+@inject HttpClient Http
+@inject IJSRuntime JS
 @inject NavigationManager Navigation
-<h3 class="mb-3">👥 User Management</h3>
 @inject ChatUp.Services.LinkService LinkService
-@inject ChatUp.Services.EmailService EmailService
 @inject IDialogService DialogService
+<link href="css/users.css" rel="stylesheet" />
+
 @if (isSendingEmail)
 {
     <div class="email-overlay">
@@ -19,201 +20,444 @@
         </div>
     </div>
 }
-<div class="flex-grow-1 p-3 p-md-4 bg-light" style="margin-bottom:50px">
-    <div class="toolbar-container d-flex flex-wrap gap-2 mb-3 justify-content-between align-items-center">
-        <div class="action-toolbar d-flex flex-wrap align-items-center gap-2">
-            <input class="form-control search-box"
-                   placeholder="🔍 Search by name or username"
-                   @bind="searchTerm" @bind:event="oninput" />
 
-            <button class="btn btn-primary action-btn" @onclick="FilterUsers">
-                <i class="fa-solid fa-magnifying-glass"></i> <span class="btn-text">Search</span>
-            </button>
+<div class="us">
+    <!-- ============ HEADER ============ -->
+    <header class="us-hero">
+        <div>
+            <div class="us-eyebrow"><i class="fa-solid fa-users-gear"></i> Administration</div>
+            <h1>User Management</h1>
+            <p>Create accounts, approve new users and manage who can sign in.</p>
+        </div>
+        <button class="us-btn us-btn-glass" @onclick="RegisterUser">
+            <i class="fa-solid fa-user-plus"></i> Register user
+        </button>
+    </header>
 
-            <button class="btn btn-success action-btn" @onclick="ImportUsers">
-                <i class="fa-solid fa-upload"></i> <span class="btn-text">Import</span>
-            </button>
+    <!-- ============ STATS (click to filter) ============ -->
+    <section class="us-stats" aria-label="Summary">
+        <button class="us-stat @(filter == "all" ? "is-active" : "")" @onclick='() => SetFilter("all")'>
+            <span class="us-stat-icon"><i class="fa-solid fa-users"></i></span>
+            <div><strong>@users.Count</strong><span>Total users</span></div>
+        </button>
+        <button class="us-stat @(filter == "active" ? "is-active" : "")" @onclick='() => SetFilter("active")'>
+            <span class="us-stat-icon is-good"><i class="fa-solid fa-user-check"></i></span>
+            <div><strong>@ActiveCount</strong><span>Active</span></div>
+        </button>
+        <button class="us-stat @(filter == "online" ? "is-active" : "")" @onclick='() => SetFilter("online")'>
+            <span class="us-stat-icon is-live"><i class="fa-solid fa-signal"></i></span>
+            <div><strong>@OnlineCount</strong><span>Online now</span></div>
+        </button>
+        <button class="us-stat @(filter == "pending" ? "is-active" : "")" @onclick='() => SetFilter("pending")'>
+            <span class="us-stat-icon is-warn"><i class="fa-solid fa-hourglass-half"></i></span>
+            <div><strong>@PendingCount</strong><span>Pending approval</span></div>
+        </button>
+    </section>
 
-            <button class="btn btn-secondary action-btn" @onclick="ExportUsers">
-                <i class="fa-solid fa-download"></i> <span class="btn-text">Export</span>
-            </button>
-
-            <button class="btn btn-outline-danger action-btn"
-                    disabled="@(!selectedUsers.Any())" @onclick="BulkDelete">
-                <i class="fa-solid fa-trash"></i> <span class="btn-text">Delete</span>
-            </button>
-
-            <button class="btn btn-outline-info action-btn"
-                    disabled="@(!selectedUsers.Any())" @onclick="BulkSendEmail">
-                <i class="fa-solid fa-envelope"></i> <span class="btn-text">Email</span>
-            </button>
+    <!-- ============ TOOLBAR ============ -->
+    <section class="us-toolbar">
+        <div class="us-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search" placeholder="Search name, username or email…" aria-label="Search users"
+                   @bind="searchTerm" @bind:event="oninput" @bind:after="ResetPage" />
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button class="us-search-clear" title="Clear search" @onclick="ClearSearch"><i class="fa-solid fa-xmark"></i></button>
+            }
         </div>
 
-        <button class="btn btn-primary rounded-pill px-3 register-btn" @onclick="RegisterUser">
-            <i class="fa-solid fa-user-plus"></i> <span class="btn-text">Register New</span>
-        </button>
-    </div>
+        <select class="us-select" aria-label="Filter" @bind="filter" @bind:after="ResetPage">
+            <option value="all">All users</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="online">Online now</option>
+            <option value="pending">Pending approval</option>
+            <option value="blocked">Blocked</option>
+        </select>
+
+        <select class="us-select" aria-label="Sort" @bind="sort" @bind:after="ResetPage">
+            <option value="newest">Newest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="login">Recent login</option>
+        </select>
+
+        <div class="us-toolbar-actions">
+            <button class="us-btn us-btn-ghost" title="Export the filtered list as CSV" @onclick="ExportUsers" disabled="@(!filteredUsers.Any())">
+                <i class="fa-solid fa-file-arrow-down"></i><span class="us-hide-sm"> Export</span>
+            </button>
+            <button class="us-btn us-btn-ghost" title="Import users" @onclick="ImportUsers">
+                <i class="fa-solid fa-file-arrow-up"></i><span class="us-hide-sm"> Import</span>
+            </button>
+        </div>
+    </section>
+
+    <!-- ============ BULK BAR ============ -->
+    @if (selectedUsers.Any())
+    {
+        <section class="us-bulk" aria-live="polite">
+            <span><strong>@selectedUsers.Count</strong> selected</span>
+            <div>
+                <button class="us-btn us-btn-sm us-btn-light" @onclick="BulkSendEmail" disabled="@isBusy">
+                    <i class="fa-solid fa-paper-plane"></i> Approve &amp; email
+                </button>
+                <button class="us-btn us-btn-sm us-btn-danger" @onclick="BulkDelete" disabled="@isBusy">
+                    <i class="fa-solid fa-trash-can"></i> Delete
+                </button>
+                <button class="us-icon-btn us-icon-light" title="Clear selection" @onclick="ClearSelection"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        </section>
+    }
+
+    @if (notice != null)
+    {
+        <div class="us-alert us-alert-ok" role="status">
+            <i class="fa-solid fa-circle-check"></i><span>@notice</span>
+            <button class="us-icon-btn" title="Dismiss" @onclick="() => notice = null"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    }
+    @if (error != null)
+    {
+        <div class="us-alert us-alert-error" role="alert">
+            <i class="fa-solid fa-circle-exclamation"></i><span>@error</span>
+            <button class="us-icon-btn" title="Dismiss" @onclick="() => error = null"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    }
 
     @if (isLoading)
     {
-        <div class="loading-section">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
+        <div class="us-card">
+            @for (var i = 0; i < 6; i++)
+            {
+                <div class="us-skel us-skel-row"></div>
+            }
+        </div>
+    }
+    else if (!filteredUsers.Any())
+    {
+        <div class="us-card us-empty">
+            <i class="fa-regular fa-user"></i>
+            <p>@(users.Any() ? "No users match your search or filter." : "No users yet.")</p>
+            @if (users.Any())
+            {
+                <button class="us-btn us-btn-ghost" @onclick="ClearFilters">Clear search &amp; filter</button>
+            }
+            else
+            {
+                <button class="us-btn us-btn-primary" @onclick="RegisterUser"><i class="fa-solid fa-user-plus"></i> Register the first user</button>
+            }
         </div>
     }
     else
     {
-        <div class="table-wrapper">
-            <div class="table-responsive scrollable-table">
-                <table class="table table-hover align-middle user-table">
+        <div class="us-card us-list-card">
+            <!-- ============ DESKTOP TABLE ============ -->
+            <div class="us-table-wrap">
+                <table class="us-table">
                     <thead>
                         <tr>
-                            <th><input type="checkbox" @onchange="SelectAllChanged" checked="@selectAll" /></th>
-                            <th>Avatar</th>
-                            <th>Username</th>
-                            <th>Full Name</th>
+                            <th class="us-th-check">
+                                <input type="checkbox" class="us-check" aria-label="Select all on this page"
+                                       checked="@AllOnPageSelected" @onchange="TogglePageSelection" />
+                            </th>
+                            <th>User</th>
                             <th>Email</th>
-                            <th>Status</th>
-                            <th>Online</th>
-                            <th>Last Login</th>
-                            <th class="sticky-actions">Actions</th>
+                            <th>Role</th>
+                            <th>Account</th>
+                            <th>Last login</th>
+                            <th class="us-th-actions"><span class="visually-hidden">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @if (filteredUsers is not null && filteredUsers.Any())
+                        @foreach (var user in PagedUsers)
                         {
-                            @foreach (var user in pagedUsers)
-                            {
-                                <tr>
-                                    <td><input type="checkbox" value="@user.Id" @onchange="() => ToggleUserSelection(user.Id)" checked="@selectedUsers.Contains(user.Id)" /></td>
-                                    <td><img src="@GetAvatar(user)" width="40" height="40" class="rounded-circle border" /></td>
-                                    <td>@user.Username</td>
-                                    <td>@user.FullName</td>
-                                    <td>@(string.IsNullOrEmpty(user.EmailAddress) ? "-" : user.EmailAddress)</td>
-                                    <td>
-                                        <span class="badge @(user.IsActive ? "bg-success" : "bg-danger")">
-                                            @(user.IsActive ? "Active" : "Inactive")
+                            var selected = selectedUsers.Contains(user.Id);
+                            <tr @key="user.Id" class="@(selected ? "is-selected" : "") @(user.IsActive ? "" : "is-inactive")">
+                                <td><input type="checkbox" class="us-check" aria-label="Select @user.Username" checked="@selected" @onchange="() => ToggleUserSelection(user.Id)" /></td>
+                                <td>
+                                    <div class="us-user">
+                                        <span class="us-avatar">
+                                            @if (AvatarSrc(user) is string src)
+                                            {
+                                                <img src="@src" alt="" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                @Initials(user.FullName, user.Username)
+                                            }
+                                            <span class="us-presence @(user.IsOnline ? "is-online" : "")" title="@(user.IsOnline ? "Online" : "Offline")"></span>
                                         </span>
-                                    </td>
-                                    <td>
-                                        <span class="badge @(user.IsOnline ? "bg-success" : "bg-secondary")">
-                                            @(user.IsOnline ? "Online" : "Offline")
-                                        </span>
-                                    </td>
-                                    <td>@(user.LastLoginTime?.ToString("MMM dd, yyyy HH:mm") ?? "-")</td>
-                                    <td class="sticky-actions">
-                                        <div class="action-buttons">
-                                            <button class="btn btn-sm btn-primary rounded-pill px-3" @onclick="() => EditUser(user.Id)">
-                                                <i class="fa-solid fa-pencil"></i> Edit
-                                            </button>
-                                            <button class="btn btn-sm btn-danger rounded-pill px-3" @onclick="() => DeleteUser(user.Id)">
-                                                <i class="fa-solid fa-trash"></i> Delete
-                                            </button>
-                                            <button class="btn btn-sm btn-info rounded-pill px-3" @onclick="() => SendEmail(user.Id)">
-                                                <i class="fa-solid fa-envelope"></i> Email
-                                            </button>
+                                        <div class="us-user-text">
+                                            <button class="us-name" @onclick="() => EditUser(user.Id)">@Fallback(user.FullName, user.Username)</button>
+                                            <span class="us-muted us-small">@@@user.Username</span>
                                         </div>
-                                    </td>
-                                </tr>
-                            }
-                        }
-                        else
-                        {
-                            <tr>
-                                <td colspan="9" class="text-center text-muted py-4">No users found</td>
+                                    </div>
+                                </td>
+                                <td class="us-email">@Fallback(user.EmailAddress)</td>
+                                <td><span class="us-role us-role-@user.UserType">@RoleLabel(user.UserType)</span></td>
+                                <td>
+                                    <div class="us-badges">
+                                        <span class="us-badge us-status-@user.Status">@StatusLabel(user.Status)</span>
+                                        @if (!user.IsActive)
+                                        {
+                                            <span class="us-badge is-off">Inactive</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="us-small" title="@user.LastLoginTime?.ToString("MMM dd, yyyy HH:mm")">@RelativeTime(user.LastLoginTime)</span>
+                                </td>
+                                <td class="us-actions">
+                                    <button class="us-icon-btn" title="Edit user" @onclick="() => EditUser(user.Id)"><i class="fa-solid fa-pen"></i></button>
+                                    <button class="us-icon-btn" title="Approve &amp; send login email" disabled="@isBusy" @onclick="() => SendEmail(user.Id)"><i class="fa-solid fa-paper-plane"></i></button>
+                                    <button class="us-icon-btn is-danger" title="Delete user" disabled="@(busyId == user.Id)" @onclick="() => DeleteUser(user)">
+                                        <i class="fa-solid @(busyId == user.Id ? "fa-circle-notch fa-spin" : "fa-trash-can")"></i>
+                                    </button>
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
 
-            @if (filteredUsers.Any())
-            {
-                <div class="pagination-holder">
-                    <div>
-                        <span>Showing @FromPage to @ToPage of @filteredUsers.Count entries</span>
-                    </div>
-                    <div class="pagination-button-holder">
-                        <button class="btn btn-secondary" @onclick="PreviousPage" disabled="@(!CanGoPrev)"><i class="fa-solid fa-backward"></i></button>
-                        @for (int i = 1; i <= TotalPage; i++)
+            <!-- ============ MOBILE CARDS ============ -->
+            <ul class="us-cards">
+                @foreach (var user in PagedUsers)
+                {
+                    var selected = selectedUsers.Contains(user.Id);
+                    <li @key="user.Id" class="us-mcard @(selected ? "is-selected" : "")">
+                        <input type="checkbox" class="us-check" aria-label="Select @user.Username" checked="@selected" @onchange="() => ToggleUserSelection(user.Id)" />
+                        <button class="us-mcard-main" @onclick="() => EditUser(user.Id)">
+                            <span class="us-avatar">
+                                @if (AvatarSrc(user) is string src)
+                                {
+                                    <img src="@src" alt="" loading="lazy" />
+                                }
+                                else
+                                {
+                                    @Initials(user.FullName, user.Username)
+                                }
+                                <span class="us-presence @(user.IsOnline ? "is-online" : "")"></span>
+                            </span>
+                            <span class="us-user-text">
+                                <span class="us-strong">@Fallback(user.FullName, user.Username)</span>
+                                <span class="us-muted us-small">@@@user.Username · @RelativeTime(user.LastLoginTime)</span>
+                                <span class="us-badges">
+                                    <span class="us-role us-role-@user.UserType">@RoleLabel(user.UserType)</span>
+                                    <span class="us-badge us-status-@user.Status">@StatusLabel(user.Status)</span>
+                                    @if (!user.IsActive)
+                                    {
+                                        <span class="us-badge is-off">Inactive</span>
+                                    }
+                                </span>
+                            </span>
+                        </button>
+                        <div class="us-mcard-actions">
+                            <button class="us-icon-btn" title="Approve &amp; send login email" disabled="@isBusy" @onclick="() => SendEmail(user.Id)"><i class="fa-solid fa-paper-plane"></i></button>
+                            <button class="us-icon-btn is-danger" title="Delete user" disabled="@(busyId == user.Id)" @onclick="() => DeleteUser(user)">
+                                <i class="fa-solid @(busyId == user.Id ? "fa-circle-notch fa-spin" : "fa-trash-can")"></i>
+                            </button>
+                        </div>
+                    </li>
+                }
+            </ul>
+
+            <!-- ============ PAGINATION ============ -->
+            <footer class="us-pager">
+                <span class="us-muted us-small">Showing <strong>@FromPage–@ToPage</strong> of <strong>@filteredUsers.Count</strong></span>
+                <div class="us-pager-controls">
+                    <label class="us-pagesize us-small us-muted">
+                        Rows
+                        <select class="us-select us-select-sm" @bind="PageSize" @bind:after="ResetPage">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                        </select>
+                    </label>
+                    <nav class="us-pages" aria-label="Pagination">
+                        <button class="us-page" title="Previous page" disabled="@(!CanGoPrev)" @onclick="PrevPage"><i class="fa-solid fa-chevron-left"></i></button>
+                        @foreach (var p in VisiblePages)
                         {
-                            int page = i;
-                            <input type="button" value=@(page)
-                                   class="@(CurrentPage == page ? "active" : "")"
-                                   @onclick="() => SelectedPage(page)" />
+                            if (p == null)
+                            {
+                                <span class="us-page-gap">…</span>
+                            }
+                            else
+                            {
+                                var pageNo = p.Value;
+                                <button class="us-page @(pageNo == CurrentPage ? "is-active" : "")" @onclick="() => GoToPage(pageNo)">@pageNo</button>
+                            }
                         }
-                        <button class="btn btn-secondary" @onclick="NextPage" disabled="@(!CanGoNext)"><i class="fa-solid fa-forward"></i></button>
-                    </div>
+                        <button class="us-page" title="Next page" disabled="@(!CanGoNext)" @onclick="NextPage"><i class="fa-solid fa-chevron-right"></i></button>
+                    </nav>
                 </div>
-            }
+            </footer>
         </div>
     }
 </div>
 
+<!-- ============ BULK EMAIL SUMMARY ============ -->
 @if (ShowModal)
 {
-    <div class="modal-overlay">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h4>📧 Bulk Email Summary</h4>
+    <div class="us-modal-backdrop" @onclick="CloseModal">
+        <div class="us-modal" role="dialog" aria-modal="true" @onclick:stopPropagation="true">
+            <header>
+                <h2><i class="fa-solid fa-paper-plane"></i> Bulk email summary</h2>
+                <button class="us-icon-btn" title="Close" @onclick="CloseModal"><i class="fa-solid fa-xmark"></i></button>
+            </header>
+            <div class="us-summary">
+                <div class="is-good"><strong>@Summary.Sent</strong><span>Sent</span></div>
+                <div class="is-warn"><strong>@Summary.Skipped</strong><span>Skipped</span></div>
+                <div class="is-bad"><strong>@Summary.Failed</strong><span>Failed</span></div>
             </div>
-
-            <div class="modal-body">
-                <p><b>✅ Successfully sent:</b> @Summary.Sent</p>
-                <p><b>⚠️ Skipped (Invalid Status):</b> @Summary.Skipped</p>
-                <p><b>❌ Failed to send:</b> @Summary.Failed</p>
-            </div>
-
-            <div class="modal-footer">
-                <button class="btn-close" @onclick="CloseModal"></button>
-            </div>
+            @if (Summary.Skipped > 0)
+            {
+                <p class="us-muted us-small">Skipped users aren't approved yet or have no email address.</p>
+            }
+            <footer><button class="us-btn us-btn-primary" @onclick="CloseModal">Done</button></footer>
         </div>
     </div>
 }
-@code {
-    private bool ShowModal = false;
 
-    private (int Sent, int Skipped, int Failed) Summary;
-    private bool isLoading = true;
-    private bool isSendingEmail = false;
-    private List<UserDetailsDto> users = new();
-    private List<UserDetailsDto> filteredUsers = new();
-    private List<UserDetailsDto> pagedUsers = new();
-    private List<int> selectedUsers = new();
-    private string searchTerm = string.Empty;
-    private bool selectAll = false;
+@code {
     [Parameter] public EventCallback OnNavigate { get; set; }
-    @inject NavigationManager Nav
-    private int CurrentPage = 1;
-    private int PageSize = 10;
-    private int TotalPage => (int)Math.Ceiling((double)filteredUsers.Count / PageSize);
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    private const int MaxParallelRequests = 4;
+
+    private List<UserDetailsDto> users = new();
+    private readonly HashSet<int> selectedUsers = new();
+    private bool isLoading = true;
+    private bool isBusy;
+    private bool isSendingEmail;
+    private int? busyId;
+    private string? notice;
+    private string? error;
+
+    private string searchTerm = string.Empty;
+    private string filter = "all";
+    private string sort = "newest";
+
+    private int _currentPage = 1;
+    private int CurrentPage
+    {
+        get => Math.Clamp(_currentPage, 1, TotalPage);
+        set => _currentPage = value;
+    }
+    private int PageSize { get; set; } = 10;
+
+    private bool ShowModal;
+    private (int Sent, int Skipped, int Failed) Summary;
+
+    // =============================
+    // DERIVED DATA (in-memory filtering/sorting — no server round-trips)
+    // =============================
+    private int ActiveCount => users.Count(u => u.IsActive);
+    private int OnlineCount => users.Count(u => u.IsOnline);
+    private int PendingCount => users.Count(u => u.Status == 1);
+
+    // Filtering/sorting is read many times per render (counts, pager, rows); compute it once per change
+    private List<UserDetailsDto>? _filteredCache;
+    private string? _filteredKey;
+
+    private List<UserDetailsDto> filteredUsers
+    {
+        get
+        {
+            var key = $"{users.GetHashCode()}|{users.Count}|{searchTerm}|{filter}|{sort}";
+            if (_filteredCache != null && key == _filteredKey)
+                return _filteredCache;
+
+            _filteredKey = key;
+            return _filteredCache = BuildFilteredUsers();
+        }
+    }
+
+    private List<UserDetailsDto> BuildFilteredUsers()
+    {
+        {
+            IEnumerable<UserDetailsDto> q = users;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim();
+                q = q.Where(u => (u.FullName ?? "").Contains(term, StringComparison.OrdinalIgnoreCase)
+                              || (u.Username ?? "").Contains(term, StringComparison.OrdinalIgnoreCase)
+                              || (u.EmailAddress ?? "").Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            q = filter switch
+            {
+                "active" => q.Where(u => u.IsActive),
+                "inactive" => q.Where(u => !u.IsActive),
+                "online" => q.Where(u => u.IsOnline),
+                "pending" => q.Where(u => u.Status == 1),
+                "blocked" => q.Where(u => u.Status == 3),
+                _ => q
+            };
+
+            q = sort switch
+            {
+                "name" => q.OrderBy(u => string.IsNullOrWhiteSpace(u.FullName) ? u.Username : u.FullName, StringComparer.OrdinalIgnoreCase),
+                "login" => q.OrderByDescending(u => u.LastLoginTime ?? DateTime.MinValue),
+                _ => q.OrderByDescending(u => u.CreatedDate ?? DateTime.MinValue).ThenByDescending(u => u.Id)
+            };
+
+            return q.ToList();
+        }
+    }
+
+    private List<UserDetailsDto> PagedUsers => filteredUsers.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+
+    private void PrevPage() => CurrentPage = CurrentPage - 1;
+    private void NextPage() => CurrentPage = CurrentPage + 1;
+    private void GoToPage(int page) => CurrentPage = page;
+
+    private int TotalPage => Math.Max(1, (int)Math.Ceiling((double)filteredUsers.Count / PageSize));
     private bool CanGoNext => CurrentPage < TotalPage;
     private bool CanGoPrev => CurrentPage > 1;
-    private int FromPage => ((CurrentPage - 1) * PageSize) + 1;
+    private int FromPage => filteredUsers.Count == 0 ? 0 : ((CurrentPage - 1) * PageSize) + 1;
     private int ToPage => Math.Min(CurrentPage * PageSize, filteredUsers.Count);
-    protected override async Task OnInitializedAsync()
+
+    private bool AllOnPageSelected => PagedUsers.Any() && PagedUsers.All(u => selectedUsers.Contains(u.Id));
+
+    private IEnumerable<int?> VisiblePages
     {
-        await LoadUsers();
-        ApplyPagination();
+        get
+        {
+            var pages = new SortedSet<int> { 1, TotalPage };
+            for (var p = CurrentPage - 1; p <= CurrentPage + 1; p++)
+                if (p >= 1 && p <= TotalPage)
+                    pages.Add(p);
+
+            var previous = 0;
+            foreach (var p in pages)
+            {
+                if (p - previous > 1)
+                    yield return null;
+                yield return p;
+                previous = p;
+            }
+        }
     }
+
+    // =============================
+    // LOADING
+    // =============================
+    protected override async Task OnInitializedAsync() => await LoadUsers();
 
     private async Task LoadUsers()
     {
         try
         {
-            var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}User/GetAllUsers").ToString();
-            var response = await Http.GetAsync(url);
-            if (response.IsSuccessStatusCode)
-            {
-                var json = await response.Content.ReadAsStringAsync();
-                users = JsonSerializer.Deserialize<List<UserDetailsDto>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
-                filteredUsers = users;
-            }
+            users = await Http.GetFromJsonAsync<List<UserDetailsDto>>($"{AppConfig.ChatUrl}User/GetAllUsers", JsonOptions) ?? new();
+
+            // Drop selections for users that no longer exist
+            selectedUsers.IntersectWith(users.Select(u => u.Id));
         }
         catch (Exception ex)
         {
             Console.WriteLine(ex.Message);
+            error = "Couldn't load users. Check your connection and refresh the page.";
         }
         finally
         {
@@ -221,289 +465,338 @@
         }
     }
 
-    private void ApplyPagination()
+    // =============================
+    // FILTERS & SELECTION
+    // =============================
+    private void ResetPage() => CurrentPage = 1;
+
+    private void SetFilter(string value)
     {
-        pagedUsers = filteredUsers.Skip((CurrentPage - 1) * PageSize).Take(PageSize).ToList();
+        filter = filter == value && value != "all" ? "all" : value;
+        ResetPage();
     }
 
-    private void SelectedPage(int page)
+    private void ClearSearch()
     {
-        CurrentPage = page;
-        ApplyPagination();
+        searchTerm = string.Empty;
+        ResetPage();
     }
 
-    private void NextPage()
+    private void ClearFilters()
     {
-        if (CanGoNext)
-        {
-            CurrentPage++;
-            ApplyPagination();
-        }
+        searchTerm = string.Empty;
+        filter = "all";
+        ResetPage();
     }
 
-    private void PreviousPage()
-    {
-        if (CanGoPrev)
-        {
-            CurrentPage--;
-            ApplyPagination();
-        }
-    }
-
-    private void FilterUsers()
-    {
-        if (string.IsNullOrWhiteSpace(searchTerm))
-            filteredUsers = users;
-        else
-            filteredUsers = users
-                .Where(u => (u.FullName ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
-                         || (u.Username ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-        CurrentPage = 1;
-        ApplyPagination();
-    }
     private void ToggleUserSelection(int userId)
     {
-        if (selectedUsers.Contains(userId))
-            selectedUsers.Remove(userId);
-        else
+        if (!selectedUsers.Remove(userId))
             selectedUsers.Add(userId);
     }
 
-    private void SelectAllChanged(ChangeEventArgs e)
+    private void TogglePageSelection(ChangeEventArgs e)
     {
-        selectAll = (bool)e.Value;
-        if (selectAll)
-            selectedUsers = filteredUsers.Select(u => u.Id).ToList();
+        var ids = PagedUsers.Select(u => u.Id);
+        if (e.Value is true)
+            selectedUsers.UnionWith(ids);
         else
-            selectedUsers.Clear();
+            selectedUsers.ExceptWith(ids);
     }
 
-    // private void RegisterUser() => JS.InvokeVoidAsync("alert", "Navigate to registration form...");
+    private void ClearSelection() => selectedUsers.Clear();
+
+    // =============================
+    // NAVIGATION
+    // =============================
     private void RegisterUser()
     {
         var token = LinkService.Protect("new"); // 🔐 Encrypt "new" as identifier
-        var encodedToken = Uri.EscapeDataString(token);
-        Navigate($"/user-registers/{encodedToken}");
+        Navigate($"/user-registers/{Uri.EscapeDataString(token)}");
     }
-    // private void EditUser(int id) => JS.InvokeVoidAsync("alert", $"Edit user {id}");
-    // private void DeleteUser(int id) => JS.InvokeVoidAsync("alert", $"Delete user {id}");
-    // private void SendEmail(int id) => JS.InvokeVoidAsync("alert", $"Send email to user {id}");
 
-    // private void BulkDelete() => JS.InvokeVoidAsync("alert", $"Deleting {selectedUsers.Count} users...");
-    // private void BulkSendEmail() => JS.InvokeVoidAsync("alert", $"Sending email to {selectedUsers.Count} users...");
-    private async Task DeleteUser(int id, bool showMessage = true)
+    private void EditUser(int id)
     {
-        if (showMessage)
-        {
-            var confirmDialog = await DialogService.ShowConfirmationAsync("Confirm Delete", "Are you sure you want to delete this user?");
-            var result = await confirmDialog.Result;
-            if (result.Cancelled) return;
-        }
-
-        try
-        {
-            var url = $"{AppConfig.ChatUrl}User/DeleteUser/delete/{id}";
-            var response = await Http.DeleteAsync(url);
-
-            if (response.IsSuccessStatusCode)
-            {
-                  if (showMessage)
-                  {
-                       await DialogService.ShowSuccessAsync("User deleted successfully!");
-                  }
-               
-                await LoadUsers();
-                ApplyPagination();
-            }
-            else
-            {
-                var msg = await response.Content.ReadAsStringAsync();
-                await DialogService.ShowErrorAsync($"Failed to delete user: {msg}");
-            }
-        }
-        catch (Exception ex)
-        {
-            await DialogService.ShowErrorAsync($"Error deleting user: {ex.Message}");
-        }
+        // 🔐 Encrypt user ID
+        var token = LinkService.Protect(id.ToString());
+        Navigate($"/user-registers/{Uri.EscapeDataString(token)}");
     }
 
-    private async Task SendEmail(int id)
+    private void Navigate(string url)
+    {
+        Navigation.NavigateTo(url, forceLoad: false);
+        if (OnNavigate.HasDelegate)
+            OnNavigate.InvokeAsync();
+    }
+
+    // =============================
+    // DELETE
+    // =============================
+    private async Task<bool> ConfirmAsync(string message, string confirmText)
+    {
+        var dialog = await DialogService.ShowConfirmationAsync(message, confirmText, "Cancel");
+        var result = await dialog.Result;
+        return !result.Cancelled;
+    }
+
+    private async Task<bool> DeleteOnServerAsync(int id)
     {
         try
         {
-            isSendingEmail = true;
-            StateHasChanged();
+            var response = await Http.DeleteAsync($"{AppConfig.ChatUrl}User/DeleteUser/delete/{id}");
+            return response.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
-            var response = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}User/ApproveUser/Approve", new { UserId = id });
+    private async Task DeleteUser(UserDetailsDto user)
+    {
+        if (!await ConfirmAsync("Delete " + Fallback(user.FullName, user.Username) + " (@" + user.Username + ")? This cannot be undone.", "Delete"))
+            return;
 
-            if (response.IsSuccessStatusCode)
+        busyId = user.Id;
+        notice = error = null;
+        try
+        {
+            if (await DeleteOnServerAsync(user.Id))
             {
-                var result = await response.Content.ReadFromJsonAsync<ChangePasswordResponseDto>();
-                await DialogService.ShowSuccessAsync($"{result?.Message}");
+                // Update locally instead of reloading the whole list
+                users.Remove(user);
+                selectedUsers.Remove(user.Id);
+                notice = $"{Fallback(user.FullName, user.Username)} was deleted.";
             }
             else
             {
-                var error = await response.Content.ReadAsStringAsync();
-                await DialogService.ShowErrorAsync($"❌ Approval failed: {error}");
+                error = $"Couldn't delete {user.Username}. Please try again.";
             }
-        }
-        catch (Exception ex)
-        {
-            await DialogService.ShowErrorAsync($"Error: {ex.Message}");
         }
         finally
         {
-            isSendingEmail = false;
-            StateHasChanged();
+            busyId = null;
         }
     }
 
     private async Task BulkDelete()
     {
-        if (!selectedUsers.Any())
-        {
-            var dialog = await DialogService.ShowWarningAsync("No users selected for deletion.");
-            await dialog.Result;
-            return;
-        }
-
-        // ✅ Ask for confirmation properly
-        var confirmDialog = await DialogService.ShowConfirmationAsync(
-            "Are you sure you want to delete ",
-            $"{selectedUsers.Count} selected users?"
-        );
-
-        var confirmResult = await confirmDialog.Result;
-        if (confirmResult.Cancelled)
+        var ids = selectedUsers.ToList();
+        if (!ids.Any() || !await ConfirmAsync("Delete " + Plural(ids.Count, "selected user") + "? This cannot be undone.", "Delete"))
             return;
 
-        // ✅ Proceed with deletion
-        foreach (var userId in selectedUsers)
+        isBusy = true;
+        notice = error = null;
+        try
         {
-            await DeleteUser(userId, showMessage: false);
-        }
+            // A few requests at a time, then one refresh — instead of reloading the list after every delete
+            var results = await RunThrottledAsync(ids, DeleteOnServerAsync);
+            var deleted = results.Where(r => r.Ok).Select(r => r.Id).ToHashSet();
 
-        await LoadUsers();
-        ApplyPagination();
+            users.RemoveAll(u => deleted.Contains(u.Id));
+            selectedUsers.ExceptWith(deleted);
+
+            if (deleted.Count == ids.Count)
+                notice = Plural(deleted.Count, "user") + " deleted.";
+            else
+                error = $"{deleted.Count} deleted, {ids.Count - deleted.Count} could not be deleted. They are still selected — try again.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    // =============================
+    // APPROVE & EMAIL
+    // =============================
+    private async Task<bool> ApproveOnServerAsync(int id)
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}User/ApproveUser/Approve", new { UserId = id });
+            if (!response.IsSuccessStatusCode)
+                return false;
+
+            var result = await response.Content.ReadFromJsonAsync<ChangePasswordResponseDto>();
+            return result?.IsSuccess == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task SendEmail(int id)
+    {
+        isSendingEmail = true;
+        isBusy = true;
+        notice = error = null;
         StateHasChanged();
 
-        // ✅ Show success message
-        var successDialog = await DialogService.ShowSuccessAsync($"{selectedUsers.Count} users deleted successfully!");
-        await successDialog.Result;
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}User/ApproveUser/Approve", new { UserId = id });
 
-        selectedUsers.Clear();
-        selectAll = false;
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<ChangePasswordResponseDto>();
+                notice = string.IsNullOrWhiteSpace(result?.Message) ? "Login details sent." : result.Message;
+            }
+            else
+            {
+                error = $"Approval failed: {await response.Content.ReadAsStringAsync()}";
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            isSendingEmail = false;
+            isBusy = false;
+        }
     }
 
     private async Task BulkSendEmail()
     {
-        if (!selectedUsers.Any())
-        {
-            await DialogService.ShowWarningAsync("No users selected for email sending.");
-            return;
-        }
-
-        var confirmDialog = await DialogService.ShowConfirmationAsync(
-            "Confirm Send emails to",
-            $" {selectedUsers.Count} selected users?"
-        );
-
-        var confirmResult = await confirmDialog.Result;
-        if (confirmResult.Cancelled)
+        var ids = selectedUsers.ToList();
+        if (!ids.Any() || !await ConfirmAsync("Approve and email login details to " + Plural(ids.Count, "selected user") + "?", "Send"))
             return;
 
-        int sent = 0;
-        int skipped = 0;
-        int failed = 0;
+        // Only approved users with an email address are sent to
+        var eligible = ids
+            .Select(id => users.FirstOrDefault(u => u.Id == id))
+            .Where(u => u != null && u.Status == 2 && !string.IsNullOrWhiteSpace(u.EmailAddress))
+            .Select(u => u!.Id)
+            .ToList();
+
+        isSendingEmail = true;
+        isBusy = true;
+        StateHasChanged();
 
         try
         {
-            isSendingEmail = true;
-            StateHasChanged();
-
-            foreach (var id in selectedUsers)
-            {
-                var user = users.FirstOrDefault(u => u.Id == id);
-                if (user == null || user.Status != 2 || string.IsNullOrWhiteSpace(user.EmailAddress))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                try
-                {
-                    // Call API to approve user and send email
-                    var response = await Http.PostAsJsonAsync(
-                        $"{AppConfig.ChatUrl}User/ApproveUser/Approve",
-                        new { UserId = id }
-                    );
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var result = await response.Content.ReadFromJsonAsync<ChangePasswordResponseDto>();
-                        if (result?.IsSuccess == true)
-                            sent++;
-                        else
-                            failed++;
-                    }
-                    else
-                    {
-                        failed++;
-                    }
-                }
-                catch
-                {
-                    failed++;
-                }
-            }
-
-            // ✅ Summary Message
-            Summary = (sent, skipped, failed);
+            var results = await RunThrottledAsync(eligible, ApproveOnServerAsync);
+            var sent = results.Count(r => r.Ok);
+            Summary = (sent, ids.Count - eligible.Count, eligible.Count - sent);
             ShowModal = true;
         }
         finally
         {
             isSendingEmail = false;
-            StateHasChanged();
+            isBusy = false;
         }
     }
 
-    private void CloseModal() => ShowModal = false;
-    private void EditUser(int id)
+    private static async Task<List<(int Id, bool Ok)>> RunThrottledAsync(IEnumerable<int> ids, Func<int, Task<bool>> action)
     {
-        // 🔐 Encrypt user ID
-        var token = LinkService.Protect(id.ToString());
-        var encodedToken = Uri.EscapeDataString(token);
-        Navigate($"/user-registers/{encodedToken}");
+        using var gate = new SemaphoreSlim(MaxParallelRequests);
+        var tasks = ids.Select(async id =>
+        {
+            await gate.WaitAsync();
+            try { return (id, await action(id)); }
+            finally { gate.Release(); }
+        });
+        return (await Task.WhenAll(tasks)).ToList();
+    }
 
-    }
-    private void Navigate(string url)
-    {
-        Nav.NavigateTo(url, forceLoad: false);
-        if (OnNavigate.HasDelegate)
-            OnNavigate.InvokeAsync();
-    }
+    private void CloseModal() => ShowModal = false;
+
+    // =============================
+    // IMPORT / EXPORT
+    // =============================
     private async Task ImportUsers()
     {
-        await JS.InvokeVoidAsync("alert", "Import functionality coming soon...");
+        await DialogService.ShowInfoAsync("Importing users from a file is coming soon.");
     }
 
     private async Task ExportUsers()
     {
         var csv = new StringBuilder();
-        csv.AppendLine("Id,Username,FullName,Email,IsActive,IsOnline,LastLoginTime");
+        csv.AppendLine("Id,Username,FullName,Email,Role,Status,IsActive,IsOnline,LastLoginTime");
         foreach (var u in filteredUsers)
         {
-            csv.AppendLine($"{u.Id},{u.Username},{u.FullName},{u.EmailAddress},{u.IsActive},{u.IsOnline},{u.LastLoginTime}");
+            csv.AppendLine(string.Join(",",
+                u.Id,
+                Csv(u.Username),
+                Csv(u.FullName),
+                Csv(u.EmailAddress),
+                Csv(RoleLabel(u.UserType)),
+                Csv(StatusLabel(u.Status)),
+                u.IsActive,
+                u.IsOnline,
+                Csv(u.LastLoginTime?.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture))));
         }
 
-        await JS.InvokeVoidAsync("downloadFile", "users.csv", "text/csv", csv.ToString());
+        await JS.InvokeVoidAsync("downloadFile", $"users-{DateTime.Now:yyyyMMdd}.csv", "text/csv", csv.ToString());
     }
 
-    private string GetAvatar(UserDetailsDto user)
-        => user.UploadedFiles != null && user.UploadedFiles.Any()
-            ? user.UploadedFiles.First().Base64Content // or FilePath
-            : "images/default.png";
+    // Quote a CSV field when it contains a comma, quote or line break
+    private static readonly char[] CsvSpecialChars = { (char)44, (char)34, (char)10, (char)13 };
+    private static readonly string Quote = ((char)34).ToString();
+
+    private static string Csv(string? value)
+    {
+        var v = value ?? string.Empty;
+        return v.IndexOfAny(CsvSpecialChars) >= 0 ? Quote + v.Replace(Quote, Quote + Quote) + Quote : v;
+    }
+
+    // =============================
+    // FORMATTING
+    // =============================
+    private static string Plural(int n, string noun) => n + " " + noun + (n == 1 ? string.Empty : "s");
+
+    private static string Fallback(string? value, string? fallback = "—") =>
+        string.IsNullOrWhiteSpace(value) ? fallback ?? "—" : value;
+
+    private static string RoleLabel(int? userType) => userType switch
+    {
+        1 => "Admin",
+        2 => "Support",
+        3 => "Client",
+        4 => "Developer",
+        5 => "HR",
+        _ => "User"
+    };
+
+    private static string StatusLabel(int? status) => status switch
+    {
+        1 => "Pending",
+        2 => "Approved",
+        3 => "Blocked",
+        _ => "Unknown"
+    };
+
+    private static string Initials(string? name, string? fallback)
+    {
+        var parts = (string.IsNullOrWhiteSpace(name) ? fallback ?? "" : name).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
+    }
+
+    // The default placeholder is shown as initials instead
+    private static string? AvatarSrc(UserDetailsDto user)
+    {
+        var path = user.PhotoPath ?? user.UploadedFiles?.FirstOrDefault()?.Base64Content;
+        return string.IsNullOrWhiteSpace(path) || path.Contains("default", StringComparison.OrdinalIgnoreCase) ? null : path;
+    }
+
+    private static string RelativeTime(DateTime? value)
+    {
+        if (!value.HasValue)
+            return "Never";
+
+        var ago = DateTime.Now - value.Value;
+        if (ago.TotalMinutes < 1) return "Just now";
+        if (ago.TotalHours < 1) return $"{(int)ago.TotalMinutes}m ago";
+        if (ago.TotalDays < 1) return $"{(int)ago.TotalHours}h ago";
+        if (ago.TotalDays < 7) return $"{(int)ago.TotalDays}d ago";
+        return value.Value.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+    }
 }

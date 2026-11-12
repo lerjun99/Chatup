@@ -1,0 +1,221 @@
+@using System.Globalization
+@using ChatUp.Application.Features.TicketMessage.DTOs
+
+@if (Messages == null || !Messages.Any())
+{
+    if (IsLoading)
+    {
+        <div class="ix-msg-skeletons" aria-label="Loading messages">
+            <div class="ix-skel ix-skel-bubble"></div>
+            <div class="ix-skel ix-skel-bubble is-mine"></div>
+            <div class="ix-skel ix-skel-bubble is-wide"></div>
+            <div class="ix-skel ix-skel-bubble is-mine"></div>
+        </div>
+    }
+    else
+    {
+        <div class="ix-chat-empty">
+            <div class="ix-chat-empty-icon">💬</div>
+            <p>No messages yet</p>
+            <small>Say hello 👋 — start the conversation below.</small>
+        </div>
+    }
+}
+else
+{
+    @if (IsLoadingOlder)
+    {
+        <div class="ix-older"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading older messages…</div>
+    }
+    else if (AllLoaded)
+    {
+        <div class="ix-older"><i class="fa-solid fa-flag"></i> Beginning of conversation</div>
+    }
+    else
+    {
+        <div class="ix-older"><i class="fa-solid fa-arrow-up"></i> Scroll up for older messages</div>
+    }
+
+    DateTime? previousDate = null;
+    MessageDto? previous = null;
+
+    foreach (var msg in Messages.OrderBy(m => m.DateCreated))
+    {
+        var isMine = msg.SenderId == CurrentUserId;
+        var day = msg.DateCreated?.ToLocalTime().Date;
+
+        if (day != previousDate)
+        {
+            <div class="ix-day"><span>@DayLabel(day)</span></div>
+            previousDate = day;
+            previous = null;
+        }
+
+        // Consecutive messages from the same sender within 5 minutes are grouped
+        var grouped = previous != null
+                      && previous.SenderId == msg.SenderId
+                      && msg.DateCreated.HasValue && previous.DateCreated.HasValue
+                      && (msg.DateCreated.Value - previous.DateCreated.Value) < TimeSpan.FromMinutes(5);
+        previous = msg;
+
+        <div @key="msg" class="ix-msg @(isMine ? "is-mine" : "is-theirs") @(grouped ? "is-grouped" : "")">
+            @if (!isMine)
+            {
+                @if (grouped)
+                {
+                    <span class="ix-msg-avatar-spacer"></span>
+                }
+                else
+                {
+                    <img class="ix-msg-avatar" alt=""
+                         src="@(!string.IsNullOrEmpty(msg.SenderAvatar) ? msg.SenderAvatar : "/images/default.png")" />
+                }
+            }
+
+            <div class="ix-msg-body">
+                @if (!isMine && !grouped)
+                {
+                    <div class="ix-msg-sender">@msg.SenderName</div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(msg.Content))
+                {
+                    <div class="ix-bubble @(IsEmojiOnly(msg.Content) ? "is-jumbo" : "")">@msg.Content</div>
+                }
+
+                @if (msg.Attachments?.Any() == true)
+                {
+                    <div class="ix-files">
+                        @foreach (var file in msg.Attachments)
+                        {
+                            var isImage = file.FileType?.StartsWith("image/") == true;
+                            <div class="ix-file @(isImage ? "is-image" : "")">
+                                @if (isImage)
+                                {
+                                    <button type="button" class="ix-file-thumb" title="Open image" @onclick="() => OnOpenImage.InvokeAsync(file)">
+                                        <img src="@PreviewSrc(file)" loading="lazy" alt="@file.FileName" />
+                                    </button>
+                                }
+                                else
+                                {
+                                    <div class="ix-file-doc">
+                                        <i class="@FileIcon(file.FileType)"></i>
+                                        <span title="@file.FileName">@file.FileName</span>
+                                    </div>
+                                }
+
+                                <div class="ix-file-actions">
+                                    <button type="button" title="Download" @onclick="() => OnDownload.InvokeAsync(file)">
+                                        <i class="fa-solid fa-download"></i>
+                                    </button>
+                                    @if (file.UploadedById == CurrentUserId)
+                                    {
+                                        <button type="button" class="is-danger" title="Remove attachment" @onclick="() => OnRemove.InvokeAsync(file)">
+                                            <i class="fa-solid fa-trash-can"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <div class="ix-msg-meta" title="@msg.DateCreated?.ToLocalTime().ToString("MMM d, yyyy h:mm tt")">
+                    @msg.DateCreated?.ToLocalTime().ToString("h:mm tt")
+                    @if (isMine)
+                    {
+                        <i class="fa-solid fa-check-double"></i>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public List<MessageDto>? Messages { get; set; }
+    [Parameter] public int CurrentUserId { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsLoadingOlder { get; set; }
+    [Parameter] public bool AllLoaded { get; set; }
+
+    /// <summary>
+    /// Changes whenever the visible conversation changes. Typing in the composer
+    /// re-renders the parent on every keystroke; this key lets the (potentially
+    /// long) message list skip those renders entirely.
+    /// </summary>
+    [Parameter] public string RenderKey { get; set; } = string.Empty;
+
+    [Parameter] public EventCallback<TicketUploadDto> OnOpenImage { get; set; }
+    [Parameter] public EventCallback<TicketUploadDto> OnDownload { get; set; }
+    [Parameter] public EventCallback<TicketUploadDto> OnRemove { get; set; }
+
+    private string? _renderedKey;
+
+    protected override bool ShouldRender()
+    {
+        if (_renderedKey == RenderKey)
+            return false;
+
+        _renderedKey = RenderKey;
+        return true;
+    }
+
+    private static string DayLabel(DateTime? day)
+    {
+        if (!day.HasValue)
+            return string.Empty;
+
+        var today = DateTime.Now.Date;
+        if (day.Value == today) return "Today";
+        if (day.Value == today.AddDays(-1)) return "Yesterday";
+        return day.Value.ToString(day.Value.Year == today.Year ? "dddd, MMMM d" : "MMMM d, yyyy", CultureInfo.InvariantCulture);
+    }
+
+    private static string PreviewSrc(TicketUploadDto file) =>
+        !string.IsNullOrEmpty(file.ThumbnailBase64)
+            ? $"data:{file.FileType};base64,{file.ThumbnailBase64}"
+            : "/images/image-placeholder.png";
+
+    private static string FileIcon(string? type) => type switch
+    {
+        "application/pdf" => "fa-solid fa-file-pdf",
+        _ when type?.Contains("word") == true => "fa-solid fa-file-word",
+        _ when type?.Contains("sheet") == true || type?.Contains("excel") == true => "fa-solid fa-file-excel",
+        _ => "fa-solid fa-file-lines"
+    };
+
+    /// <summary>1–3 emoji and nothing else → shown large, like modern chat apps.</summary>
+    private static bool IsEmojiOnly(string content)
+    {
+        var text = content.Trim();
+        if (text.Length == 0 || text.Length > 24)
+            return false;
+
+        var count = 0;
+        var e = StringInfo.GetTextElementEnumerator(text);
+        while (e.MoveNext())
+        {
+            var element = (string)e.Current;
+            if (string.IsNullOrWhiteSpace(element))
+                continue;
+            if (!IsEmojiElement(element))
+                return false;
+            if (++count > 3)
+                return false;
+        }
+
+        return count > 0;
+    }
+
+    private static bool IsEmojiElement(string element)
+    {
+        var c = element[0];
+        return char.IsHighSurrogate(c)
+               || (c >= 0x2190 && c <= 0x21FF)
+               || (c >= 0x2300 && c <= 0x23FF)
+               || (c >= 0x2600 && c <= 0x27BF)
+               || (c >= 0x2B00 && c <= 0x2BFF)
+               || c is '©' or '®' or '‼' or '⁉' or '™' or '〰' or '〽';
+    }
+}

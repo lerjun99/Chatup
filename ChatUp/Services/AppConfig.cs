@@ -23,6 +23,11 @@ public static class AppConfig
     public static IEnumerable<string> CorsOrigins =>
         config.GetSection("CORS:Origins").Get<IEnumerable<string>>() ?? Enumerable.Empty<string>();
 
+    // 🔗 Fetch security header settings (sites allowed to embed the portal; CSP report-only switch)
+    public static IEnumerable<string> FrameAncestors =>
+        config.GetSection("SecurityHeaders:FrameAncestors").Get<IEnumerable<string>>() ?? Enumerable.Empty<string>();
+    public static bool CspReportOnly => config.GetValue("SecurityHeaders:CspReportOnly", false);
+
     // 🔗 Fetch JWT Settings
     public static string JwtKey => config["Jwt:Key"] ?? "";
     public static string JwtIssuer => config["Jwt:Issuer"] ?? "";

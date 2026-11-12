@@ -12,6 +12,7 @@ public interface IChatDBContext
     DbSet<ChatUser> ChatUsers { get; set; }
     DbSet<LoginAttempt> Attempts { get; set; }
     DbSet<ApiTokenModel> ApiTokenModel { get; set; }
+    DbSet<ApiKey> ApiKeys { get; set; }
     DbSet<Client> Client { get; set; }
     DbSet<Ticket> Tickets { get; set; }
     DbSet<Project> Projects { get; set; }

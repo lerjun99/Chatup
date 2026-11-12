@@ -1,0 +1,202 @@
+@using ChatUp.Services
+@using ChatUp.Domain.Entities
+@implements IDisposable
+
+@if (Variant == "full")
+{
+    <div class="sla-full sla-@Css">
+        <div class="sla-full-head">
+            <span class="sla-badge"><i class="@Icon"></i> @Label</span>
+            @if (_snap.IsPaused && IsLive)
+            {
+                <span class="sla-paused-tag" title="@PausedHint"><i class="fa-solid fa-pause"></i> Paused</span>
+            }
+        </div>
+
+        @if (_snap.State != SlaState.None)
+        {
+            <div class="sla-full-time">@TimeText</div>
+            <div class="sla-full-caption">@Caption</div>
+        }
+        else
+        {
+            <div class="sla-full-caption">This ticket has no SLA deadline.</div>
+        }
+
+        @if (IsLive)
+        {
+            <div class="sla-bar sla-bar-lg" role="progressbar" aria-valuenow="@((int)_snap.ElapsedPercent)" aria-valuemin="0" aria-valuemax="100"
+                 aria-label="SLA time used">
+                <span style="width:@(((int)_snap.ElapsedPercent).ToString())%"></span>
+            </div>
+            <div class="sla-full-scale">
+                <span>@((int)_snap.ElapsedPercent)% of SLA time used</span>
+            </div>
+        }
+
+        <dl class="sla-full-meta">
+            <div>
+                <dt>Received</dt>
+                <dd>@Received.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</dd>
+            </div>
+            @if (Due.HasValue)
+            {
+                <div>
+                    <dt>Due</dt>
+                    <dd>@Due.Value.ToLocalTime().ToString("MMM d, yyyy h:mm tt")</dd>
+                </div>
+            }
+        </dl>
+
+        <p class="sla-full-note">
+            <i class="fa-regular fa-clock"></i>
+            @if (Calendar != null)
+            {
+                <span>Counts business hours only (@WorkingDaysLabel, @(Calendar.WorkStart.ToString("hh\\:mm"))–@(Calendar.WorkEnd.ToString("hh\\:mm"))), excluding holidays. Warns at @((int)SlaService.AtRiskWindow.TotalHours)h remaining.</span>
+            }
+            else
+            {
+                <span>Business calendar unavailable — showing clock time.</span>
+            }
+        </p>
+    </div>
+}
+else
+{
+    <div class="sla sla-@Css" title="@Tooltip">
+        <div class="sla-line">
+            <i class="@Icon"></i>
+            <span class="sla-label">@Label</span>
+            @if (_snap.State is SlaState.OnTrack or SlaState.AtRisk or SlaState.Breached)
+            {
+                <span class="sla-time">@TimeText</span>
+            }
+            @if (_snap.IsPaused && IsLive)
+            {
+                <i class="fa-solid fa-pause sla-paused-icon" aria-label="Paused outside business hours"></i>
+            }
+        </div>
+        @if (IsLive)
+        {
+            <div class="sla-bar"><span style="width:@(((int)_snap.ElapsedPercent).ToString())%"></span></div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public DateTime Received { get; set; }
+    [Parameter] public DateTime? Due { get; set; }
+    [Parameter] public string? Status { get; set; }
+    [Parameter] public bool IsBreached { get; set; }
+    [Parameter] public BusinessCalendar? Calendar { get; set; }
+
+    /// <summary>"compact" for lists, "full" for the ticket detail panel.</summary>
+    [Parameter] public string Variant { get; set; } = "compact";
+
+    private SlaSnapshot _snap;
+    private string _renderKey = string.Empty;
+
+    private bool IsLive => _snap.State is SlaState.OnTrack or SlaState.AtRisk or SlaState.Breached;
+
+    protected override void OnInitialized() => SlaTicker.Subscribe(OnTick);
+
+    protected override void OnParametersSet() => Recalculate();
+
+    private void OnTick()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (!IsLive)
+                return;
+
+            var previous = _renderKey;
+            Recalculate();
+
+            // Only re-render this timer when what it shows actually changed
+            // (a paused clock stays still and costs nothing)
+            if (previous != _renderKey)
+                StateHasChanged();
+        });
+    }
+
+    private void Recalculate()
+    {
+        _snap = SlaService.Evaluate(Received, Due, Status, IsBreached, Calendar, DateTime.UtcNow);
+        _renderKey = $"{_snap.State}|{TimeText}|{_snap.IsPaused}|{(int)_snap.ElapsedPercent}";
+    }
+
+    private string TimeText => _snap.State switch
+    {
+        SlaState.Breached => $"+{SlaService.FormatDuration(_snap.Overdue)}",
+        SlaState.OnTrack or SlaState.AtRisk => SlaService.FormatDuration(_snap.Remaining),
+        _ => string.Empty
+    };
+
+    private string Label => _snap.State switch
+    {
+        SlaState.OnTrack => "On track",
+        SlaState.AtRisk => "Due soon",
+        SlaState.Breached => "Overdue",
+        SlaState.Met => "SLA met",
+        SlaState.Missed => "SLA missed",
+        _ => "No SLA"
+    };
+
+    private string Css => _snap.State switch
+    {
+        SlaState.OnTrack => "ok",
+        SlaState.AtRisk => "risk",
+        SlaState.Breached => "breach",
+        SlaState.Met => "met",
+        SlaState.Missed => "missed",
+        _ => "none"
+    };
+
+    private string Icon => _snap.State switch
+    {
+        SlaState.OnTrack => "fa-solid fa-circle-check",
+        SlaState.AtRisk => "fa-solid fa-hourglass-half",
+        SlaState.Breached => "fa-solid fa-triangle-exclamation",
+        SlaState.Met => "fa-solid fa-flag-checkered",
+        SlaState.Missed => "fa-solid fa-circle-xmark",
+        _ => "fa-regular fa-circle"
+    };
+
+    private string Caption => _snap.State switch
+    {
+        SlaState.OnTrack or SlaState.AtRisk => "business time remaining",
+        SlaState.Breached => "business time past the deadline",
+        SlaState.Met => "Finished within the SLA deadline",
+        SlaState.Missed => "Finished after the SLA deadline",
+        _ => string.Empty
+    };
+
+    private const string PausedHint = "Outside business hours — the SLA clock resumes at the start of the next working period.";
+
+    private string Tooltip
+    {
+        get
+        {
+            var due = Due.HasValue ? $"Due {Due.Value.ToLocalTime():MMM d, yyyy h:mm tt}" : "No due date";
+            var paused = _snap.IsPaused && IsLive ? $" · {PausedHint}" : string.Empty;
+            return IsLive ? $"{due} · {(int)_snap.ElapsedPercent}% of SLA time used{paused}" : due;
+        }
+    }
+
+    private string WorkingDaysLabel
+    {
+        get
+        {
+            var days = Calendar?.WorkingDays?.OrderBy(d => ((int)d + 6) % 7).ToList() ?? new List<DayOfWeek>();
+            if (days.Count == 0)
+                return "no working days";
+
+            var isContiguous = days.Zip(days.Skip(1), (a, b) => (((int)b + 6) % 7) - (((int)a + 6) % 7)).All(step => step == 1);
+            return isContiguous && days.Count > 2
+                ? $"{days.First().ToString()[..3]}–{days.Last().ToString()[..3]}"
+                : string.Join(", ", days.Select(d => d.ToString()[..3]));
+        }
+    }
+
+    public void Dispose() => SlaTicker.Unsubscribe(OnTick);
+}

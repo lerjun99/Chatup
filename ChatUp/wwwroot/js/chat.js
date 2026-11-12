@@ -348,3 +348,77 @@ window.initCalendar = function (events) {
 
     calendar.render();
 };
+// =========================================================
+// INBOX helpers
+// =========================================================
+
+// Grow the composer with its content and keep Enter for "send" (Shift+Enter = new line).
+// Runs entirely in the browser, so typing doesn't need a server round-trip to resize.
+window.inboxBindComposer = (textarea) => {
+    if (!textarea || textarea._inboxBound) return;
+    textarea._inboxBound = true;
+
+    const resize = () => {
+        textarea.style.height = 'auto';
+        textarea.style.height = Math.min(textarea.scrollHeight, 180) + 'px';
+    };
+
+    textarea.addEventListener('input', resize);
+    textarea.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+            e.preventDefault(); // Blazor's keydown handler still sends the message
+        }
+    });
+    resize();
+};
+
+window.inboxResetComposer = (textarea) => {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.focus();
+};
+
+// Insert text at the caret and notify Blazor's @bind through a normal input event
+window.insertAtCaret = (textarea, text) => {
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+    const caret = start + text.length;
+    textarea.focus();
+    textarea.setSelectionRange(caret, caret);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+};
+
+// Load older messages when scrolled to the top — one request at a time,
+// and remember where the reader was so the view doesn't jump.
+window.inboxBindScroll = (element, dotNetRef) => {
+    if (!element || element._inboxScrollBound) return;
+    element._inboxScrollBound = true;
+
+    element.addEventListener('scroll', async () => {
+        if (element.scrollTop > 40 || element._inboxLoadingOlder) return;
+        element._inboxLoadingOlder = true;
+        element._inboxPrevHeight = element.scrollHeight;
+        element._inboxPrevTop = element.scrollTop;
+        try {
+            await dotNetRef.invokeMethodAsync('LoadMoreMessages');
+        } finally {
+            element._inboxLoadingOlder = false;
+        }
+    }, { passive: true });
+};
+
+// After older messages are prepended, keep the same message under the reader's eyes
+window.inboxRestoreScroll = (element) => {
+    if (!element || element._inboxPrevHeight == null) return;
+    requestAnimationFrame(() => {
+        element.scrollTop = element.scrollHeight - element._inboxPrevHeight + (element._inboxPrevTop || 0);
+        element._inboxPrevHeight = null;
+    });
+};
+
+window.inboxIsNearBottom = (element) => {
+    if (!element) return true;
+    return element.scrollHeight - element.scrollTop - element.clientHeight < 120;
+};

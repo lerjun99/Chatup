@@ -59,8 +59,27 @@ namespace ChatUp.Api.Controllers
         // 📌 SLA CALENDAR SNAPSHOT (FOR FRONTEND / SIGNALR)
         // =========================
         [HttpGet("sla-calendar/{region}")]
-        public async Task<IActionResult> GetSlaCalendar(string region)
+        public async Task<IActionResult> GetSlaCalendar(string region, [FromServices] IBusinessCalendarService calendarService)
         {
+            // Serve the same calendar the SLA engine uses for due dates and breach checks,
+            // so live timers in the UI match the server exactly
+            try
+            {
+                var slaCalendar = await calendarService.GetCalendarAsync(region);
+                return Ok(new
+                {
+                    Region = region,
+                    slaCalendar.WorkStart,
+                    slaCalendar.WorkEnd,
+                    WorkingDays = slaCalendar.WorkingDays ?? new List<DayOfWeek>(),
+                    Holidays = (slaCalendar.Holidays ?? new List<DateTime>()).Select(d => new { Date = d, Name = string.Empty })
+                });
+            }
+            catch (Exception)
+            {
+                // No calendar configured for this region - fall back to the default below
+            }
+
             var holidays = await _repo.GetByRegionAsync(region);
 
             var calendar = new

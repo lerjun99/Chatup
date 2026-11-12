@@ -1,402 +1,384 @@
 ﻿@page "/ticketlist/{EncryptedId}"
-@implements IAsyncDisposable
+@implements IDisposable
+@using System.Globalization
 @using ChatUp.Domain.Entities
 @using ChatUp.Services
 @using ChatUp.Services.DTOs
-@using Microsoft.AspNetCore.SignalR.Client
 @inject HttpClient Http
 @inject NavigationManager Navigation
-@inject IJSRuntime JSRuntime
 @inject TitleService TitleService
 @inject IDialogService DialogService
-<h3 class="mb-4 fw-bold text-primary">
-    <i class="bi bi-ticket-detailed me-2"></i>
-    Ticket Management
-</h3>
+@inject SlaService SlaService
+<link href="css/tickets.css" rel="stylesheet" />
 
-<div class="ticket-filters card shadow-sm border-0 rounded-4 p-3 mb-4">
-    <div class="row g-2 align-items-center flex-nowrap">
-    
-        <!-- Search -->
-        <div class="col-md-3">
-            <input type="text"
-                   class="form-control"
-                   placeholder="🔍 Search..."
-                   @bind="searchTerm"
-                   @bind:event="oninput"
-                   @onkeydown="@HandleEnterKey" />
-        </div>
+<div class="tk">
+    @if (_loading && tickets != null)
+    {
+        <div class="tk-progress" role="progressbar" aria-label="Loading tickets"><span></span></div>
+    }
 
-        <!-- Status -->
-        <div class="col-md-2">
-            <select class="form-select" @onchange="StatusChanged">
-                <option value="">All Status</option>
-                @foreach (var status in Enum.GetValues<TicketStatus>())
+    <!-- ============ HEADER ============ -->
+    <header class="tk-hero">
+        <div>
+            <div class="tk-eyebrow"><i class="fa-solid fa-ticket"></i> Support desk</div>
+            <h1>Ticket Management</h1>
+            <p class="tk-hero-sub">
+                @if (tickets == null)
                 {
-                    <option value="@((int)status)" selected="@(statusFilter == (int)status)">
-                        @status
-                    </option>
+                    <span>Loading tickets…</span>
                 }
-            </select>
-        </div>
-
-        <!-- Priority -->
-        <div class="col-md-2">
-            <select class="form-select" @onchange="PriorityChanged">
-                <option value="">All Priority</option>
-                @foreach (var priority in Enum.GetValues<TicketPriority>())
+                else
                 {
-                    <option value="@((int)priority)" selected="@(priorityFilter == (int)priority)">
-                        @priority
-                    </option>
+                    <span>
+                        <strong>@_totalRecords.ToString("N0")</strong> @(showArchived ? "archived" : "active") ticket@(_totalRecords == 1 ? "" : "s")
+                        @if (HasFilters)
+                        {
+                            <span> match your filters</span>
+                        }
+                    </span>
                 }
-            </select>
+            </p>
         </div>
 
-        <!-- Project Autocomplete -->
-        <div class="col-md-3 position-relative">
-            <input type="text"
-                   class="form-control"
-                   placeholder="🔍 Project..."
+        <div class="tk-segmented tk-segmented-glass" role="group" aria-label="Ticket set">
+            <button type="button" class="@(!showArchived ? "is-active" : "")" aria-pressed="@(!showArchived)" @onclick="() => SetArchived(false)">
+                <i class="fa-solid fa-inbox"></i> Active
+            </button>
+            <button type="button" class="@(showArchived ? "is-active" : "")" aria-pressed="@showArchived" @onclick="() => SetArchived(true)">
+                <i class="fa-solid fa-box-archive"></i> Archived
+            </button>
+        </div>
+    </header>
+
+    <!-- ============ FILTERS ============ -->
+    <section class="tk-toolbar" aria-label="Filter tickets">
+        <div class="tk-search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="search" placeholder="Search ticket no., title or project…"
+                   aria-label="Search tickets"
+                   value="@searchTerm"
+                   @oninput="OnSearchInput"
+                   @onkeydown="HandleEnterKey" />
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button type="button" class="tk-input-clear" title="Clear search" @onclick="ClearSearch">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+        </div>
+
+        <select class="tk-select" aria-label="Status" @onchange="StatusChanged">
+            <option value="" selected="@(statusFilter == null)">All statuses (excl. closed)</option>
+            @foreach (var status in Enum.GetValues<TicketStatus>())
+            {
+                <option value="@((int)status)" selected="@(statusFilter == (int)status)">@StatusLabel(status.ToString())</option>
+            }
+        </select>
+
+        <select class="tk-select" aria-label="Priority" @onchange="PriorityChanged">
+            <option value="" selected="@(priorityFilter == null)">All priorities</option>
+            @foreach (var priority in Enum.GetValues<TicketPriority>())
+            {
+                <option value="@((int)priority)" selected="@(priorityFilter == (int)priority)">@priority</option>
+            }
+        </select>
+
+        <div class="tk-combo">
+            <i class="fa-solid fa-folder-open tk-combo-icon"></i>
+            <input type="text" autocomplete="off" placeholder="All projects" aria-label="Project"
                    value="@projectSearch"
                    @oninput="OnProjectInput"
-                   @onfocus="() => showProjectDropdown = true"
-                   @onblur="HideProjectDropdown" />
-
-            @if (showProjectDropdown && filteredProjects.Any())
+                   @onfocus="OpenProjectDropdown"
+                   @onclick="OpenProjectDropdown"
+                   @onblur="CloseProjectDropdown"
+                   @onkeydown="OnProjectKeyDown" />
+            @if (projectFilter.HasValue)
             {
-                <ul class="list-group position-absolute w-100 shadow-sm"
-                    style="z-index:1000; max-height:200px; overflow:auto;">
+                <button type="button" class="tk-input-clear" title="Show all projects"
+                        @onmousedown="() => SelectProject(null)" @onmousedown:preventDefault>
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+            @if (showProjectDropdown)
+            {
+                <ul class="tk-combo-list" role="listbox">
+                    <li class="@(projectFilter == null ? "is-selected" : "")"
+                        @onmousedown="() => SelectProject(null)" @onmousedown:preventDefault>All projects</li>
                     @foreach (var proj in filteredProjects)
                     {
-                        <li class="list-group-item list-group-item-action"
-                            @onclick="() => SelectProject(proj)">
-                            @proj.title
-                        </li>
+                        <li @key="proj.Id" class="@(projectFilter == proj.Id ? "is-selected" : "")"
+                            @onmousedown="() => SelectProject(proj)" @onmousedown:preventDefault>@proj.title</li>
+                    }
+                    @if (!filteredProjects.Any())
+                    {
+                        <li class="tk-combo-empty">No projects match “@projectSearch”</li>
                     }
                 </ul>
             }
         </div>
 
-        <!-- Buttons -->
-        <div class="col-md-2 d-flex gap-2">
-            <button class="btn btn-secondary w-100" @onclick="ToggleArchive">
-                <i class="fa-solid fa-box-archive"></i> @(showArchived ? "Show Active" : "Archived")
+        @if (HasFilters)
+        {
+            <button type="button" class="tk-btn tk-btn-link" @onclick="ClearFilters">
+                <i class="fa-solid fa-filter-circle-xmark"></i> Clear filters
             </button>
+        }
+    </section>
 
-            <button class="btn btn-primary w-100" @onclick="SearchTickets">
-                <i class="fa-solid fa-magnifying-glass"></i> Search
-            </button>
+    @if (_error != null)
+    {
+        <div class="tk-alert tk-alert-error" role="alert">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>@_error</span>
+            <button class="tk-btn tk-btn-ghost tk-btn-sm" @onclick="LoadTickets">Try again</button>
         </div>
-        
-    </div>
-</div>
+    }
+    @if (_notice != null)
+    {
+        <div class="tk-alert tk-alert-ok" role="status">
+            <i class="fa-solid fa-circle-check"></i>
+            <span>@_notice</span>
+            <button class="tk-icon-btn" title="Dismiss" @onclick="() => _notice = null"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+    }
 
-@if (tickets == null)
-{
-    <div class="text-center py-5">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="mt-2 text-muted">Loading tickets...</p>
-    </div>
-}
-else if (!tickets.Any())
-{
-    <div class="alert alert-warning text-center shadow-sm rounded-3">
-        No tickets found.
-    </div>
-}
-else
-{
-    <div class="table-wrapper">
-        <div class="table-responsive scrollable-table2">
-            <table class="table table-hover align-middle user-table ">
-                <thead class="table-primary">
-                    <tr>
-                        <th>Ticket No.</th>
-                        <th>Date Received</th>
-                        <th>Issue Title</th>
-                        <th>Client</th>
-                        <th>Project</th>
-                        <th>Status</th>
-                        <th>Priority</th>
-                        <th>Due Date</th>
-                        <th>SLA</th>
-                        <th class="sticky-actions">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var t in tickets)
-                    {
-                        TimeSpan timeLeft;
+    @if (tickets == null)
+    {
+        <!-- ============ FIRST-LOAD SKELETON ============ -->
+        <div class="tk-card">
+            @for (var i = 0; i < 6; i++)
+            {
+                <div class="tk-skel tk-skel-row"></div>
+            }
+        </div>
+    }
+    else if (!tickets.Any())
+    {
+        <div class="tk-card tk-empty">
+            <i class="fa-regular fa-folder-open"></i>
+            @if (HasFilters)
+            {
+                <p>No tickets match your filters.</p>
+                <button class="tk-btn tk-btn-ghost" @onclick="ClearFilters">Clear filters</button>
+            }
+            else
+            {
+                <p>@(showArchived ? "No archived tickets." : "No active tickets — all caught up!")</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="tk-card tk-list-card @(_loading ? "is-stale" : "")">
 
-                        if (t.Status == "Closed")
+            <!-- ============ DESKTOP TABLE ============ -->
+            <div class="tk-table-wrap">
+                <table class="tk-table">
+                    <thead>
+                        <tr>
+                            <th>Ticket</th>
+                            <th>Client / Project</th>
+                            <th>Status</th>
+                            <th>Priority</th>
+                            <th>Received</th>
+                            <th title="Live SLA countdown in business hours">SLA</th>
+                            <th class="tk-th-actions"><span class="visually-hidden">Actions</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var t in tickets)
                         {
-                            timeLeft = TimeSpan.Zero;
+                            <tr @key="t.Id" class="tk-row @(t.IsArchived ? "is-archived" : "")" @onclick="() => ViewTicket(t.Id)">
+                                <td class="tk-cell-ticket">
+                                    <span class="tk-mono tk-muted">@t.TicketNo</span>
+                                    <span class="tk-title" title="@t.IssueTitle">@t.IssueTitle</span>
+                                </td>
+                                <td class="tk-cell-client">
+                                    <span class="tk-strong">@Fallback(t.ClientName)</span>
+                                    <span class="tk-muted tk-small">@Fallback(t.ProjectName, "No project")</span>
+                                </td>
+                                <td><span class="tk-chip tk-st-@StatusCss(t.Status)"><span class="tk-dot"></span>@StatusLabel(t.Status)</span></td>
+                                <td><span class="tk-prio tk-prio-@t.Priority.ToLowerInvariant()"><i class="@PriorityIcon(t.Priority)"></i> @t.Priority</span></td>
+                                <td>
+                                    <span class="tk-small" title="@t.DateReceived.ToLocalTime().ToString("MMM d, yyyy h:mm tt")">@RelativeTime(t.DateReceived)</span>
+                                </td>
+                                <td class="tk-cell-sla">
+                                    <SlaTimer Received="t.DateReceived" Due="t.DueDate" Status="@t.Status" IsBreached="t.IsBreached" Calendar="_slaCalendar" />
+                                </td>
+                                <td class="tk-cell-actions" @onclick:stopPropagation="true">
+                                    <button class="tk-icon-btn" title="View ticket" @onclick="() => ViewTicket(t.Id)">
+                                        <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                    </button>
+                                    <button class="tk-icon-btn @(t.IsArchived ? "tk-icon-ok" : "tk-icon-danger")"
+                                            title="@(t.IsArchived ? "Restore ticket" : "Delete ticket")"
+                                            disabled="@(_busyTicketId == t.Id)"
+                                            @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived, t.Id)">
+                                        <i class="fa-solid @(_busyTicketId == t.Id ? "fa-circle-notch fa-spin" : t.IsArchived ? "fa-rotate-left" : "fa-trash-can")"></i>
+                                    </button>
+                                </td>
+                            </tr>
                         }
-                        else
-                        {
-                            timeLeft = t.DueDate - DateTime.UtcNow;
+                    </tbody>
+                </table>
+            </div>
 
-                            if (timeLeft < TimeSpan.Zero)
+            <!-- ============ MOBILE CARDS ============ -->
+            <ul class="tk-cards">
+                @foreach (var t in tickets)
+                {
+                    <li @key="t.Id" class="tk-mcard @(t.IsArchived ? "is-archived" : "")">
+                        <button type="button" class="tk-mcard-main" @onclick="() => ViewTicket(t.Id)">
+                            <div class="tk-mcard-top">
+                                <span class="tk-mono tk-muted">@t.TicketNo</span>
+                                <span class="tk-chip tk-st-@StatusCss(t.Status)"><span class="tk-dot"></span>@StatusLabel(t.Status)</span>
+                            </div>
+                            <div class="tk-mcard-title">@t.IssueTitle</div>
+                            <div class="tk-muted tk-small">
+                                @Fallback(t.ClientName) · @Fallback(t.ProjectName, "No project") · @RelativeTime(t.DateReceived)
+                            </div>
+                            <div class="tk-mcard-foot">
+                                <span class="tk-prio tk-prio-@t.Priority.ToLowerInvariant()"><i class="@PriorityIcon(t.Priority)"></i> @t.Priority</span>
+                                <SlaTimer Received="t.DateReceived" Due="t.DueDate" Status="@t.Status" IsBreached="t.IsBreached" Calendar="_slaCalendar" />
+                            </div>
+                        </button>
+                        <button type="button" class="tk-icon-btn @(t.IsArchived ? "tk-icon-ok" : "tk-icon-danger") tk-mcard-action"
+                                title="@(t.IsArchived ? "Restore ticket" : "Delete ticket")"
+                                disabled="@(_busyTicketId == t.Id)"
+                                @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived, t.Id)">
+                            <i class="fa-solid @(_busyTicketId == t.Id ? "fa-circle-notch fa-spin" : t.IsArchived ? "fa-rotate-left" : "fa-trash-can")"></i>
+                        </button>
+                    </li>
+                }
+            </ul>
+
+            <!-- ============ PAGINATION ============ -->
+            <footer class="tk-pager">
+                <div class="tk-muted tk-small">
+                    Showing <strong>@FromPage–@ToPage</strong> of <strong>@_totalRecords.ToString("N0")</strong>
+                </div>
+
+                <div class="tk-pager-controls">
+                    <label class="tk-pagesize tk-small tk-muted">
+                        Rows
+                        <select class="tk-select tk-select-sm" @onchange="PageSizeChanged" aria-label="Rows per page">
+                            @foreach (var size in PageSizes)
                             {
-                                timeLeft = TimeSpan.Zero;
+                                <option value="@size" selected="@(size == _pageSize)">@size</option>
+                            }
+                        </select>
+                    </label>
+
+                    <nav class="tk-pages" aria-label="Pagination">
+                        <button class="tk-page" title="Previous page" disabled="@(!CanGoPrev || _loading)" @onclick="PrevPage">
+                            <i class="fa-solid fa-chevron-left"></i>
+                        </button>
+                        @foreach (var p in VisiblePages)
+                        {
+                            if (p == null)
+                            {
+                                <span class="tk-page-gap">…</span>
+                            }
+                            else
+                            {
+                                var pageNo = p.Value;
+                                <button class="tk-page @(pageNo == _currentPage ? "is-active" : "")"
+                                        aria-current="@(pageNo == _currentPage ? "page" : null)"
+                                        disabled="@_loading"
+                                        @onclick="() => SelectedPage(pageNo)">@pageNo</button>
                             }
                         }
-
-                        <tr class="@(t.IsArchived ? "table-secondary" : "")">
-                            <td>@t.TicketNo</td>
-                            <td>@t.DateReceived.ToString("g")</td>
-                            <td class="text-start">@t.IssueTitle</td>
-                            <td>@t.ClientName</td>
-                            <td>@t.ProjectName</td>
-
-                            <td>
-                                <span class="badge @(t.Status switch
-                                      {
-                                          "Open" => "bg-success",
-                                          "InProgress" => "bg-info",
-                                          "Resolved" => "bg-primary",
-                                          "Closed" => "bg-secondary",
-                                          "Rejected" => "bg-danger",
-                                          _ => "bg-light text-dark"
-                                      })">
-                                    @t.Status
-                                </span>
-                            </td>
-
-                            <td>
-                                <span class="badge @(t.Priority switch
-                                      {
-                                          "High" => "bg-danger",
-                                          "Medium" => "bg-warning text-dark",
-                                          "Low" => "bg-success",
-                                          _ => "bg-secondary"
-                                      })">
-                                    @t.Priority
-                                </span>
-                            </td>
-
-                            <td>@t.DueDate.ToString("g")</td>
-
-                            <td>
-                                @if (t.Status == "Closed")
-                                {
-                                    <span class="badge bg-secondary">✔ Closed</span>
-                                    <br />
-                                    <small>0:00:00</small>
-                                }
-                                else if (t.IsBreached)
-                                {
-                                    <span class="badge bg-danger">⚠ Breached</span>
-                                    <br />
-                                    <small>@($"{(int)timeLeft.TotalHours}:{timeLeft.Minutes:D2}:{timeLeft.Seconds:D2}")</small>
-                                }
-                                else if (timeLeft.TotalHours <= 2)
-                                {
-                                    <span class="badge bg-warning text-dark">⏳ Near SLA</span>
-                                    <br />
-                                    <small>@($"{(int)timeLeft.TotalHours}:{timeLeft.Minutes:D2}:{timeLeft.Seconds:D2}")</small>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-success">✅ On Track</span>
-                                    <br />
-                                    <small>@($"{(int)timeLeft.TotalHours}:{timeLeft.Minutes:D2}:{timeLeft.Seconds:D2}")</small>
-                                }
-                            </td>
-
-                            <td class="sticky-actions">
-                                <div class="action-buttons">
-                                    <button class="btn btn-sm btn-info text-white rounded-pill px-3"
-                                            @onclick="() => ViewTicket(t.Id)">
-                                        <i class="fa-solid fa-eye"></i> View
-                                    </button>
-
-                                    <button class="btn btn-sm @(t.IsArchived ? "btn-success" : "btn-danger") rounded-pill px-3"
-                                            @onclick="() => DeleteOrRestoreTicket(t.TicketNo, t.IsArchived, t.Id)">
-                                        <i class="fa-solid @(t.IsArchived ? "fa-rotate-left" : "fa-trash")"></i>
-                                        @(t.IsArchived ? "Restore" : "Delete")
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+                        <button class="tk-page" title="Next page" disabled="@(!CanGoNext || _loading)" @onclick="NextPage">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </button>
+                    </nav>
+                </div>
+            </footer>
         </div>
-    </div>
-    <!-- ✅ Enhanced Pagination -->
-    <div class="pagination-holder ">
-        <div class="text-muted small">
-            Showing @FromPage to @ToPage of @_totalRecords entries
-        </div>
-
-        <div class="pagination-button-holder d-flex align-items-center flex-nowrap gap-1">
-            <button class="btn btn-secondary btn-sm" @onclick="PrevPage" disabled="@(!CanGoPrev)"><i class="fa-solid fa-backward"></i></button>
-            @for (int i = 1; i <= _totalPages; i++)
-            {
-                int page = i;
-                <input type="button"
-                       value=@(page)
-                       class="btn btn-sm @( _currentPage == page ?  "active" : "")"
-                       @onclick="() => SelectedPage(page)" />
-            }
-            <button class="btn btn-secondary btn-sm" @onclick="NextPage" disabled="@(!CanGoNext)"><i class="fa-solid fa-forward"></i></button>
-        </div>
-    </div>
-}
+    }
+</div>
 
 @code {
     [Parameter]
-    public string EncryptedId { get; set; }
+    public string EncryptedId { get; set; } = string.Empty;
 
     [Inject]
-    public LinkService LinkService { get; set; }
+    public LinkService LinkService { get; set; } = default!;
+
+    private static readonly int[] PageSizes = { 10, 15, 25, 50 };
+
     private int UserId;
     private List<TicketDto>? tickets;
     private string searchTerm = string.Empty;
     private int? statusFilter;
     private int? priorityFilter;
     private bool showArchived = false;
-    private bool isArchived = false;
     private int _currentPage = 1;
     private int _pageSize = 15;
     private int _totalPages = 1;
     private int _totalRecords = 0;
 
-    private int FromPage => ((_currentPage - 1) * _pageSize) + 1;
+    private int FromPage => _totalRecords == 0 ? 0 : ((_currentPage - 1) * _pageSize) + 1;
     private int ToPage => Math.Min(_currentPage * _pageSize, _totalRecords);
 
     private bool CanGoPrev => _currentPage > 1;
     private bool CanGoNext => _currentPage < _totalPages;
+
     private List<ProjectDto> allProjects = new();
     private List<ProjectDto> filteredProjects = new();
-
     private string projectSearch = string.Empty;
     private int? projectFilter = null;
+    private string? selectedProjectTitle;
     private bool showProjectDropdown = false;
-    private Dictionary<int, string> slaStatusMap = new();
-    private System.Timers.Timer? slaTimer;
-    private HubConnection? hub;
+
+    // Loading state: tickets stay on screen while a refresh is in flight
+    private bool _loading;
+    private string? _error;
+    private string? _notice;
+    private int? _busyTicketId;
+    private CancellationTokenSource? _loadCts;
+    private CancellationTokenSource? _searchCts;
+
+    private BusinessCalendar? _slaCalendar;
+
+    private bool HasFilters =>
+        !string.IsNullOrWhiteSpace(searchTerm) || statusFilter.HasValue || priorityFilter.HasValue || projectFilter.HasValue;
+
     public class ProjectDto
     {
         public int Id { get; set; }
-        public string title { get; set; }
+        public string title { get; set; } = string.Empty;
     }
-    private async Task InitSlaSignalR()
-    {
-        hub = new HubConnectionBuilder()
-     .WithUrl($"{AppConfig.ChatUrl}slahub") // ✅ correct API endpoint
-     .WithAutomaticReconnect()
-     .Build();
 
-        hub.On<int, string, string>("ReceiveSlaUpdate", (ticketId, time, status) =>
-        {
-            slaStatusMap[ticketId] = status;
-            InvokeAsync(StateHasChanged);
-        });
-
-        // ✅ Handle reconnect (VERY IMPORTANT)
-        hub.Reconnected += async (connectionId) =>
-        {
-            await JoinTicketGroups();
-        };
-
-        await hub.StartAsync();
-    }
-    private async Task JoinTicketGroups()
-    {
-        if (hub == null || hub.State != HubConnectionState.Connected || tickets == null || tickets.Count == 0)
-            return;
-
-        // One hub call with all ticket IDs — server joins all groups and sends
-        // back each ticket's current SLA status in a single round-trip
-        var ids = tickets.Select(t => t.Id).ToList();
-        await hub.SendAsync("JoinTicketGroups", ids);
-    }
     protected override async Task OnInitializedAsync()
     {
         var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
 
-        if (string.IsNullOrEmpty(decrypted))
+        if (string.IsNullOrEmpty(decrypted) || !int.TryParse(decrypted, out UserId))
         {
             // If invalid token, redirect to error or home
             Navigation.NavigateTo("/unauthorized");
             return;
         }
 
-        UserId = int.Parse(decrypted);
-        slaTimer = new System.Timers.Timer(1000);
-        slaTimer.Elapsed += (_, __) =>
-        {
-            InvokeAsync(() =>
-            {
-                StateHasChanged();
-            });
-        };
-        slaTimer.AutoReset = true;
-        slaTimer.Start();
-        TitleService.SetTitle("Chat Support Page");
-        await InitSlaSignalR();   // start SignalR first
-        await LoadTickets();      // load tickets — also joins groups internally
-        await LoadProjects();
+        TitleService.SetTitle("Ticket Management");
 
+        // Independent requests run concurrently. Live SLA timers are computed locally
+        // from the business calendar, so no per-page SignalR connection is needed.
+        await Task.WhenAll(LoadTickets(), LoadProjects(), LoadSlaCalendar());
     }
-    private string GetSlaTime(int ticketId)
+
+    private async Task LoadSlaCalendar()
     {
-        var t = tickets?.FirstOrDefault(x => x.Id == ticketId);
-        if (t == null) return "--:--:--";
-
-        var remaining = t.DueDate - DateTime.UtcNow;
-        if (remaining <= TimeSpan.Zero) return "00:00:00";
-        return $"{(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
+        _slaCalendar = await SlaService.GetCalendarAsync();
     }
 
-    private string GetSlaStatus(int ticketId)
-    {
-        var t = tickets?.FirstOrDefault(x => x.Id == ticketId);
-        if (t == null) return "Loading...";
-
-        var remaining = t.DueDate - DateTime.UtcNow;
-        if (remaining <= TimeSpan.Zero) return "Breached";
-        if (remaining.TotalHours <= 2) return "Near";
-        return "OnTrack";
-    }
-
-    private string GetSlaColor(int ticketId)
-    {
-        return GetSlaStatus(ticketId) switch
-        {
-            "Breached" => "text-danger",
-            "Near" => "text-warning",
-            "OnTrack" => "text-success",
-            _ => "text-muted"
-        };
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (hub != null)
-            await hub.DisposeAsync();
-        if (slaTimer != null)
-        {
-            slaTimer.Stop();
-            slaTimer.Dispose();
-        }
-    }
     private async Task LoadProjects()
     {
         try
         {
             var url = $"{AppConfig.ChatUrl}Projects/GetProjectsByUser/by-user/{UserId}";
-            // var url = $"{AppConfig.ChatUrl}Projects/Get";
-            var response = await Http.GetFromJsonAsync<List<ProjectDto>>(url);
-
-            if (response != null)
-            {
-                allProjects = response;
-                filteredProjects = allProjects;
-            }
+            allProjects = await Http.GetFromJsonAsync<List<ProjectDto>>(url) ?? new();
+            filteredProjects = allProjects;
         }
         catch (Exception ex)
         {
@@ -404,81 +386,101 @@ else
         }
     }
 
-    private void FilterProjects()
-    {
-        if (string.IsNullOrWhiteSpace(projectSearch))
-        {
-            filteredProjects = allProjects;
-        }
-        else
-        {
-            filteredProjects = allProjects
-                .Where(p => p.title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-        }
-    }
-    private void OnProjectInput(ChangeEventArgs e)
-    {
-        projectSearch = e.Value?.ToString() ?? string.Empty;
-        showProjectDropdown = true;
-
-        filteredProjects = allProjects
-            .Where(p => p.title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-    }
-    private async Task SelectProject(ProjectDto proj)
-    {
-        projectSearch = proj.title;
-        projectFilter = proj.Id;
-
-        showProjectDropdown = false;
-
-        _currentPage = 1;
-        await LoadTickets(); // auto search after selection
-    }
-    private async Task HideProjectDropdown()
-    {
-        await Task.Delay(150); // allow click before closing
-        showProjectDropdown = false;
-    }
     private async Task LoadTickets()
     {
-        var url = Navigation.ToAbsoluteUri($"{AppConfig.ChatUrl}Tickets/Query?" +
-        $"userId={UserId}" +
-        $"&page={_currentPage}" +
-        $"&pageSize={_pageSize}" +
-        $"&search={Uri.EscapeDataString(searchTerm ?? string.Empty)}" +
-        $"&statusFilter={(statusFilter.HasValue ? statusFilter.Value.ToString() : string.Empty)}" +
-        $"&priorityFilter={(priorityFilter.HasValue ? priorityFilter.Value.ToString() : string.Empty)}" +
-        $"&projectFilter={(projectFilter.HasValue ? projectFilter.Value.ToString() : "")}" +
-        $"&includeArchived={showArchived}");
+        // A newer request supersedes any in-flight one
+        _loadCts?.Cancel();
+        var cts = _loadCts = new CancellationTokenSource();
+
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+
+        var url = $"{AppConfig.ChatUrl}Tickets/Query?" +
+            $"userId={UserId}" +
+            $"&page={_currentPage}" +
+            $"&pageSize={_pageSize}" +
+            $"&search={Uri.EscapeDataString(searchTerm ?? string.Empty)}" +
+            $"&statusFilter={(statusFilter.HasValue ? statusFilter.Value.ToString() : string.Empty)}" +
+            $"&priorityFilter={(priorityFilter.HasValue ? priorityFilter.Value.ToString() : string.Empty)}" +
+            $"&projectFilter={(projectFilter.HasValue ? projectFilter.Value.ToString() : string.Empty)}" +
+            $"&includeArchived={showArchived}";
 
         try
         {
-            var response = await Http.GetFromJsonAsync<TicketResponse>(url);
+            var response = await Http.GetFromJsonAsync<TicketResponse>(url, cts.Token);
 
-            if (response != null)
+            tickets = response?.Items ?? new();
+            _totalRecords = response?.TotalCount ?? 0;
+            _totalPages = Math.Max(1, (int)Math.Ceiling((double)_totalRecords / _pageSize));
+
+            // Deleting the last ticket on the last page leaves us past the end
+            if (_currentPage > _totalPages && _totalRecords > 0)
             {
-                tickets = response.Items;
-                _totalRecords = response.TotalCount;
-                _totalPages = (int)Math.Ceiling((double)_totalRecords / _pageSize);
+                _currentPage = _totalPages;
+                await LoadTickets();
+                return;
             }
-            else
-            {
-                tickets = new();
-                _totalRecords = 0;
-                _totalPages = 1;
-            }
-            // Rejoin groups so the server sends fresh SLA values for the new page of tickets
-            await JoinTicketGroups();
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            return;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error loading tickets: {ex.Message}");
-            tickets = new();
+            _error = "Couldn't load tickets. Check your connection and try again.";
+            tickets ??= new();
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested)
+            {
+                _loading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    // =============================
+    // SEARCH & FILTERS
+    // =============================
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? string.Empty;
+
+        // Debounce: search once typing pauses instead of on every keystroke
+        _searchCts?.Cancel();
+        var cts = _searchCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(350, cts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
         }
 
-        StateHasChanged();
+        _currentPage = 1;
+        await LoadTickets();
+    }
+
+    private async Task HandleEnterKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            _searchCts?.Cancel();
+            _currentPage = 1;
+            await LoadTickets();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchCts?.Cancel();
+        searchTerm = string.Empty;
+        _currentPage = 1;
+        await LoadTickets();
     }
 
     private async Task StatusChanged(ChangeEventArgs e)
@@ -497,26 +499,91 @@ else
         await LoadTickets();
     }
 
-    private async Task SearchTickets()
+    private async Task SetArchived(bool archived)
     {
+        if (showArchived == archived)
+            return;
+
+        showArchived = archived;
         _currentPage = 1;
         await LoadTickets();
     }
 
-    private async Task HandleEnterKey(KeyboardEventArgs e)
+    private async Task ClearFilters()
     {
-        if (e.Key == "Enter")
+        _searchCts?.Cancel();
+        searchTerm = string.Empty;
+        statusFilter = null;
+        priorityFilter = null;
+        projectFilter = null;
+        selectedProjectTitle = null;
+        projectSearch = string.Empty;
+        _currentPage = 1;
+        await LoadTickets();
+    }
+
+    private void OpenProjectDropdown()
+    {
+        showProjectDropdown = true;
+        FilterProjects();
+    }
+
+    private void CloseProjectDropdown()
+    {
+        showProjectDropdown = false;
+        projectSearch = selectedProjectTitle ?? string.Empty;
+    }
+
+    private void OnProjectInput(ChangeEventArgs e)
+    {
+        projectSearch = e.Value?.ToString() ?? string.Empty;
+        showProjectDropdown = true;
+        FilterProjects();
+    }
+
+    private void FilterProjects()
+    {
+        // When the box just shows the current selection, list everything
+        filteredProjects = string.IsNullOrWhiteSpace(projectSearch) || projectSearch == selectedProjectTitle
+            ? allProjects
+            : allProjects
+                .Where(p => (p.title ?? string.Empty).Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+    }
+
+    private async Task OnProjectKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            CloseProjectDropdown();
+        else if (e.Key == "Enter" && showProjectDropdown && filteredProjects.Any())
+            await SelectProject(filteredProjects[0]);
+    }
+
+    private async Task SelectProject(ProjectDto? proj)
+    {
+        showProjectDropdown = false;
+        projectSearch = proj?.title ?? string.Empty;
+
+        if (proj?.Id == projectFilter)
+            return;
+
+        projectFilter = proj?.Id;
+        selectedProjectTitle = proj?.title;
+        _currentPage = 1;
+        await LoadTickets();
+    }
+
+    // =============================
+    // PAGINATION
+    // =============================
+    private async Task PageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size != _pageSize)
         {
+            _pageSize = size;
             _currentPage = 1;
             await LoadTickets();
         }
-    }
-
-    private async Task ToggleArchive()
-    {
-        showArchived = !showArchived;
-        _currentPage = 1;
-        await LoadTickets();
     }
 
     private async Task PrevPage()
@@ -539,10 +606,37 @@ else
 
     private async Task SelectedPage(int page)
     {
+        if (page == _currentPage)
+            return;
+
         _currentPage = page;
         await LoadTickets();
     }
 
+    // First, last and the pages around the current one; null marks a gap
+    private IEnumerable<int?> VisiblePages
+    {
+        get
+        {
+            var pages = new SortedSet<int> { 1, _totalPages };
+            for (var p = _currentPage - 1; p <= _currentPage + 1; p++)
+                if (p >= 1 && p <= _totalPages)
+                    pages.Add(p);
+
+            var previous = 0;
+            foreach (var p in pages)
+            {
+                if (p - previous > 1)
+                    yield return null;
+                yield return p;
+                previous = p;
+            }
+        }
+    }
+
+    // =============================
+    // ACTIONS
+    // =============================
     private void ViewTicket(int id)
     {
         var token = LinkService.Protect(id.ToString());
@@ -553,38 +647,93 @@ else
     private async Task DeleteOrRestoreTicket(string ticketno, bool isArchived, int id)
     {
         string action = isArchived ? "restore" : "delete";
-        // bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to {action} {ticketno}?");
-        // if (!confirmed) return;
         var confirmDialog = await DialogService.ShowConfirmationAsync($"Are you sure you want to {action} {ticketno}?", "Yes");
         var result = await confirmDialog.Result;
         if (result.Cancelled) return;
+
         string url = isArchived
             ? $"{AppConfig.ChatUrl}Tickets/RestoreTicket/Restore/{id}"
             : $"{AppConfig.ChatUrl}Tickets/Delete/{id}";
 
-        Console.WriteLine($"➡️ Calling: {url}");
+        _busyTicketId = id;
+        _notice = null;
+        _error = null;
 
-        HttpResponseMessage response;
+        try
+        {
+            // Restore uses POST, delete uses DELETE
+            var response = isArchived
+                ? await Http.PostAsync(url, null)
+                : await Http.DeleteAsync(url);
 
-        if (isArchived)
-        {
-            // If Restore uses POST (depends on your controller)
-            response = await Http.PostAsync(url, null);
+            if (response.IsSuccessStatusCode)
+            {
+                _notice = isArchived ? $"{ticketno} was restored." : $"{ticketno} was deleted and moved to the archive.";
+                await LoadTickets();
+            }
+            else
+            {
+                _error = $"Couldn't {action} {ticketno} ({(int)response.StatusCode}).";
+            }
         }
-        else
+        catch (Exception ex)
         {
-            // Delete should use DELETE
-            response = await Http.DeleteAsync(url);
+            Console.WriteLine($"❌ Failed to {action} ticket: {ex.Message}");
+            _error = $"Couldn't {action} {ticketno}. Check your connection and try again.";
         }
+        finally
+        {
+            _busyTicketId = null;
+        }
+    }
 
-        if (response.IsSuccessStatusCode)
-        {
-            await LoadTickets();
-        }
-        else
-        {
-            Console.WriteLine($"❌ Failed: {response.StatusCode}");
-        }
+    // =============================
+    // FORMATTING
+    // =============================
+    private static string StatusLabel(string? status) => status switch
+    {
+        "InProgress" => "In progress",
+        null or "" => "Unknown",
+        _ => status
+    };
+
+    private static string StatusCss(string? status) => status switch
+    {
+        "Open" => "open",
+        "InProgress" => "progress",
+        "Resolved" => "resolved",
+        "Closed" => "closed",
+        "Rejected" => "rejected",
+        "New" => "new",
+        _ => "other"
+    };
+
+    private static string PriorityIcon(string? priority) => priority switch
+    {
+        "Critical" => "fa-solid fa-fire",
+        "High" => "fa-solid fa-angles-up",
+        "Medium" => "fa-solid fa-equals",
+        "Low" => "fa-solid fa-angle-down",
+        _ => "fa-regular fa-circle"
+    };
+
+    private static string Fallback(string? value, string fallback = "—") =>
+        string.IsNullOrWhiteSpace(value) ? fallback : value;
+
+    private static string RelativeTime(DateTime utc)
+    {
+        var ago = DateTime.UtcNow - utc;
+        if (ago.TotalMinutes < 1) return "just now";
+        if (ago.TotalHours < 1) return $"{(int)ago.TotalMinutes}m ago";
+        if (ago.TotalDays < 1) return $"{(int)ago.TotalHours}h ago";
+        if (ago.TotalDays < 7) return $"{(int)ago.TotalDays}d ago";
+        return utc.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+    }
+
+    public void Dispose()
+    {
+        _loadCts?.Cancel();
+        _searchCts?.Cancel();
     }
 
     // ✅ DTO for pagination response

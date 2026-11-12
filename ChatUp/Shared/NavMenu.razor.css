@@ -1,124 +1,251 @@
-.navbar-toggler {
-    background-color: rgba(255, 255, 255, 0.1);
-}
+/* =========================================================
+   SIDEBAR NAVIGATION (scoped to NavMenu)
+========================================================= */
 
-.top-row {
-    height: 3.5rem;
-    background-color: rgba(0,0,0,0.4);
-}
-
-.navbar-brand {
-    font-size: 1.1rem;
-}
-
-.bi {
-    display: inline-block;
+.nv {
     position: relative;
-    width: 1.25rem;
-    height: 1.25rem;
-    margin-right: 0.75rem;
-    top: -1px;
-    background-size: cover;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    color: #c7d2fe;
+    background:
+        radial-gradient(420px 260px at 0% 0%, rgba(99, 102, 241, .28), transparent 70%),
+        radial-gradient(360px 300px at 100% 100%, rgba(6, 182, 212, .18), transparent 70%),
+        linear-gradient(180deg, #0b1437 0%, #141a4a 45%, #1e1240 100%);
+    font-family: "Segoe UI", Inter, system-ui, -apple-system, Roboto, sans-serif;
 }
 
-.bi-house-door-fill-nav-menu {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-house-door-fill' viewBox='0 0 16 16'%3E%3Cpath d='M6.5 14.5v-3.505c0-.245.25-.495.5-.495h2c.25 0 .5.25.5.5v3.5a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5v-7a.5.5 0 0 0-.146-.354L13 5.793V2.5a.5.5 0 0 0-.5-.5h-1a.5.5 0 0 0-.5.5v1.293L8.354 1.146a.5.5 0 0 0-.708 0l-6 6A.5.5 0 0 0 1.5 7.5v7a.5.5 0 0 0 .5.5h4a.5.5 0 0 0 .5-.5Z'/%3E%3C/svg%3E");
-}
-
-.bi-plus-square-fill-nav-menu {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-plus-square-fill' viewBox='0 0 16 16'%3E%3Cpath d='M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm6.5 4.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3a.5.5 0 0 1 1 0z'/%3E%3C/svg%3E");
-}
-
-.bi-list-nested-nav-menu {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-list-nested' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M4.5 11.5A.5.5 0 0 1 5 11h10a.5.5 0 0 1 0 1H5a.5.5 0 0 1-.5-.5zm-2-4A.5.5 0 0 1 3 7h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm-2-4A.5.5 0 0 1 1 3h10a.5.5 0 0 1 0 1H1a.5.5 0 0 1-.5-.5z'/%3E%3C/svg%3E");
-}
-
-.nav-item {
-    font-size: 0.9rem;
-    padding-bottom: 0.5rem;
-}
-
-    .nav-item:first-of-type {
-        padding-top: 1rem;
+    /* subtle tech grid */
+    .nv::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+            linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+        background-size: 24px 24px;
+        mask-image: linear-gradient(180deg, #000, transparent 70%);
+        -webkit-mask-image: linear-gradient(180deg, #000, transparent 70%);
+        pointer-events: none;
     }
 
-    .nav-item:last-of-type {
-        padding-bottom: 1rem;
-    }
+    .nv > * { position: relative; }
 
-    .nav-item ::deep a {
-        color: #d7d7d7;
-        border-radius: 4px;
-        height: 3rem;
-        display: flex;
-        align-items: center;
-        line-height: 3rem;
-    }
-
-        .nav-item ::deep a.active {
-            background-color: rgba(255,255,255,0.37);
-            color: white;
-        }
-
-        .nav-item ::deep a:hover {
-            background-color: rgba(255,255,255,0.1);
-            color: white;
-        }
-
-@media (min-width: 641px) {
-    .navbar-toggler {
-        display: none;
-    }
-
-    .collapse {
-        /* Never collapse the sidebar for wide screens */
-        display: block;
-    }
-
-    .nav-scrollable {
-        /* Allow sidebar to scroll for tall menus */
-        height: calc(100vh - 3.5rem);
-        overflow-y: auto;
-    }
-}
-/* base style for every link */
-.sidebar-link {
-    color: #ffffff !important; /* Makes text white */
-    font-weight: 500;
-    padding: 10px 20px;
+/* brand */
+.nv-brand {
     display: flex;
     align-items: center;
-    gap: 10px;
-    transition: background-color 0.2s ease, color 0.2s ease;
-    border-radius: 8px;
+    justify-content: center;
+    height: 72px;
+    flex: none;
+    padding: 0 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, .07);
 }
 
-    /* hover / focus */
-    .sidebar-link:hover,
-    .sidebar-link:focus {
-        background-color: rgba(255, 255, 255, 0.15);
-        opacity: 1;
-        text-decoration: none;
-    }
+.nv-logo { width: 100%; max-width: 168px; height: auto; filter: drop-shadow(0 2px 8px rgba(0,0,0,.25)); }
 
-    /* active route = NavLink adds .active automatically */
-    .sidebar-link.active {
-        background-color: #ffffff;
-        color: white; /* Bootstrap primary */
+.nv-mark {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #6366f1, #06b6d4);
+    color: #fff;
+    font-size: 17px;
+    box-shadow: 0 6px 18px rgba(99, 102, 241, .45);
+}
+
+/* links */
+.nv-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 12px 16px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.15) transparent;
+}
+
+.nv-section {
+    margin: 14px 10px 6px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: rgba(199, 210, 254, .55);
+}
+
+.nv-divider { height: 1px; margin: 12px 8px; background: rgba(255, 255, 255, .08); }
+
+.nv-list { margin: 0; padding: 0; list-style: none; }
+
+.nv-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 44px;
+    margin-bottom: 4px;
+    padding: 0 10px;
+    border-radius: 12px;
+    color: #c7d2fe;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background .15s, color .15s, transform .1s;
+}
+
+    .nv-link:hover { background: rgba(255, 255, 255, .07); color: #fff; text-decoration: none; }
+    .nv-link:active { transform: scale(.98); }
+    .nv-link:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
+
+    .nv-link.is-active {
+        background: linear-gradient(135deg, rgba(99, 102, 241, .95), rgba(79, 70, 229, .85));
+        color: #fff;
         font-weight: 600;
+        box-shadow: 0 6px 18px rgba(79, 70, 229, .4), inset 0 1px 0 rgba(255,255,255,.18);
     }
 
-        .sidebar-link.active i {
-            color: white;
+        /* glowing accent rail */
+        .nv-link.is-active::before {
+            content: "";
+            position: absolute;
+            left: -12px;
+            top: 10px;
+            bottom: 10px;
+            width: 4px;
+            border-radius: 0 4px 4px 0;
+            background: #22d3ee;
+            box-shadow: 0 0 12px #22d3ee;
         }
 
-    /* keep icons inheriting link color */
-    .sidebar-link i {
-        font-size: 1.1rem;
-        line-height: 1;
-    }
-
-.fa-solid {
-    margin-right: 10px
+.nv-icon {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    font-size: 15px;
+    color: inherit;
 }
-/*page*/
+
+.nv-link:not(.is-active) .nv-icon { background: rgba(255, 255, 255, .05); }
+
+.nv-label { overflow: hidden; text-overflow: ellipsis; }
+
+.nv-badge {
+    margin-left: auto;
+    min-width: 22px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: #f43f5e;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 20px;
+    text-align: center;
+    box-shadow: 0 0 0 2px rgba(11, 20, 55, .9);
+}
+
+/* footer: user + actions */
+.nv-footer {
+    flex: none;
+    padding: 12px;
+    border-top: 1px solid rgba(255, 255, 255, .07);
+    background: rgba(0, 0, 0, .15);
+}
+
+.nv-user { display: flex; align-items: center; gap: 10px; padding: 6px 6px 10px; min-width: 0; }
+
+.nv-avatar {
+    position: relative;
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6366f1, #06b6d4);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+    .nv-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+
+.nv-presence {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    background: #34d399;
+    border: 2px solid #141a4a;
+}
+
+.nv-user-text { display: flex; flex-direction: column; min-width: 0; }
+    .nv-user-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-size: 13.5px; }
+    .nv-user-text small { color: rgba(199, 210, 254, .7); font-size: 11.5px; }
+
+.nv-footer-actions { display: flex; gap: 6px; }
+
+.nv-footer-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 38px;
+    padding: 0 12px;
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .05);
+    color: #c7d2fe;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+}
+
+    .nv-footer-btn:hover { background: rgba(255, 255, 255, .12); color: #fff; }
+    .nv-footer-btn.is-danger { flex: 1; }
+    .nv-footer-btn.is-danger:hover { background: rgba(244, 63, 94, .18); border-color: rgba(244, 63, 94, .45); color: #fecdd3; }
+
+/* =========================
+   COLLAPSED RAIL (desktop)
+========================= */
+.nv.is-collapsed .nv-scroll { padding: 10px 10px 16px; }
+.nv.is-collapsed .nv-link { justify-content: center; padding: 0; }
+.nv.is-collapsed .nv-link.is-active::before { left: -10px; }
+.nv.is-collapsed .nv-label,
+.nv.is-collapsed .nv-user-text { display: none; }
+
+.nv.is-collapsed .nv-badge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 18px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 9.5px;
+    line-height: 16px;
+}
+
+.nv.is-collapsed .nv-user { justify-content: center; padding: 4px 0 10px; }
+.nv.is-collapsed .nv-footer-actions { flex-direction: column; }
+.nv.is-collapsed .nv-footer-btn { padding: 0; }
+
+/* the collapse toggle only makes sense on desktop */
+@media (max-width: 767.98px) {
+    .nv-collapse-btn { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nv * { transition: none !important; }
+}

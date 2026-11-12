@@ -1,8 +1,9 @@
 ﻿@page "/dashboard/{EncryptedId}"
+@implements IAsyncDisposable
 @using System.Globalization
 @using System.Linq
+@using System.Text.RegularExpressions
 @using ChatUp.Application.Features.Dashboard.DTOs
-@using ChatUp.Domain.Entities
 @using ChatUp.Services
 @using ChatUp.Services.DTOs
 @inject TitleService TitleService
@@ -12,906 +13,1301 @@
 @inject IJSRuntime JS
 <link href="css/dashboard.css" rel="stylesheet" />
 
+<div class="dx">
+    @if (IsBusy && HasAnyData)
+    {
+        <div class="dx-progress" role="progressbar" aria-label="Refreshing dashboard data"><span></span></div>
+    }
 
-<div class="erp-app">
-    <aside class="sidebar @(sidebarVisible ? "mobile-visible" : "mobile-hidden")">
-        <div style="font-weight:700; margin-bottom:12px;">SupportOps</div>
-        <nav>
-            <div class="muted">Analytics</div>
-            <div style="margin-top:10px;">
-                <div class="muted">Dashboard</div>
-                <div class="muted">Tickets</div>
-                <div class="muted">Agents</div>
-                <div class="muted">SLA</div>
+    <!-- ============ HERO / CONTEXT ============ -->
+    <header class="dx-hero">
+        <div class="dx-hero-text">
+            <div class="dx-eyebrow">
+                <span class="dx-live-dot @(IsBusy ? "is-busy" : "")"></span>
+                Support operations
             </div>
-        </nav>
-    </aside>
+            <h1>Ticket Operations Dashboard</h1>
+            <p class="dx-scope">
+                Showing tickets received <strong>@RangeLabel</strong>
+                in <strong>@(SelectedProjectTitle ?? "all projects")</strong>
+            </p>
+        </div>
+        <div class="dx-hero-meta">
+            <span class="dx-updated" aria-live="polite">
+                @if (IsBusy)
+                {
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Updating…</span>
+                }
+                else if (_lastUpdated.HasValue)
+                {
+                    <i class="fa-regular fa-clock"></i>
+                    <span>Updated @_lastUpdated.Value.ToString("h:mm tt", CultureInfo.InvariantCulture)</span>
+                }
+            </span>
+            <button class="dx-btn dx-btn-glass" @onclick="RefreshAsync" disabled="@IsBusy" title="Reload all dashboard data">
+                <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+        </div>
+    </header>
 
-    <main class="main">
-        <header class="d-flex justify-content-between align-items-center">
+    <!-- ============ FILTERS ============ -->
+    <section class="dx-toolbar" aria-label="Dashboard filters">
+        <div class="dx-field dx-field-project">
+            <label for="dx-project">Project</label>
+            <div class="dx-combo">
+                <i class="fa-solid fa-folder-open dx-combo-icon"></i>
+                <input id="dx-project" type="text" autocomplete="off"
+                       placeholder="All projects"
+                       value="@projectSearch"
+                       @oninput="OnProjectInput"
+                       @onfocus="OpenProjectDropdown"
+                       @onclick="OpenProjectDropdown"
+                       @onblur="CloseProjectDropdown"
+                       @onkeydown="OnProjectKeyDown" />
+                @if (projectFilter.HasValue)
+                {
+                    <button type="button" class="dx-combo-clear" title="Show all projects"
+                            @onmousedown="() => SelectProject(null)" @onmousedown:preventDefault>
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                }
+                @if (showProjectDropdown)
+                {
+                    <ul class="dx-combo-list" role="listbox">
+                        <li class="@(projectFilter == null ? "is-selected" : "")"
+                            @onmousedown="() => SelectProject(null)" @onmousedown:preventDefault>
+                            <span>All projects</span>
+                        </li>
+                        @foreach (var proj in filteredProjects)
+                        {
+                            <li @key="proj.Id" class="@(projectFilter == proj.Id ? "is-selected" : "")"
+                                @onmousedown="() => SelectProject(proj)" @onmousedown:preventDefault>
+                                <span>@proj.Title</span>
+                                @if (!string.IsNullOrWhiteSpace(proj.ClientName))
+                                {
+                                    <small>@proj.ClientName</small>
+                                }
+                            </li>
+                        }
+                        @if (!filteredProjects.Any())
+                        {
+                            <li class="dx-combo-empty">No projects match “@projectSearch”</li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="dx-field">
+            <label>Quick range</label>
+            <div class="dx-segmented" role="group" aria-label="Quick date range">
+                @foreach (var preset in Presets)
+                {
+                    <button type="button" class="@(activePreset == preset.Key ? "is-active" : "")"
+                            aria-pressed="@(activePreset == preset.Key)"
+                            @onclick="() => ApplyPresetAsync(preset.Key)">
+                        @preset.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="dx-field">
+            <label>Custom range</label>
+            <div class="dx-daterange">
+                <input type="date" aria-label="Start date" @bind="FilterStartDate" @bind:after="OnCustomDateChanged" />
+                <i class="fa-solid fa-arrow-right-long"></i>
+                <input type="date" aria-label="End date" @bind="FilterEndDate" @bind:after="OnCustomDateChanged" />
+                <button type="button" class="dx-btn dx-btn-primary" disabled="@(!CanApplyCustom)" @onclick="ApplyCustomRangeAsync">
+                    Apply
+                </button>
+            </div>
+            @if (RangeInvalid)
+            {
+                <small class="dx-field-error"><i class="fa-solid fa-circle-exclamation"></i> Start date must be on or before the end date.</small>
+            }
+        </div>
+    </section>
+
+    @if (_dashboardError != null)
+    {
+        <div class="dx-alert" role="alert">
+            <i class="fa-solid fa-circle-exclamation"></i>
             <div>
-                <h2>Support & Ticket Operations</h2>
-                <div class="muted">Overview & productivity</div>
+                <strong>Couldn't load dashboard data.</strong>
+                <span>@_dashboardError</span>
             </div>
-           
-            <div class="d-flex align-items-center gap-2">
-                <div class="col position-relative">
-                    <input type="text" style="min-width:300px"
-                           class="form-control"
-                           placeholder="🔍 Project..."
-                           value="@projectSearch"
-                           @oninput="OnProjectInput"
-                           @onfocus="() => showProjectDropdown = true"
-                           @onblur="HideProjectDropdown" />
+            <button class="dx-btn dx-btn-ghost" @onclick="RefreshAsync">Try again</button>
+        </div>
+    }
 
-                    @if (showProjectDropdown && filteredProjects.Any())
-                    {
-                        <ul class="list-group position-absolute w-100 shadow-sm"
-                            style="z-index:1000; max-height:200px; overflow:auto;">
-                            @foreach (var proj in filteredProjects)
+    @if (_Dashboard == null && _dashboardLoading)
+    {
+        <!-- ============ FIRST-LOAD SKELETON ============ -->
+        <div class="dx-skel-attn dx-skel"></div>
+        <div class="dx-kpis">
+            @for (var i = 0; i < 4; i++)
+            {
+                <div class="dx-kpi dx-skel" style="height:128px"></div>
+            }
+        </div>
+        <div class="dx-grid-2">
+            <div class="dx-card dx-skel" style="height:280px"></div>
+            <div class="dx-card dx-skel" style="height:280px"></div>
+        </div>
+    }
+    else if (_Dashboard != null)
+    {
+        var c = _Dashboard.TicketCounts;
+
+        <div class="dx-content @(IsDashboardRefreshing ? "is-stale" : "")">
+
+            <!-- ============ NEEDS ATTENTION ============ -->
+            <section class="dx-attention" aria-label="What needs attention">
+                <span class="dx-attention-title"><i class="fa-solid fa-bell"></i> At a glance</span>
+                @foreach (var item in AttentionItems)
+                {
+                    <span class="dx-attn dx-tone-@item.Tone">
+                        <i class="@item.Icon"></i> @item.Text
+                    </span>
+                }
+            </section>
+
+            <!-- ============ KPIs ============ -->
+            <section class="dx-kpis" aria-label="Key metrics">
+                @foreach (var k in Kpis)
+                {
+                    <div class="dx-kpi dx-kpi-@k.Tone" title="@k.Help">
+                        <div class="dx-kpi-top">
+                            <span class="dx-kpi-icon"><i class="@k.Icon"></i></span>
+                            <span class="dx-kpi-label">@k.Label</span>
+                            <i class="fa-regular fa-circle-question dx-kpi-help" aria-hidden="true"></i>
+                        </div>
+                        <div class="dx-kpi-value">@k.Value</div>
+                        <div class="dx-kpi-foot">
+                            @if (!string.IsNullOrEmpty(k.ToneLabel))
                             {
-                                <li class="list-group-item list-group-item-action"
-                                    @onclick="() => SelectProject(proj)">
-                                    @proj.Title
+                                <span class="dx-pill dx-tone-@k.Tone"><i class="@ToneIcon(k.Tone)"></i> @k.ToneLabel</span>
+                            }
+                            <span class="dx-muted">@k.Hint</span>
+                        </div>
+                    </div>
+                }
+            </section>
+
+            <!-- ============ STATUS + SLA ============ -->
+            <div class="dx-grid-2">
+                <article class="dx-card">
+                    <header class="dx-card-head">
+                        <div>
+                            <h2><i class="fa-solid fa-chart-simple"></i> Ticket status</h2>
+                            <p>@c.Total.ToString("N0") ticket@(c.Total == 1 ? "" : "s") received in this range, by current status</p>
+                        </div>
+                    </header>
+
+                    @if (c.Total == 0)
+                    {
+                        <div class="dx-empty">
+                            <i class="fa-regular fa-folder-open"></i>
+                            <p>No tickets were received in this range.</p>
+                            <small>Try a wider date range or another project.</small>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="dx-stack" role="img" aria-label="@StatusAriaLabel">
+                            @foreach (var s in StatusSegments.Where(s => s.Count > 0))
+                            {
+                                <span class="dx-stack-seg" style="flex-grow:@s.Count; background:@s.Color"
+                                      title="@($"{s.Label}: {s.Count:N0} ({Pct(s.Count, c.Total)})")"></span>
+                            }
+                        </div>
+
+                        <ul class="dx-legend">
+                            @foreach (var s in StatusSegments)
+                            {
+                                <li class="@(s.Count == 0 ? "is-zero" : "")">
+                                    <span class="dx-swatch" style="background:@s.Color"></span>
+                                    <span class="dx-legend-label">@s.Label</span>
+                                    <span class="dx-legend-count">@s.Count.ToString("N0")</span>
+                                    <span class="dx-legend-pct">@Pct(s.Count, c.Total)</span>
+                                </li>
+                            }
+                        </ul>
+
+                        <div class="dx-note">
+                            <i class="fa-solid fa-fire"></i>
+                            <span>
+                                <strong>@c.Critical.ToString("N0")</strong> critical-priority ticket@(c.Critical == 1 ? "" : "s")
+                                (@Pct(c.Critical, c.Total) of total). Priority is counted separately from status.
+                            </span>
+                        </div>
+                    }
+                </article>
+
+                <article class="dx-card">
+                    <header class="dx-card-head">
+                        <div>
+                            <h2><i class="fa-solid fa-stopwatch"></i> SLA watchlist</h2>
+                            <p>Unfinished tickets with an SLA deadline: overdue first, then soonest due</p>
+                        </div>
+                        <span class="dx-count" title="Tickets on the watchlist">@_Dashboard.TotalRecords.ToString("N0")</span>
+                    </header>
+
+                    @if (!_Dashboard.SlaAlerts.Any())
+                    {
+                        <div class="dx-empty dx-empty-good">
+                            <i class="fa-solid fa-circle-check"></i>
+                            <p>No open SLA deadlines.</p>
+                            <small>Nothing is overdue or at risk in this range.</small>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="dx-table-wrap">
+                            <table class="dx-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ticket</th>
+                                        <th>Status</th>
+                                        <th title="Time since the ticket was received">Age</th>
+                                        <th title="Time left until the SLA deadline, or how long it is overdue">Due</th>
+                                        <th>SLA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var t in _Dashboard.SlaAlerts)
+                                    {
+                                        var status = StatusMeta(t.Status);
+                                        var sla = SlaMeta(t.SlaStatus);
+                                        <tr @key="t.Id">
+                                            <td>
+                                                <div class="dx-strong dx-mono">@t.TicketNo</div>
+                                                <div class="dx-muted dx-truncate">@t.ClientName</div>
+                                            </td>
+                                            <td><span class="dx-chip dx-st-@status.Css"><span class="dx-dot"></span>@status.Label</span></td>
+                                            <td class="dx-mono">@FormatSpan(DateTime.UtcNow - t.DateReceived)</td>
+                                            <td class="dx-mono">
+                                                @if (!t.DueDate.HasValue)
+                                                {
+                                                    <span>—</span>
+                                                }
+                                                else if (t.DueDate.Value <= DateTime.UtcNow)
+                                                {
+                                                    <span class="dx-overdue">@FormatSpan(DateTime.UtcNow - t.DueDate.Value) overdue</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>in @FormatSpan(t.DueDate.Value - DateTime.UtcNow)</span>
+                                                }
+                                            </td>
+                                            <td><span class="dx-pill dx-tone-@sla.Tone"><i class="@sla.Icon"></i> @sla.Label</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if (_Dashboard.TotalPages > 1)
+                        {
+                            <footer class="dx-pager">
+                                <span class="dx-muted">
+                                    @_Dashboard.FromPage–@_Dashboard.ToPage of @_Dashboard.TotalRecords.ToString("N0")
+                                </span>
+                                <div>
+                                    <button class="dx-btn dx-btn-icon" title="Previous page" disabled="@(!CanGoPrev || _dashboardLoading)" @onclick="PrevPage">
+                                        <i class="fa-solid fa-chevron-left"></i>
+                                    </button>
+                                    <span class="dx-pager-page">@_currentPage / @_Dashboard.TotalPages</span>
+                                    <button class="dx-btn dx-btn-icon" title="Next page" disabled="@(!CanGoNext || _dashboardLoading)" @onclick="NextPage">
+                                        <i class="fa-solid fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </footer>
+                        }
+                    }
+                </article>
+            </div>
+
+            <!-- ============ AGENT PRODUCTIVITY ============ -->
+            @if (!IsClientUser)
+            {
+                <article class="dx-card">
+                    <header class="dx-card-head">
+                        <div>
+                            <h2><i class="fa-solid fa-headset"></i> Support agent productivity</h2>
+                            <p>How quickly each agent picks up the tickets assigned to them</p>
+                        </div>
+                    </header>
+
+                    @if (!_Dashboard.AgentStats.Any())
+                    {
+                        <div class="dx-empty">
+                            <i class="fa-solid fa-user-clock"></i>
+                            <p>No assigned tickets in this range.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="dx-table-wrap">
+                            <table class="dx-table">
+                                <thead>
+                                    <tr>
+                                        <th>Agent</th>
+                                        <th class="dx-num">Tickets</th>
+                                        <th title="Average time from ticket received to the agent's first reply">Avg first response</th>
+                                        <th title="Share of tickets the agent replied to within 15 minutes">Replied within 15 min</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var a in _Dashboard.AgentStats)
+                                    {
+                                        var tone = ResponseTone(a.AvgFirstResponseMinutes);
+                                        <tr @key="a.Name">
+                                            <td>
+                                                <div class="dx-agent">
+                                                    <span class="dx-avatar">@Initials(a.Name)</span>
+                                                    <span class="dx-strong">@a.Name</span>
+                                                </div>
+                                            </td>
+                                            <td class="dx-num dx-mono">@a.TicketCount.ToString("N0")</td>
+                                            <td>
+                                                <span class="dx-pill dx-tone-@tone"><i class="@ToneIcon(tone)"></i> @FormatDuration(a.AvgFirstResponseMinutes)</span>
+                                            </td>
+                                            <td>
+                                                <div class="dx-meter" title="@($"{a.ProactivenessPercent:F0}% of tickets answered within 15 minutes")">
+                                                    <div class="dx-meter-track"><div class="dx-meter-fill" style="width:@(Math.Clamp(a.ProactivenessPercent, 0, 100).ToString("F0", CultureInfo.InvariantCulture))%"></div></div>
+                                                    <span class="dx-mono">@($"{a.ProactivenessPercent:F0}%")</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </article>
+            }
+
+            <!-- ============ RECENT TICKETS + ACTIVITY ============ -->
+            <div class="@(IsClientUser ? "" : "dx-grid-2")">
+                <article class="dx-card">
+                    <header class="dx-card-head">
+                        <div>
+                            <h2><i class="fa-solid fa-ticket"></i> Recent tickets</h2>
+                            <p>Latest 10 tickets received in this range</p>
+                        </div>
+                    </header>
+
+                    @if (!_Dashboard.RecentTickets.Any())
+                    {
+                        <div class="dx-empty">
+                            <i class="fa-regular fa-envelope-open"></i>
+                            <p>No tickets yet.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <ul class="dx-list dx-scroll">
+                            @foreach (var t in _Dashboard.RecentTickets.OrderByDescending(x => x.CreatedAt).Take(10))
+                            {
+                                var status = StatusMeta(t.Status);
+                                var sla = SlaMeta(t.SlaStatus);
+                                <li @key="t.Id" class="dx-ticket">
+                                    <div class="dx-ticket-main">
+                                        <div class="dx-ticket-title">
+                                            <span class="dx-mono dx-muted">@t.TicketNo</span>
+                                            <span class="dx-strong dx-truncate" title="@t.Subject">@t.Subject</span>
+                                        </div>
+                                        <div class="dx-muted dx-small">
+                                            @t.ClientName ·
+                                            <span title="@t.CreatedAt.ToString("MMM dd, yyyy HH:mm")">@RelativeTime(t.CreatedAt)</span>
+                                            @if (t.Severity is "Critical" or "High")
+                                            {
+                                                <span class="dx-prio dx-prio-@t.Severity.ToLowerInvariant()"><i class="fa-solid fa-arrow-up"></i> @t.Severity</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="dx-ticket-side">
+                                        <span class="dx-chip dx-st-@status.Css"><span class="dx-dot"></span>@status.Label</span>
+                                        <span class="dx-pill dx-pill-sm dx-tone-@sla.Tone"><i class="@sla.Icon"></i> @sla.Label</span>
+                                    </div>
                                 </li>
                             }
                         </ul>
                     }
-                </div>
-                <input type="date" @bind="FilterStartDate" class="form-control form-control-sm" />
-                <input type="date" @bind="FilterEndDate" class="form-control form-control-sm" />
+                </article>
 
-                <button class="btn btn-primary btn-sm" @onclick="ApplyFilter">Apply</button>
-
-                <button class="btn btn-outline-secondary btn-sm" @onclick="SetToday">Today</button>
-                <button class="btn btn-outline-secondary btn-sm" @onclick="SetWeek">Week</button>
-                <button class="btn btn-outline-secondary btn-sm" @onclick="SetMonth">Month</button>
-            </div>
-        </header>
-
-        <section>
-            @if (isLoading)
-            {
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-muted">Loading dashboard...</p>
-                </div>
-            }
-            else if (_Dashboard == null)
-            {
-                <div class="text-center py-5">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p class="mt-2 text-muted">Loading _Dashboard...</p>
-                </div>
-            }
-            else
-            {
-                <!-- KPIs -->
-                <div class="grid grid-4 mb-4">
-                    <div class="card kpi">
-                        <div class="kpi-label">Open Tickets</div>
-                        <div class="kpi-value">@_Dashboard.TicketCounts.Open</div>
-                        <div class="muted small">@($"{_Dashboard.TicketCounts.OpenPercent:F1}% of total")</div>
-                    </div>
-
-                    <div class="card kpi">
-                        <div class="kpi-label">SLA Compliance</div>
-                        <div class="kpi-value">@($"{_Dashboard.TicketCounts.CriticalPercent:F1}%")</div>
-                        <div class="muted small">within SLA</div>
-                    </div>
-
-                    <div class="card kpi">
-                        <div class="kpi-label">Avg First Response</div>
-                        <div class="kpi-value">@FormatTime(_Dashboard.AvgFirstResponseMinutes)</div>
-                        <div class="muted small">lower is better</div>
-                    </div>
-
-                    <div class="card kpi">
-                        <div class="kpi-label">Avg Resolution</div>
-                        <div class="kpi-value">@FormatTime(_Dashboard.AvgResolutionHours)</div>
-                        <div class="muted small">time to close</div>
-                    </div>
-                </div>
-
-                <!-- Status & SLA Donut -->
-                @*   <div class="grid grid-2 mb-4">
-                    <div class="card">
-                        <h3>Tickets by Status</h3>
-                        <div class="d-flex gap-3 mt-2">
-                            <div style="flex:1">
-                                @foreach (var status in new[] { "Open", "InProgress", "Closed", "Rejected", "Critical" })
-                                {
-                                    <div class="ticket-item mb-2">
-                                        <div>
-                                            <div class="fw-600">@status</div>
-                                            <div class="muted">
-                                                @(status == "Open" ? _Dashboard.TicketCounts.Open :
-                                                                                        status == "InProgress" ? _Dashboard.TicketCounts.InProgress :
-                                                                                        status == "Closed" ? _Dashboard.TicketCounts.Closed :
-                                                                                        status == "Rejected" ? _Dashboard.TicketCounts.Rejected :
-                                                                                        _Dashboard.TicketCounts.Critical)
-                                    </div>
-                                </div>
-                                <div><span class="badge @(status.ToLower())">@status</span></div>
-                            </div>
-                                                        }
-                            </div>
-
-                            <!-- Donut Chart -->
-                            <div style="width:220px;">
-                                <svg viewBox="0 0 42 42" class="donut w-100 h-200">
-                                    <circle class="donut-ring" cx="21" cy="21" r="15.9155" fill="transparent" stroke="#eef2ff" stroke-width="6"></circle>
-
-                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
-                                            stroke="#7e22ce" stroke-width="6"
-                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.CriticalPercent:F1} {100 - _Dashboard.TicketCounts.CriticalPercent:F1}")"
-                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetCritical">
-                                        <title>Critical: @_Dashboard.TicketCounts.Critical (@($"{_Dashboard.TicketCounts.CriticalPercent:F1}%"))</title>
-                                    </circle>
-
-                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
-                                            stroke="#ef4444" stroke-width="6"
-                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.RejectedPercent:F1} {100 - _Dashboard.TicketCounts.RejectedPercent:F1}")"
-                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetRejected">
-                                        <title>Rejected: @_Dashboard.TicketCounts.Rejected (@($"{_Dashboard.TicketCounts.RejectedPercent:F1}%"))</title>
-                                    </circle>
-
-                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
-                                            stroke="#f97316" stroke-width="6"
-                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.ClosedPercent:F1} {100 - _Dashboard.TicketCounts.ClosedPercent:F1}")"
-                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetClosed">
-                                        <title>Closed: @_Dashboard.TicketCounts.Closed (@($"{_Dashboard.TicketCounts.ClosedPercent:F1}%"))</title>
-                                    </circle>
-
-                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
-                                            stroke="#22c55e" stroke-width="6"
-                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.InProgressPercent:F1} {100 - _Dashboard.TicketCounts.InProgressPercent:F1}")"
-                                            stroke-dashoffset="-@_Dashboard.TicketCounts.OffsetInProgress">
-                                        <title>In Progress: @_Dashboard.TicketCounts.InProgress (@($"{_Dashboard.TicketCounts.InProgressPercent:F1}%"))</title>
-                                    </circle>
-
-                                    <circle cx="21" cy="21" r="15.9155" fill="transparent"
-                                            stroke="#3b82f6" stroke-width="6"
-                                            stroke-dasharray="@($"{_Dashboard.TicketCounts.OpenPercent:F1} {100 - _Dashboard.TicketCounts.OpenPercent:F1}")"
-                                            stroke-dashoffset="0">
-                                        <title>Open: @_Dashboard.TicketCounts.Open (@($"{_Dashboard.TicketCounts.OpenPercent:F1}%"))</title>
-                                    </circle>
-                                </svg>
-                            </div>
-                        </div>
-                    </div>
-
-                   
-                </div> *@
-                <div class="grid grid-2 mb-4">
-                    <div class="card">
-                        <h3>Tickets by Status</h3>
-
-                        <div class="bargraph-wrapper">
-                            <div class="bargraph-yaxis">
-                                <div>@MaxTickets</div>
-                                <div>@(MaxTickets / 2)</div>
-                                <div>0</div>
-                            </div>
-
-                            <div class="bargraph">
-                                @RenderBar("Open", _Dashboard.TicketCounts.Open, "#3b82f6")
-                                @RenderBar("In Progress", _Dashboard.TicketCounts.InProgress, "#22c55e")
-                                @RenderBar("Closed", _Dashboard.TicketCounts.Closed, "#f97316")
-                                @RenderBar("Rejected", _Dashboard.TicketCounts.Rejected, "#ef4444")
-                                @RenderBar("Critical", _Dashboard.TicketCounts.Critical, "#7e22ce")
-                            </div>
-                        </div>
-                    </div>
-                    <!-- SLA Alerts -->
-                    <div class="card" style="overflow:auto; max-height:300px">
-                        <h3>SLA Alerts</h3>
-                        <table class="table table-sm table-hover align-middle">
-                            <thead class="table-primary">
-                                <tr>
-                                    <th>Ticket No.</th>
-                                    <th>Client</th>
-                                    <th>Status</th>
-                                    <th>Elapsed</th>
-                                    <th>SLA</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var t in tickets)
-                                {
-                                    var elapsed = DateTime.UtcNow - t.DateReceived;
-                                    var timeLeft = t.DueDate.HasValue ? t.DueDate.Value - DateTime.UtcNow : TimeSpan.Zero;
-
-                                    string elapsedFormatted = elapsed.TotalDays >= 1
-                                    ? $"{(int)elapsed.TotalDays}d {(int)elapsed.Hours}h"
-                                    : elapsed.TotalHours >= 1
-                                    ? $"{(int)elapsed.TotalHours}h {(int)elapsed.Minutes}m"
-                                    : $"{(int)elapsed.TotalMinutes}m";
-
-                                    // Determine SLA badge CSS and text
-                                    string slaClass = t.SlaStatus switch
-                                    {
-                                        "Breached" => "bg-danger",
-                                        "NearSLA" => "bg-warning text-dark",
-                                        "OnTrack" => "bg-success",
-                                        _ => "bg-light text-dark"
-                                    };
-
-                                    string slaText = t.SlaStatus switch
-                                    {
-                                        "Breached" => "⚠ Breached",
-                                        "NearSLA" => "⏳ Near SLA",
-                                        "OnTrack" => "✅ On Track",
-                                        _ => t.SlaStatus
-                                    };
-
-                                    <tr>
-                                        <td><strong>@t.TicketNo</strong></td>
-                                        <td>@t.ClientName</td>
-                                        <td>
-                                            <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
-                                        </td>
-                                        <td><span class="elapsed-pill">@elapsedFormatted</span></td>
-                                        <td>
-                                            <span class="badge @slaClass">@slaText</span>
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                @if (UserState?.UserType != 3)
+                @if (!IsClientUser)
                 {
-                    <!-- Agent Productivity -->
-                    <div class="card" style="overflow:auto; margin-bottom:15px">
-                        <h3>Support Agent Productivity</h3>
-                        <table class="table table-sm table-hover align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Agent</th>
-                                    <th>Tickets Assigned</th>
-                                    <th>Avg First Response (mins)</th>
-                                    <th>Idle Time (mins)</th>
-                                    <th>Proactiveness (%)</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var a in AgentStats)
-                                {
-                                    <tr>
-                                        <td>@a.Name</td>
-                                        <td>@a.TicketCount</td>
-                                        <td>@($"{a.AvgFirstResponseMinutes:F1}")</td>
-                                        <td>@($"{a.AvgIdleMinutes:F1}")</td>
-                                        <td>@($"{a.ProactivenessPercent:F0}%")</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-                    <div class="card mb-4">
-
-                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <article class="dx-card">
+                        <header class="dx-card-head">
                             <div>
-                                <h3 class="mb-0">Business Calendar</h3>
-                                <small class="text-muted">@currentMonthLabel</small>
+                                <h2><i class="fa-solid fa-wave-square"></i> Recent activity</h2>
+                                <p>
+                                    What changed across tickets in this range
+                                    @if (_activity != null && _activity.TotalRecords > _activity.Items.Count)
+                                    {
+                                        <span>· latest @_activity.Items.Count of @_activity.TotalRecords.ToString("N0")</span>
+                                    }
+                                </p>
                             </div>
+                            @if (_activityLoading)
+                            {
+                                <i class="fa-solid fa-circle-notch fa-spin dx-muted" title="Loading activity"></i>
+                            }
+                        </header>
 
-                            <div class="d-flex gap-2">
-                                <select class="form-select form-select-sm"
-                                        style="width:160px"
-                                        @bind="selectedRegion"
-                                        @bind:after="OnRegionChanged">
-                                    <option value="PH">Philippines</option>
-                                    <option value="US">United States</option>
-                                </select>
-
-                                <button class="btn btn-primary btn-sm" @onclick="SyncHolidays">
-                                    Sync
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="gc-layout">
-
-                            <!-- CALENDAR -->
-                            <div id="calendar" class="gc-calendar"></div>
-
-                            <!-- AGENDA -->
-                            <div class="gc-agenda">
-
-                                <h6>Agenda</h6>
-
-                                @if (_agendaEvents.Any())
-                                {
-                                    <ul class="agenda-list">
-                                        @foreach (var e in _agendaEvents.OrderBy(x => x.Start))
-                                        {
-                                            <li>
-                                                <span class="dot" style="background:@e.Color"></span>
-                                                <div>
-                                                    <div class="title">@e.Title</div>
-                                                    <div class="muted small">@e.Start.ToString("MMM dd yyyy")</div>
-                                                </div>
-                                            </li>
-                                        }
-                                    </ul>
-                                }
-                                else
-                                {
-                                    <div class="text-muted small">No events</div>
-                                }
-
-                            </div>
-
-                        </div>
-                    </div>
-             
-                <!-- Recent Tickets -->
-                <div class="card mb-4">
-                    <h3>Recent Tickets</h3>
-                    <div class="mt-2" style="overflow:auto; height:250px;">
-                        @foreach (var t in _Dashboard.RecentTickets.OrderByDescending(x => x.CreatedAt).Take(10))
+                        @if (_activityError != null)
                         {
-                            <div class="ticket-item d-flex justify-content-between align-items-start mb-2">
-                                <div>
-                                    <div class="fw-600">• @t.Subject</div>
-                                    <div class="muted">@t.ClientName • Created @t.CreatedAt.ToString("MMM dd, yyyy HH:mm")</div>
-                                </div>
-                                <div class="text-end">
-                                    <span class="badge @(GetBadgeClass(t.Status))">@t.Status</span>
-                                    <div class="muted mt-1">SLA: @t.SlaStatus</div>
-                                </div>
+                            <div class="dx-inline-error">
+                                <i class="fa-solid fa-circle-exclamation"></i> @_activityError
+                                <button class="dx-link" @onclick="LoadActivityAsync">Retry</button>
                             </div>
                         }
-                    </div>
-                </div>
-              
-                @if (UserState?.UserType != 3)
-                {
-                    <!-- Recent Activity -->
-                    <div class="card mb-4" style="
-                        overflow: scroll;
-                        max-height: 300px;
-                        ">
-                        <h3>Recent Activity</h3>
-
-                        @if (isLoadingActivity)
+                        else if (_activity == null && _activityLoading)
                         {
-                            <div class="text-center py-3">
-                                <i class="fa fa-spinner fa-spin"></i> Loading activity...
-                            </div>
+                            for (var i = 0; i < 4; i++)
+                            {
+                                <div class="dx-skel dx-skel-line"></div>
+                            }
                         }
                         else if (_activity?.Items == null || !_activity.Items.Any())
                         {
-                            <div class="text-muted py-2">No activity found for the selected date range.</div>
+                            <div class="dx-empty">
+                                <i class="fa-regular fa-moon"></i>
+                                <p>No activity in this range.</p>
+                            </div>
                         }
                         else
                         {
-                            <div style="overflow:auto;">
-                                <table class="table table-sm table-hover align-middle">
-                                    <thead class="table-primary">
-                                        <tr>
-                                            <th style="width:170px;">Time</th>
-                                            <th style="width:180px;">Actor</th>
-                                            <th style="width:160px;">Type</th>
-                                            <th style="width:140px;">Ticket</th>
-                                            <th>Summary</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        @foreach (var a in _activity.Items)
-                                        {
-                                            <tr>
-                                                <td>@a.OccurredAtUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm")</td>
-                                                <td>@a.ActorName</td>
-                                                <td>@a.ActivityType</td>
-                                                <td>@(string.IsNullOrWhiteSpace(a.TicketNo) ? "-" : a.TicketNo)</td>
-                                                <td>@a.Summary</td>
-                                            </tr>
-                                        }
-                                    </tbody>
-                                </table>
-                            </div>
+                            <ol class="dx-timeline dx-scroll @(_activityLoading ? "is-stale" : "")">
+                                @foreach (var a in _activity.Items)
+                                {
+                                    <li @key="a.Id">
+                                        <span class="dx-timeline-icon"><i class="@ActivityIcon(a.ActivityType)"></i></span>
+                                        <div class="dx-timeline-body">
+                                            <div class="dx-timeline-head">
+                                                <span class="dx-strong">@a.ActorName</span>
+                                                <span class="dx-muted">@Humanize(a.ActivityType)</span>
+                                                @if (!string.IsNullOrWhiteSpace(a.TicketNo))
+                                                {
+                                                    <span class="dx-tag dx-mono">@a.TicketNo</span>
+                                                }
+                                                <time class="dx-muted dx-small" title="@a.OccurredAtUtc.ToLocalTime().ToString("MMM dd, yyyy HH:mm")">@RelativeTime(a.OccurredAtUtc)</time>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(a.Summary))
+                                            {
+                                                <div class="dx-timeline-text">@a.Summary</div>
+                                            }
+                                        </div>
+                                    </li>
+                                }
+                            </ol>
                         }
-                    </div>
+                    </article>
                 }
-            }
-        </section>
-    </main>
-</div>
-@* <button class="mobile-menu-btn" @onclick="ToggleSidebar">Menu</button> *@
-@code {
+            </div>
+        </div>
+    }
 
-    private bool sidebarVisible = false;
+    <!-- ============ BUSINESS CALENDAR ============ -->
+    <article class="dx-card">
+        <header class="dx-card-head">
+            <div>
+                <h2><i class="fa-regular fa-calendar"></i> Business calendar</h2>
+                <p>Public holidays that may affect support coverage</p>
+            </div>
+            <div class="dx-card-actions">
+                <select class="dx-select" aria-label="Holiday region"
+                        @bind="selectedRegion" @bind:after="OnRegionChanged">
+                    <option value="PH">Philippines</option>
+                    <option value="US">United States</option>
+                </select>
+                <button class="dx-btn dx-btn-ghost" @onclick="SyncHolidaysAsync" disabled="@_isSyncing"
+                        title="@($"Fetch the latest {currentMonth.Year} holidays for this region")">
+                    <i class="fa-solid fa-arrows-rotate @(_isSyncing ? "fa-spin" : "")"></i>
+                    @(_isSyncing ? "Syncing…" : $"Sync {currentMonth.Year}")
+                </button>
+            </div>
+        </header>
+
+        @if (_calendarError != null)
+        {
+            <div class="dx-inline-error"><i class="fa-solid fa-circle-exclamation"></i> @_calendarError</div>
+        }
+        else if (_calendarNotice != null)
+        {
+            <div class="dx-inline-ok"><i class="fa-solid fa-circle-check"></i> @_calendarNotice</div>
+        }
+
+        <div class="dx-cal-layout">
+            <div id="@CalendarElementId" class="dx-cal"></div>
+
+            <aside class="dx-agenda">
+                <h3>@currentMonthLabel</h3>
+                @if (_agendaEvents.Any())
+                {
+                    <ul>
+                        @foreach (var e in _agendaEvents)
+                        {
+                            <li>
+                                <span class="dx-agenda-date">
+                                    <span>@e.Start.ToString("MMM", CultureInfo.InvariantCulture)</span>
+                                    <strong>@e.Start.Day</strong>
+                                </span>
+                                <div>
+                                    <div class="dx-strong">@e.Title</div>
+                                    <div class="dx-muted dx-small">@e.Start.ToString("dddd", CultureInfo.InvariantCulture)</div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <div class="dx-muted dx-small">No holidays this month.</div>
+                }
+            </aside>
+        </div>
+    </article>
+</div>
+
+@code {
     [Parameter]
-    public string EncryptedId { get; set; }
-    private bool isLoading = false;
+    public string EncryptedId { get; set; } = string.Empty;
     [Inject]
-    public LinkService LinkService { get; set; }
+    public LinkService LinkService { get; set; } = default!;
+
+    private const string CalendarElementId = "dx-calendar";
+    private const int SlaPageSize = 10;
+    private const int ActivityPageSize = 50;
+
     private int UserId;
-    private List<ProjectDto> Projects = new();
-    private int? SelectedProjectId;
+    private bool IsClientUser => UserState?.UserType == 3;
+
+    // =============================
+    // DATA
+    // =============================
+    private DashboardDto? _Dashboard { get; set; }
+    private ChatUp.Application.Features.Activity.DTOs.ActivityPagedResponse? _activity;
     private List<ProjectDto> allProjects = new();
     private List<ProjectDto> filteredProjects = new();
-    private string projectSearch = string.Empty;
-    private int? projectFilter = null;
-    private bool showProjectDropdown = false;
-    private List<CalendarEventDto> events = new();
-    private List<CalendarEventDto> agendaEvents = new();
 
-    private DateTime selectedDate = DateTime.UtcNow;
-    private string selectedPriority = "Medium";
-    private List<object> calendarJsEvents = new();
-    private string selectedRegion = "PH";
-    private DateTime currentMonth = DateTime.UtcNow;
+    // =============================
+    // LOADING STATE (per section, so one slow call never blanks the page)
+    // =============================
+    private bool _dashboardLoading;
+    private bool _activityLoading;
+    private string? _dashboardError;
+    private string? _activityError;
+    private DateTime? _lastUpdated;
+    private CancellationTokenSource? _dashboardCts;
+    private CancellationTokenSource? _activityCts;
 
-    private string currentMonthLabel => currentMonth.ToString("MMMM yyyy");
-    private List<AgendaDto> _agendaEvents = new();
-    private List<HolidayDto> holidays = new();
-    private List<HolidayDto> filteredHolidays = new();
+    private bool IsBusy => _dashboardLoading || _activityLoading;
+    private bool HasAnyData => _Dashboard != null || _activity != null;
+    private bool IsDashboardRefreshing => _dashboardLoading && _Dashboard != null;
 
-    private List<object> calendarEvents = new();
-
-    private DotNetObjectReference<Dashboard>? objRef;
-    private void BuildCalendarEvents()
+    // =============================
+    // FILTERS
+    // =============================
+    private static readonly (string Key, string Label)[] Presets =
     {
-        var eventItems = events.Select(e => new CalendarJsEvent
-        {
-            id = e.Id,
-            title = e.Title,
-            start = e.Start.ToString("yyyy-MM-ddTHH:mm:ss"),
-            end = e.End?.ToString("yyyy-MM-ddTHH:mm:ss"),
-            color = e.Color,
-            editable = true
-        });
+        ("today", "Today"),
+        ("week", "This week"),
+        ("month", "This month"),
+        ("3m", "Last 3 months"),
+        ("all", "All time")
+    };
 
-        var holidayItems = holidays.Select(h => new CalendarJsEvent
+    private string activePreset = "3m";
+    private DateTime? FilterStartDate { get; set; }
+    private DateTime? FilterEndDate { get; set; }
+    private DateTime? _appliedFrom;
+    private DateTime? _appliedTo;
+    private bool _customDirty;
+
+    private bool RangeInvalid => FilterStartDate.HasValue && FilterEndDate.HasValue && FilterStartDate > FilterEndDate;
+    private bool CanApplyCustom => _customDirty && !RangeInvalid;
+
+    private string projectSearch = string.Empty;
+    private int? projectFilter;
+    private string? SelectedProjectTitle;
+    private bool showProjectDropdown;
+
+    private int _currentPage = 1;
+    private bool CanGoPrev => _currentPage > 1;
+    private bool CanGoNext => _Dashboard != null && _currentPage < _Dashboard.TotalPages;
+
+    // =============================
+    // CALENDAR
+    // =============================
+    private string selectedRegion = "PH";
+    private DateTime currentMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private string currentMonthLabel => currentMonth.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+    private List<HolidayDto> holidays = new();
+    private readonly Dictionary<string, List<HolidayDto>> _holidayCache = new();
+    private List<AgendaDto> _agendaEvents = new();
+    private bool _calendarNeedsRender;
+    private bool _isSyncing;
+    private string? _calendarError;
+    private string? _calendarNotice;
+    private DotNetObjectReference<Dashboard>? objRef;
+
+    // =============================
+    // LIFECYCLE
+    // =============================
+    protected override async Task OnInitializedAsync()
+    {
+        TitleService.SetTitle("Admin Dashboard");
+
+        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
+        if (string.IsNullOrEmpty(decrypted) || !int.TryParse(decrypted, out UserId))
         {
-            id = null,
+            Navigation.NavigateTo("/unauthorized");
+            return;
+        }
+
+        objRef = DotNetObjectReference.Create(this);
+        SetPresetRange(activePreset);
+
+        // Independent requests run concurrently instead of one after another
+        await Task.WhenAll(ReloadDataAsync(), LoadProjectsAsync(), LoadHolidaysAsync());
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_calendarNeedsRender || objRef == null)
+            return;
+
+        _calendarNeedsRender = false;
+
+        var calendarEvents = holidays.Select(h => new CalendarJsEvent
+        {
             title = h.Name,
-            start = h.Date.ToString("yyyy-MM-dd"),
-            end = null,
+            start = h.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             color = "#fecaca",
-            editable = false,
             allDay = true,
             display = "background"
-        });
+        }).ToList();
 
-        calendarJsEvents = eventItems
-            .Concat(holidayItems)
-            .Cast<object>()   // only needed if JS interop expects object
-            .ToList();
-    }
-    [JSInvokable]
-    public async Task OnDateClick(string date)
-    {
-        selectedDate = DateTime.Parse(date);
-
-        // OPEN YOUR TICKET MODAL HERE
-        await JS.InvokeVoidAsync("alert", $"Create ticket for {selectedDate:yyyy-MM-dd}");
-    }
-
-    [JSInvokable]
-    public async Task OnEventDrop(string id, string newDate)
-    {
-        var ev = events.FirstOrDefault(x => x.Id == id);
-        if (ev != null)
+        try
         {
-            ev.Start = DateTime.Parse(newDate);
-            BuildCalendarEvents();
-            await RenderCalendar();
+            await JS.InvokeVoidAsync("renderDashboardCalendar", CalendarElementId, calendarEvents, objRef);
+        }
+        catch (JSException ex)
+        {
+            Console.WriteLine($"❌ Error rendering calendar: {ex.Message}");
         }
     }
 
-    private async Task RenderCalendar()
+    public async ValueTask DisposeAsync()
     {
-        objRef = DotNetObjectReference.Create(this);
+        _dashboardCts?.Cancel();
+        _activityCts?.Cancel();
 
-        await JS.InvokeVoidAsync(
-            "renderCalendar",
-            calendarJsEvents,
-            objRef
-        );
+        try
+        {
+            await JS.InvokeVoidAsync("destroyDashboardCalendar", CalendarElementId);
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+        catch (TaskCanceledException) { }
+
+        objRef?.Dispose();
     }
-    [JSInvokable]
-    public async Task OnMonthChanged(string startDate)
+
+    // =============================
+    // DATA LOADING
+    // =============================
+    private Task ReloadDataAsync() => Task.WhenAll(LoadDashboardAsync(1), LoadActivityAsync());
+
+    private Task RefreshAsync() => ReloadDataAsync();
+
+    private async Task LoadDashboardAsync(int page)
     {
-        var parsedDate = DateTime.Parse(startDate);
+        // A newer request supersedes any in-flight one, so stale responses never overwrite fresh data
+        _dashboardCts?.Cancel();
+        var cts = _dashboardCts = new CancellationTokenSource();
 
-        // 🔥 Move to correct month (FullCalendar gives previous range start)
-        selectedDate = parsedDate.AddMonths(1);
-
-        // Optional: normalize to first day of month
-        selectedDate = new DateTime(selectedDate.Year, selectedDate.Month, 1);
-
-        currentMonth = selectedDate;
-
-        UpdateAgenda();
+        _dashboardLoading = true;
+        _dashboardError = null;
         StateHasChanged();
-    }
-    private void UpdateAgenda()
-    {
-        _agendaEvents = holidays
-            .Where(x => x.Date.Month == selectedDate.Month &&
-                        x.Date.Year == selectedDate.Year)
-            .Select(x => new AgendaDto
+
+        var query = $"?userId={UserId}&page={page}&pageSize={SlaPageSize}{BuildRangeQuery()}";
+        if (projectFilter.HasValue)
+            query += $"&projectId={projectFilter.Value}";
+
+        try
+        {
+            var response = await Http.GetFromJsonAsync<DashboardDto>(
+                $"{AppConfig.ChatUrl}Dashboard/GetDashboard{query}", cts.Token);
+
+            if (response != null)
             {
-                Title = x.Name,
-                Start = x.Date,
-                Color = "#ef4444" // holiday color
-            })
-            .OrderBy(x => x.Start)
-            .ToList();
+                _Dashboard = response;
+                _currentPage = response.CurrentPage;
+                _lastUpdated = DateTime.Now;
+            }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _dashboardError = "Check your connection and try again.";
+            Console.WriteLine($"❌ Error loading dashboard: {ex.Message}");
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested)
+            {
+                _dashboardLoading = false;
+                StateHasChanged();
+            }
+        }
     }
-    private string GetColor(string priority) => priority switch
+
+    private async Task LoadActivityAsync()
     {
-        "Critical" => "#dc2626",
-        "High" => "#f97316",
-        "Medium" => "#3b82f6",
-        "Low" => "#22c55e",
-        _ => "#6b7280"
-    };
-    void ToggleSidebar()
-    {
-        sidebarVisible = !sidebarVisible;
+        // Client users never see the activity feed, so don't fetch it for them
+        if (IsClientUser)
+            return;
+
+        _activityCts?.Cancel();
+        var cts = _activityCts = new CancellationTokenSource();
+
+        _activityLoading = true;
+        _activityError = null;
+        StateHasChanged();
+
+        var query = $"?userId={UserId}&page=1&pageSize={ActivityPageSize}{BuildRangeQuery()}";
+
+        try
+        {
+            _activity = await Http.GetFromJsonAsync<ChatUp.Application.Features.Activity.DTOs.ActivityPagedResponse>(
+                $"{AppConfig.ChatUrl}Dashboard/GetActivity{query}", cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            _activityError = "Couldn't load recent activity.";
+            Console.WriteLine($"❌ Error loading activity: {ex.Message}");
+        }
+        finally
+        {
+            if (!cts.IsCancellationRequested)
+            {
+                _activityLoading = false;
+                StateHasChanged();
+            }
+        }
     }
-    private int MaxTickets =>
-        new[] {
-            _Dashboard.TicketCounts.Open,
-            _Dashboard.TicketCounts.InProgress,
-            _Dashboard.TicketCounts.Closed,
-            _Dashboard.TicketCounts.Rejected,
-            _Dashboard.TicketCounts.Critical
-        }.Max();
 
-    private RenderFragment RenderBar(string label, int value, string color) => builder =>
+    private string BuildRangeQuery()
     {
-        var heightPercent = MaxTickets == 0 ? 0 : (value * 100.0 / MaxTickets);
+        var query = string.Empty;
 
-        builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", "bar-item");
+        if (_appliedFrom.HasValue)
+            query += $"&from={_appliedFrom.Value.Date.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}";
 
-        builder.AddMarkupContent(2, $@"
-            <div class='bar-value'>{value}</div>
-            <div class='bar-column'>
-                <div class='bar-fill' style='height:{heightPercent}%; background:{color}'></div>
-            </div>
-            <div class='bar-label'>{label}</div>
-        ");
+        // Include the whole end day, not just its first instant
+        if (_appliedTo.HasValue)
+            query += $"&to={_appliedTo.Value.Date.AddDays(1).AddSeconds(-1).ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)}";
 
-        builder.CloseElement();
-    };
+        return query;
+    }
+
     private async Task LoadProjectsAsync()
     {
         try
         {
             var url = $"{AppConfig.ChatUrl}Projects/GetProjectsByUser/by-user/{UserId}";
-            var response = await Http.GetFromJsonAsync<List<ProjectDto>>(url);
-
-            if (response != null)
-            {
-                allProjects = response;
-                filteredProjects = allProjects;
-            }
+            allProjects = await Http.GetFromJsonAsync<List<ProjectDto>>(url) ?? new();
+            filteredProjects = allProjects;
         }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Error loading projects: {ex.Message}");
         }
     }
-    private void FilterProjects()
+
+    private async Task LoadHolidaysAsync(bool forceRefresh = false)
     {
-        if (string.IsNullOrWhiteSpace(projectSearch))
+        var region = selectedRegion;
+        _calendarError = null;
+
+        if (forceRefresh || !_holidayCache.TryGetValue(region, out var list))
         {
-            filteredProjects = allProjects;
+            try
+            {
+                list = await Http.GetFromJsonAsync<List<HolidayDto>>(
+                    $"{AppConfig.ChatUrl}Holidays/Get/{region}") ?? new();
+                _holidayCache[region] = list;
+            }
+            catch (Exception ex)
+            {
+                list = new();
+                _calendarError = "Couldn't load holidays for this region.";
+                Console.WriteLine($"❌ Error loading holidays: {ex.Message}");
+            }
+        }
+
+        // The user switched region while this request was in flight
+        if (region != selectedRegion)
+            return;
+
+        holidays = list;
+        BuildAgenda();
+        _calendarNeedsRender = true;
+        StateHasChanged();
+    }
+
+    // =============================
+    // FILTER HANDLERS
+    // =============================
+    private void SetPresetRange(string key)
+    {
+        var today = DateTime.UtcNow.Date;
+
+        if (key == "today")
+        {
+            FilterStartDate = today;
+            FilterEndDate = today;
+        }
+        else if (key == "week")
+        {
+            FilterStartDate = today.AddDays(-(int)today.DayOfWeek);
+            FilterEndDate = FilterStartDate.Value.AddDays(6);
+        }
+        else if (key == "month")
+        {
+            FilterStartDate = new DateTime(today.Year, today.Month, 1);
+            FilterEndDate = FilterStartDate.Value.AddMonths(1).AddDays(-1);
+        }
+        else if (key == "3m")
+        {
+            FilterStartDate = today.AddMonths(-3);
+            FilterEndDate = today;
         }
         else
         {
-            filteredProjects = allProjects
-                .Where(p => p.Title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
-                .ToList();
+            FilterStartDate = null;
+            FilterEndDate = null;
+        }
+
+        activePreset = key;
+        _appliedFrom = FilterStartDate;
+        _appliedTo = FilterEndDate;
+        _customDirty = false;
+    }
+
+    private async Task ApplyPresetAsync(string key)
+    {
+        SetPresetRange(key);
+        await ReloadDataAsync();
+    }
+
+    private void OnCustomDateChanged()
+    {
+        _customDirty = true;
+    }
+
+    private async Task ApplyCustomRangeAsync()
+    {
+        if (!CanApplyCustom)
+            return;
+
+        activePreset = "custom";
+        _appliedFrom = FilterStartDate;
+        _appliedTo = FilterEndDate;
+        _customDirty = false;
+        await ReloadDataAsync();
+    }
+
+    private string RangeLabel
+    {
+        get
+        {
+            string Fmt(DateTime d) => d.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+
+            if (!_appliedFrom.HasValue && !_appliedTo.HasValue)
+                return "at any time";
+            if (_appliedFrom.HasValue && _appliedTo.HasValue)
+                return _appliedFrom.Value.Date == _appliedTo.Value.Date
+                    ? $"on {Fmt(_appliedFrom.Value)}"
+                    : $"from {Fmt(_appliedFrom.Value)} to {Fmt(_appliedTo.Value)}";
+            return _appliedFrom.HasValue
+                ? $"since {Fmt(_appliedFrom.Value)}"
+                : $"up to {Fmt(_appliedTo!.Value)}";
         }
     }
+
+    private void OpenProjectDropdown()
+    {
+        showProjectDropdown = true;
+        FilterProjects();
+    }
+
+    private void CloseProjectDropdown()
+    {
+        showProjectDropdown = false;
+        projectSearch = SelectedProjectTitle ?? string.Empty;
+    }
+
     private void OnProjectInput(ChangeEventArgs e)
     {
         projectSearch = e.Value?.ToString() ?? string.Empty;
         showProjectDropdown = true;
-
-        filteredProjects = allProjects
-            .Where(p => p.Title.Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-    }
-    private async Task SelectProject(ProjectDto proj)
-    {
-        projectSearch = proj.Title;
-        projectFilter = proj.Id;
-
-        showProjectDropdown = false;
-
-        _currentPage = 1;
-        await LoadDashboardAsync(_currentPage);
-    }
-    private async Task HideProjectDropdown()
-    {
-        await Task.Delay(150); // allow click before closing
-        showProjectDropdown = false;
-    }
-    // Dashboard Data
-    private DashboardDto? _Dashboard { get; set; }
-
-    // SLA Alerts
-    private List<TicketSummaryDto> tickets => _Dashboard?.SlaAlerts.ToList() ?? new List<TicketSummaryDto>();
-    private int _currentPage = 1;
-    private int _totalPages = 1;
-    private int _totalRecords = 0;
-    private int FromPage => (_Dashboard != null) ? ((_Dashboard.CurrentPage - 1) * _Dashboard.SlaAlerts.Count() + 1) : 0;
-    private int ToPage => (_Dashboard != null) ? Math.Min(_Dashboard.CurrentPage * _Dashboard.SlaAlerts.Count(), _totalRecords) : 0;
-
-    // Agent Stats
-    private IEnumerable<AgentStatDto> AgentStats => _Dashboard?.AgentStats ?? Enumerable.Empty<AgentStatDto>();
-
-    // Recent Tickets
-    private IEnumerable<TicketSummaryDto> RecentTickets => _Dashboard?.RecentTickets ?? Enumerable.Empty<TicketSummaryDto>();
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadDashboardAsync(_currentPage);
-        await LoadActivityAsync(1);
-        await LoadProjectsAsync(); // ✅ ADD
-        await LoadCalendarData();
-    }
-    private async Task LoadCalendarData()
-    {
-        holidays = await Http.GetFromJsonAsync<List<HolidayDto>>(
-            $"{AppConfig.ChatUrl}Holidays/Get/{selectedRegion}");
- 
-        ApplyMonthFilter();
-        BuildCalendarEvents();
-        BuildAgenda();
-
-        await RenderCalendar();
+        FilterProjects();
     }
 
-    private void ApplyMonthFilter()
+    private void FilterProjects()
     {
-        filteredHolidays = holidays
-            .Where(x => x.Date.Month == currentMonth.Month &&
-                        x.Date.Year == currentMonth.Year)
-            .ToList();
-    }
-   
-    private void BuildAgenda()
-    {
-        _agendaEvents = holidays
-      .Where(x => x.Date.Month == currentMonth.Month &&
-                  x.Date.Year == currentMonth.Year)
-      .Select(x => new AgendaDto
-      {
-          Title = x.Name,
-          Start = x.Date,
-          Color = "#ef4444"
-      })
-      .ToList();
-    }
-    private async Task SyncHolidays()
-    {
-        await Http.PostAsync(
-            $"{AppConfig.ChatUrl}Holidays/Sync/sync/{selectedRegion}/2026",
-            null);
-
-        await LoadCalendarData();
+        // When the box just shows the current selection, list everything
+        filteredProjects = string.IsNullOrWhiteSpace(projectSearch) || projectSearch == SelectedProjectTitle
+            ? allProjects
+            : allProjects
+                .Where(p => (p.Title ?? string.Empty).Contains(projectSearch, StringComparison.OrdinalIgnoreCase)
+                         || (p.ClientName ?? string.Empty).Contains(projectSearch, StringComparison.OrdinalIgnoreCase))
+                .ToList();
     }
 
-    private async Task OnRegionChanged()
+    private async Task OnProjectKeyDown(KeyboardEventArgs e)
     {
-        await LoadCalendarData();
-    }
-    private DateTime FilterStartDate { get; set; } = DateTime.UtcNow.Date.AddMonths(-3);
-    private DateTime FilterEndDate { get; set; } = DateTime.UtcNow.Date;
-
-    private ChatUp.Application.Features.Activity.DTOs.ActivityPagedResponse? _activity;
-    private bool isLoadingActivity;
-
-
-    private async Task ApplyFilter()
-    {
-        await LoadDashboardAsync(_currentPage, FilterStartDate, FilterEndDate);
-    }
-
-    private async Task SetToday()
-    {
-        FilterStartDate = DateTime.UtcNow.Date;
-        FilterEndDate = DateTime.UtcNow.Date;
-        await ApplyFilter();
-    }
-
-    private async Task SetWeek()
-    {
-        var today = DateTime.UtcNow.Date;
-        FilterStartDate = today.AddDays(-(int)today.DayOfWeek);
-        FilterEndDate = FilterStartDate.AddDays(6);
-        await ApplyFilter();
-    }
-
-    private async Task SetMonth()
-    {
-        var today = DateTime.UtcNow.Date;
-        FilterStartDate = new DateTime(today.Year, today.Month, 1);
-        FilterEndDate = FilterStartDate.AddMonths(1).AddDays(-1);
-        await ApplyFilter();
-    }
-
-    private async Task LoadDashboardAsync(int page, DateTime? startDate = null, DateTime? endDate = null)
-    {
-        _currentPage = page;
-        _currentPage = page;
-        isLoading = true;
-        StateHasChanged(); // Immediately show spinner
-        TitleService.SetTitle("Admin Dashboard");
-
-
-        var decrypted = LinkService.Unprotect(Uri.UnescapeDataString(EncryptedId));
-        if (string.IsNullOrEmpty(decrypted))
+        if (e.Key == "Escape")
         {
-            Navigation.NavigateTo("/unauthorized");
+            CloseProjectDropdown();
+        }
+        else if (e.Key == "Enter" && showProjectDropdown && filteredProjects.Any())
+        {
+            await SelectProject(filteredProjects[0]);
+        }
+    }
+
+    private async Task SelectProject(ProjectDto? proj)
+    {
+        showProjectDropdown = false;
+        projectSearch = proj?.Title ?? string.Empty;
+
+        if (proj?.Id == projectFilter)
             return;
-        }
-        UserId = int.Parse(decrypted);
 
-        // Build query params
-        UserId = int.Parse(decrypted);
+        projectFilter = proj?.Id;
+        SelectedProjectTitle = proj?.Title;
 
-        // ✅ INCLUDE USER ID
-        var query = $"?userId={UserId}&page={page}&pageSize=10";
-        
-        if (projectFilter.HasValue)
-            query += $"&projectId={projectFilter.Value}";
-        if (startDate.HasValue)
-            query += $"&from={startDate.Value:yyyy-MM-ddTHH:mm:ss}";
-
-        if (endDate.HasValue)
-            query += $"&to={endDate.Value:yyyy-MM-ddTHH:mm:ss}";
-        try
-        {
-            var url = $"{AppConfig.ChatUrl}Dashboard/GetDashboard{query}";
-            var response = await Http.GetFromJsonAsync<DashboardDto>(url);
-            if (response != null)
-            {
-                _Dashboard = response;
-                _totalPages = response.TotalPages;
-                _totalRecords = response.TotalRecords;
-            }
-
-            await LoadActivityAsync(1, startDate, endDate);
-        }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged(); // Refresh UI after loading
-        }
+        // Activity is not project-scoped, so only the dashboard needs reloading
+        await LoadDashboardAsync(1);
     }
-
-    private async Task LoadActivityAsync(int page, DateTime? startDate = null, DateTime? endDate = null)
-    {
-        isLoadingActivity = true;
-        StateHasChanged();
-
-        var query = $"?userId={UserId}&page={page}&pageSize=50";
-
-        if (startDate.HasValue)
-            query += $"&from={startDate.Value:yyyy-MM-ddTHH:mm:ss}";
-
-        if (endDate.HasValue)
-            query += $"&to={endDate.Value:yyyy-MM-ddTHH:mm:ss}";
-
-        try
-        {
-            var url = $"{AppConfig.ChatUrl}Dashboard/GetActivity{query}";
-            _activity = await Http.GetFromJsonAsync<ChatUp.Application.Features.Activity.DTOs.ActivityPagedResponse>(url);
-        }
-        finally
-        {
-            isLoadingActivity = false;
-            StateHasChanged();
-        }
-    }
-
-
-    // Pagination helpers
-    private bool CanGoPrev => _currentPage > 1;
-    private bool CanGoNext => _currentPage < _totalPages;
 
     private async Task PrevPage()
     {
         if (CanGoPrev)
-        {
             await LoadDashboardAsync(_currentPage - 1);
-        }
     }
 
     private async Task NextPage()
     {
         if (CanGoNext)
-        {
             await LoadDashboardAsync(_currentPage + 1);
-        }
     }
 
-    private async Task SelectedPage(int page)
+    // =============================
+    // CALENDAR HANDLERS
+    // =============================
+    [JSInvokable]
+    public Task OnVisibleMonthChanged(string month)
     {
-        if (page != _currentPage)
+        if (DateTime.TryParseExact(month, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+            && parsed != currentMonth)
         {
-            await LoadDashboardAsync(page);
+            currentMonth = parsed;
+            BuildAgenda();
+            return InvokeAsync(StateHasChanged);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void BuildAgenda()
+    {
+        _agendaEvents = holidays
+            .Where(x => x.Date.Month == currentMonth.Month && x.Date.Year == currentMonth.Year)
+            .OrderBy(x => x.Date)
+            .Select(x => new AgendaDto { Title = x.Name, Start = x.Date })
+            .ToList();
+    }
+
+    private async Task OnRegionChanged()
+    {
+        _calendarNotice = null;
+        await LoadHolidaysAsync();
+    }
+
+    private async Task SyncHolidaysAsync()
+    {
+        _isSyncing = true;
+        _calendarNotice = null;
+        _calendarError = null;
+        var year = currentMonth.Year;
+
+        try
+        {
+            var response = await Http.PostAsync($"{AppConfig.ChatUrl}Holidays/Sync/sync/{selectedRegion}/{year}", null);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadHolidaysAsync(forceRefresh: true);
+                if (_calendarError == null)
+                    _calendarNotice = $"{year} holidays synced.";
+            }
+            else
+            {
+                _calendarError = $"Sync failed ({(int)response.StatusCode}). Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _calendarError = "Sync failed. Check your connection and try again.";
+            Console.WriteLine($"❌ Error syncing holidays: {ex.Message}");
+        }
+        finally
+        {
+            _isSyncing = false;
         }
     }
 
-    // Badge CSS based on ticket status
-    private string GetBadgeClass(string status) => status switch
-    {
-        "Open" => "bg-success",
-        "InProgress" => "bg-info",
-        "Resolved" => "bg-primary",
-        "Closed" => "bg-secondary",
-        "Rejected" => "bg-danger",
-        _ => "bg-light text-dark"
-    };
-    private string FormatTime(double totalMinutes)
-    {
-        if (totalMinutes < 60)
-            return $"{Math.Round(totalMinutes, 1)}m"; // minutes
+    // =============================
+    // VIEW MODELS
+    // =============================
+    private sealed record Kpi(string Label, string Value, string Hint, string Icon, string Tone, string ToneLabel, string Help);
+    private sealed record Attention(string Tone, string Icon, string Text);
+    private sealed record StatusSegment(string Label, int Count, string Color);
 
-        double totalHours = totalMinutes / 60;
-        if (totalHours < 24)
-            return $"{Math.Round(totalHours, 1)}h"; // hours
+    private IEnumerable<Kpi> Kpis
+    {
+        get
+        {
+            var c = _Dashboard!.TicketCounts;
 
-        double totalDays = totalHours / 24;
-        return $"{Math.Round(totalDays, 1)}d"; // days
+            yield return new Kpi(
+                "Open tickets", c.Open.ToString("N0"),
+                $"{Pct(c.Open, c.Total)} of {c.Total:N0} in range",
+                "fa-solid fa-inbox", "neutral", "",
+                "Tickets still waiting to be picked up");
+
+            if (c.Total == 0)
+            {
+                yield return new Kpi("SLA compliance", "—", "No tickets in range",
+                    "fa-solid fa-shield-halved", "neutral", "",
+                    "Share of tickets that have not breached their SLA deadline");
+            }
+            else
+            {
+                var compliance = (c.Total - c.Breached) * 100.0 / c.Total;
+                var tone = compliance >= 95 ? "good" : compliance >= 85 ? "warning" : "critical";
+                yield return new Kpi("SLA compliance", $"{compliance:F1}%",
+                    $"{c.Breached:N0} breached",
+                    "fa-solid fa-shield-halved", tone, ToneLabel(tone),
+                    "Share of tickets that have not breached their SLA deadline");
+            }
+
+            var responseTone = ResponseTone(_Dashboard.AvgFirstResponseMinutes);
+            yield return new Kpi("Avg first response", FormatDuration(_Dashboard.AvgFirstResponseMinutes),
+                "Target: under 15 min",
+                "fa-solid fa-bolt", responseTone, ToneLabel(responseTone),
+                "Average time from a ticket being received to the agent's first reply");
+
+            yield return new Kpi("Avg resolution", FormatDuration(_Dashboard.AvgResolutionHours * 60),
+                "Received → resolved",
+                "fa-solid fa-flag-checkered", "neutral", "",
+                "Average time from a ticket being received to it being resolved");
+        }
     }
-    // Donut Chart Percentages
-    private double OpenPct => _Dashboard?.TicketCounts.OpenPercent ?? 0;
-    private double InProgressPct => _Dashboard?.TicketCounts.InProgressPercent ?? 0;
-    private double ClosedPct => _Dashboard?.TicketCounts.ClosedPercent ?? 0;
-    private double RejectedPct => _Dashboard?.TicketCounts.RejectedPercent ?? 0;
-    private double CriticalPct => _Dashboard?.TicketCounts.CriticalPercent ?? 0;
 
-    private double OffsetCritical => _Dashboard?.TicketCounts.OffsetCritical ?? 0;
-    private double OffsetRejected => _Dashboard?.TicketCounts.OffsetRejected ?? 0;
-    private double OffsetClosed => _Dashboard?.TicketCounts.OffsetClosed ?? 0;
-    private double OffsetInProgress => _Dashboard?.TicketCounts.OffsetInProgress ?? 0;
+    private IEnumerable<Attention> AttentionItems
+    {
+        get
+        {
+            var c = _Dashboard!.TicketCounts;
+
+            if (c.Total == 0)
+            {
+                yield return new Attention("neutral", "fa-regular fa-folder-open", "No tickets received in this range");
+                yield break;
+            }
+
+            if (c.Breached > 0)
+                yield return new Attention("critical", "fa-solid fa-triangle-exclamation", $"{Plural(c.Breached, "ticket")} breached SLA");
+            if (_Dashboard.TotalRecords > 0)
+                yield return new Attention("warning", "fa-solid fa-stopwatch", $"{Plural(_Dashboard.TotalRecords, "ticket")} on the SLA watchlist");
+            if (c.Critical > 0)
+                yield return new Attention("serious", "fa-solid fa-fire", $"{Plural(c.Critical, "critical-priority ticket")}");
+            if (c.Open > 0)
+                yield return new Attention("info", "fa-solid fa-inbox", $"{Plural(c.Open, "open ticket")} waiting");
+            if (c.Breached == 0 && c.Critical == 0)
+                yield return new Attention("good", "fa-solid fa-circle-check", "No SLA breaches or critical tickets");
+        }
+    }
+
+    // Validated categorical palette; identity is also carried by the legend labels
+    private List<StatusSegment> StatusSegments
+    {
+        get
+        {
+            var c = _Dashboard!.TicketCounts;
+            var known = c.Open + c.InProgress + c.Resolved + c.Closed + c.Rejected;
+            var segments = new List<StatusSegment>
+            {
+                new("Open", c.Open, "#2a78d6"),
+                new("In progress", c.InProgress, "#eda100"),
+                new("Resolved", c.Resolved, "#1baf7a"),
+                new("Closed", c.Closed, "#6250d6"),
+                new("Rejected", c.Rejected, "#e34948")
+            };
+            if (c.Total > known)
+                segments.Add(new("New / other", c.Total - known, "#94a3b8"));
+            return segments;
+        }
+    }
+
+    private string StatusAriaLabel =>
+        "Ticket status breakdown: " + string.Join(", ", StatusSegments.Select(s => $"{s.Label} {s.Count}"));
+
+    // =============================
+    // FORMATTING HELPERS
+    // =============================
+    private static string Pct(int value, int total) =>
+        total <= 0 ? "0%" : $"{value * 100.0 / total:0.#}%";
+
+    private static string Plural(int n, string noun) => $"{n:N0} {noun}{(n == 1 ? "" : "s")}";
+
+    private static string FormatDuration(double totalMinutes)
+    {
+        if (totalMinutes <= 0)
+            return "—";
+        if (totalMinutes < 60)
+            return $"{Math.Round(totalMinutes, 1)}m";
+
+        var totalHours = totalMinutes / 60;
+        if (totalHours < 24)
+            return $"{Math.Round(totalHours, 1)}h";
+
+        return $"{Math.Round(totalHours / 24, 1)}d";
+    }
+
+    private static string FormatSpan(TimeSpan span)
+    {
+        if (span <= TimeSpan.Zero)
+            return "now";
+        if (span.TotalDays >= 1)
+            return $"{(int)span.TotalDays}d {span.Hours}h";
+        if (span.TotalHours >= 1)
+            return $"{(int)span.TotalHours}h {span.Minutes}m";
+        return span.TotalMinutes >= 1 ? $"{(int)span.TotalMinutes}m" : "<1m";
+    }
+
+    private static string RelativeTime(DateTime utc)
+    {
+        var ago = DateTime.UtcNow - utc;
+        if (ago.TotalMinutes < 1) return "just now";
+        if (ago.TotalHours < 1) return $"{(int)ago.TotalMinutes}m ago";
+        if (ago.TotalDays < 1) return $"{(int)ago.TotalHours}h ago";
+        if (ago.TotalDays < 7) return $"{(int)ago.TotalDays}d ago";
+        return utc.ToLocalTime().ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+    }
+
+    private static string ResponseTone(double minutes) =>
+        minutes <= 0 ? "neutral" : minutes <= 15 ? "good" : minutes <= 60 ? "warning" : "critical";
+
+    private static string ToneLabel(string tone) => tone switch
+    {
+        "good" => "On target",
+        "warning" => "Watch",
+        "critical" => "Needs attention",
+        _ => ""
+    };
+
+    private static string ToneIcon(string tone) => tone switch
+    {
+        "good" => "fa-solid fa-circle-check",
+        "warning" => "fa-solid fa-circle-exclamation",
+        "critical" => "fa-solid fa-triangle-exclamation",
+        _ => "fa-regular fa-circle"
+    };
+
+    private static (string Label, string Css) StatusMeta(string? status) => status switch
+    {
+        "Open" => ("Open", "open"),
+        "InProgress" => ("In progress", "progress"),
+        "Resolved" => ("Resolved", "resolved"),
+        "Closed" => ("Closed", "closed"),
+        "Rejected" => ("Rejected", "rejected"),
+        "New" => ("New", "new"),
+        _ => (status ?? "Unknown", "other")
+    };
+
+    private static (string Label, string Tone, string Icon) SlaMeta(string? slaStatus) => slaStatus switch
+    {
+        "Breached" => ("Breached", "critical", "fa-solid fa-triangle-exclamation"),
+        "NearSLA" => ("Due soon", "warning", "fa-solid fa-hourglass-half"),
+        "OnTrack" => ("On track", "good", "fa-solid fa-circle-check"),
+        _ => (slaStatus ?? "Unknown", "neutral", "fa-regular fa-circle")
+    };
+
+    private static string ActivityIcon(string? type)
+    {
+        var t = type ?? string.Empty;
+        if (t.Contains("Creat", StringComparison.OrdinalIgnoreCase)) return "fa-solid fa-plus";
+        if (t.Contains("Assign", StringComparison.OrdinalIgnoreCase)) return "fa-solid fa-user-plus";
+        if (t.Contains("Status", StringComparison.OrdinalIgnoreCase)) return "fa-solid fa-arrows-rotate";
+        if (t.Contains("Message", StringComparison.OrdinalIgnoreCase) || t.Contains("Repl", StringComparison.OrdinalIgnoreCase) || t.Contains("Comment", StringComparison.OrdinalIgnoreCase)) return "fa-regular fa-comment";
+        if (t.Contains("Clos", StringComparison.OrdinalIgnoreCase) || t.Contains("Resolv", StringComparison.OrdinalIgnoreCase)) return "fa-solid fa-check";
+        if (t.Contains("Upload", StringComparison.OrdinalIgnoreCase) || t.Contains("File", StringComparison.OrdinalIgnoreCase)) return "fa-solid fa-paperclip";
+        return "fa-solid fa-bolt";
+    }
+
+    private static string Humanize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : Regex.Replace(value, "(?<=[a-z])(?=[A-Z])", " ").ToLowerInvariant();
+
+    private static string Initials(string? name)
+    {
+        var parts = (name ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
+    }
+
     public class AgendaDto
     {
-        public string Title { get; set; }
+        public string Title { get; set; } = string.Empty;
         public DateTime Start { get; set; }
-        public string Color { get; set; }
     }
-    public class CalendarEventDto
-    {
-        public string Id { get; set; }
-        public string Title { get; set; }
-        public DateTime Start { get; set; }
-        public DateTime? End { get; set; }
-        public string Color { get; set; }
-        public string Priority { get; set; }
-    }
+
     public class CalendarJsEvent
     {
         public string? id { get; set; }
-        public string title { get; set; }
-        public string start { get; set; }
+        public string title { get; set; } = string.Empty;
+        public string start { get; set; } = string.Empty;
         public string? end { get; set; }
-
         public string? color { get; set; }
         public bool? editable { get; set; }
-
         public bool? allDay { get; set; }
         public string? display { get; set; }
     }
+
     public class HolidayDto
     {
         public DateTime Date { get; set; }
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
     }
 }
