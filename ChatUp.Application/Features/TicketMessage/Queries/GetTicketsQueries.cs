@@ -1,15 +1,9 @@
 ﻿using ChatUp.Application.Features.TicketMessage.DTOs;
 using ChatUp.Domain.Entities;
 using MediatR;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ChatUp.Application.Features.TicketMessage.Queries
 {
-
     public class GetTicketsQueries : IRequest<TicketPagedResponse>
     {
         public int UserId { get; set; }
@@ -20,6 +14,21 @@ namespace ChatUp.Application.Features.TicketMessage.Queries
         public bool IncludeArchived { get; set; }
         public int Page { get; set; }
         public int PageSize { get; set; }
+
+        /// <summary>Only tickets of this client.</summary>
+        public int? ClientId { get; set; }
+
+        /// <summary>Only tickets whose latest client message has no support reply yet (auto replies don't count).</summary>
+        public bool NeedsReply { get; set; }
+
+        /// <summary>Only tickets this user is the supporting agent of.</summary>
+        public bool AssignedToMe { get; set; }
+
+        /// <summary>recent (default) · waiting · priority · due</summary>
+        public string? Sort { get; set; }
+
+        /// <summary>Ticket status histories; the inbox list doesn't need them.</summary>
+        public bool IncludeHistories { get; set; } = true;
 
         public GetTicketsQueries(
             int userId,

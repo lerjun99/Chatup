@@ -130,6 +130,9 @@
     box-shadow: 0 0 0 2px #fff;
 }
 
+/* the inbox button keeps the open-ticket count; the bell (NotificationBell) owns the red badge */
+.app-bell-badge.is-muted { background: #64748b; }
+
 /* user menu */
 .app-user { position: relative; }
 
@@ -291,6 +294,10 @@
     .app.is-drawer-open .app-scrim { opacity: 1; pointer-events: auto; }
 
     .app-topbar { gap: 10px; height: 60px; padding: 0 12px; }
+    .app-actions { gap: 6px; }
+
+    /* the bell already says what's new; the envelope shortcut is in the tab bar on phones */
+    .app-inbox-btn { display: none !important; }
     .app-title h1 { font-size: 16px; }
     .app-crumb { display: none; }
     .app-user-text, .app-user-caret { display: none; }
@@ -360,6 +367,108 @@
     }
 }
 
+/* =========================
+   INSTALLED APP (PWA, standalone window)
+========================= */
+@media (display-mode: standalone) {
+    /* the status bar / notch sits over the page on iOS (black-translucent) and Android edge-to-edge */
+    .app-topbar {
+        height: calc(var(--app-topbar-h) + env(safe-area-inset-top, 0px));
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+
+    .app-sidebar { padding-top: env(safe-area-inset-top, 0px); }
+
+    /* feels like an app, not a web page */
+    .app { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+    .app-tab, .app-icon-btn { touch-action: manipulation; user-select: none; }
+}
+
+@media (display-mode: standalone) and (max-width: 767.98px) {
+    .app-topbar { height: calc(60px + env(safe-area-inset-top, 0px)); }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .app, .app * { transition: none !important; animation: none !important; }
+}
+
+/* ============ SESSION GATE (checking / unavailable / no access) ============ */
+.app-gate {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    padding: 24px 16px;
+    text-align: center;
+    background: var(--app-bg, #f6f7fb);
+    color: var(--app-text, #0f172a);
+}
+
+.app-gate-inline {
+    min-height: 60vh;
+    background: transparent;
+}
+
+.app-gate h2 {
+    margin: .25rem 0 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.app-gate p {
+    margin: 0;
+    max-width: 420px;
+    color: var(--app-muted, #64748b);
+}
+
+.app-gate-icon {
+    font-size: 2rem;
+    color: var(--app-accent, #4f46e5);
+}
+
+.app-gate-spinner {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid var(--app-border, #e2e8f0);
+    border-top-color: var(--app-accent, #4f46e5);
+    animation: app-gate-spin .8s linear infinite;
+}
+
+@keyframes app-gate-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-gate-spinner { animation-duration: 2.4s; }
+}
+
+.app-gate-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .75rem;
+    margin-top: .75rem;
+}
+
+.app-gate-btn {
+    display: inline-flex;
+    align-items: center;
+    padding: .55rem 1.1rem;
+    border: 0;
+    border-radius: 10px;
+    background: var(--app-accent, #4f46e5);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.app-gate-link {
+    align-self: center;
+    color: var(--app-accent, #4f46e5);
+    font-weight: 600;
 }

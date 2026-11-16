@@ -14,14 +14,19 @@ namespace ChatUp.Application.Features.Ticket.Handler
 {
     public class UpdateTicketStatusHandler : IRequestHandler<UpdateTicketStatusCommand, bool>
     {
+        private static string Label(TicketStatus? s) => s == TicketStatus.InProgress ? "In progress" : (s ?? TicketStatus.Open).ToString();
+
         private readonly IChatDBContext _db;
         private readonly IBusinessCalendarRepository _calendarService;
         private readonly IChatHubContext _chatHub;
-        public UpdateTicketStatusHandler(IChatDBContext db, IChatHubContext chatHub, IBusinessCalendarRepository calendarService)
+        private readonly Notifications.INotificationPublisher _notifications;
+        public UpdateTicketStatusHandler(IChatDBContext db, IChatHubContext chatHub, IBusinessCalendarRepository calendarService,
+            Notifications.INotificationPublisher notifications)
         {
             _db = db;
             _calendarService = calendarService;
             _chatHub = chatHub;
+            _notifications = notifications;
         }
 
         public async Task<bool> Handle(UpdateTicketStatusCommand request, CancellationToken cancellationToken)
@@ -216,6 +221,14 @@ namespace ChatUp.Application.Features.Ticket.Handler
                 // NOTIFY
                 // =============================
                 await _chatHub.NotifyTicketUpdated();
+
+                // Bell: requester, the client's support agents and the project's developers
+                var changes = new List<string>();
+                if (statusChanged) changes.Add($"Status: {Label(oldStatus)} → {Label(ticket.Status)}");
+                if (priorityChanged) changes.Add($"Priority: {oldPriority} → {ticket.Priority}");
+                if (projectChanged) changes.Add("Project changed");
+                if (remarksChanged && !string.IsNullOrWhiteSpace(request.Remarks)) changes.Add($"Remarks: {request.Remarks}");
+                _notifications.TicketUpdated(ticket.Id, request.UpdatedBy, string.Join(" · ", changes));
 
                 return true;
             }

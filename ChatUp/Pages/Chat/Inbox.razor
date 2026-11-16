@@ -1,4 +1,4 @@
-@page "/inbox/{EncryptedId}"
+﻿@page "/inbox/{EncryptedId}"
 @page "/inbox/ticket/{EncryptedId}/{TicketNo}/{Status}"
 @implements IDisposable
 @using ChatUp.Application.Common.Helpers
@@ -21,6 +21,7 @@
 @inject ChatUp.Services.TicketNotificationService _ticketNotificationService
 @inject Blazored.SessionStorage.ISessionStorageService SessionStorage
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject ChatUp.Services.NotificationCenter Notifications
 <link href="css/ticket-chat.css" rel="stylesheet" />
 <link href="css/inbox.css" rel="stylesheet" />
 
@@ -45,33 +46,114 @@
         <div class="ix-sidebar-head" data-intro="Here you can see all your tickets and filter them by status." data-step="2">
             <div class="ix-sidebar-title">
                 <h2>Inbox</h2>
-                <span class="ix-count">@(OpenCount + InProgress + ClosedCount)</span>
+                <span class="ix-count" title="Active tickets">@ActiveCount</span>
+                <span class="ix-spacer"></span>
+                @if (IsStaff)
+                {
+                    <button class="ix-icon-btn ix-icon-btn-sm" title="Chat auto reply settings" @onclick="() => showAutoReply = true">
+                        <i class="fa-solid fa-robot"></i>
+                    </button>
+                }
+                <button class="ix-icon-btn ix-icon-btn-sm @(showRefine || RefineCount > 0 ? "is-active" : "")"
+                        title="Filter and sort" aria-expanded="@showRefine" @onclick="() => showRefine = !showRefine">
+                    <i class="fa-solid fa-sliders"></i>
+                    @if (RefineCount > 0)
+                    {
+                        <span class="ix-badge-dot">@RefineCount</span>
+                    }
+                </button>
             </div>
 
             <div class="ix-filters" role="tablist" aria-label="Filter tickets by status">
-                <button role="tab" class="@(SelectedStatusFilter == null ? "is-active" : "")" @onclick="() => ApplyStatusFilter(null)">All</button>
+                <button role="tab" class="@(SelectedStatusFilter == null ? "is-active" : "")" @onclick="() => ApplyStatusFilter(null)">
+                    All <span>@ActiveCount</span>
+                </button>
                 <button role="tab" class="@(SelectedStatusFilter == TicketStatus.Open ? "is-active" : "")" @onclick="() => ApplyStatusFilter(TicketStatus.Open)">
                     Open <span>@OpenCount</span>
                 </button>
                 <button role="tab" class="@(SelectedStatusFilter == TicketStatus.InProgress ? "is-active" : "")" @onclick="() => ApplyStatusFilter(TicketStatus.InProgress)">
                     In progress <span>@InProgress</span>
                 </button>
+                @if (NewCount > 0 || SelectedStatusFilter == TicketStatus.New)
+                {
+                    <button role="tab" class="@(SelectedStatusFilter == TicketStatus.New ? "is-active" : "")" @onclick="() => ApplyStatusFilter(TicketStatus.New)">
+                        New <span>@NewCount</span>
+                    </button>
+                }
                 <button role="tab" class="@(SelectedStatusFilter == TicketStatus.Closed ? "is-active" : "")" @onclick="() => ApplyStatusFilter(TicketStatus.Closed)">
                     Closed <span>@ClosedCount</span>
                 </button>
             </div>
 
             <div class="ix-search" data-intro="Search tickets by title or ticket number." data-step="3">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="search" placeholder="Search title or ticket no." aria-label="Search tickets"
-                       @bind="SearchText" @bind:event="oninput" />
+                <i class="fa-solid @(isSearching ? "fa-circle-notch fa-spin" : "fa-magnifying-glass")"></i>
+                <input type="search" placeholder="Search title, ticket no., client…" aria-label="Search tickets"
+                       value="@SearchText" @oninput="OnSearchInput" />
                 @if (!string.IsNullOrEmpty(SearchText))
                 {
-                    <button class="ix-search-clear" title="Clear search" @onclick='() => SearchText = string.Empty'>
+                    <button class="ix-search-clear" title="Clear search" @onclick="ClearSearch">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 }
             </div>
+
+            @if (IsStaff)
+            {
+                <div class="ix-quick" role="group" aria-label="Quick filters">
+                    <button class="ix-chip @(filterNeedsReply ? "is-on" : "")" aria-pressed="@filterNeedsReply" @onclick="ToggleNeedsReply">
+                        <i class="fa-solid fa-reply"></i> Needs reply
+                        @if (NeedsReplyCount > 0)
+                        {
+                            <span class="ix-chip-count is-hot">@NeedsReplyCount</span>
+                        }
+                    </button>
+                    <button class="ix-chip @(filterMine ? "is-on" : "")" aria-pressed="@filterMine" @onclick="ToggleMine">
+                        <i class="fa-solid fa-user-check"></i> Mine
+                    </button>
+                </div>
+            }
+
+            @if (showRefine)
+            {
+                <div class="ix-refine">
+                    <label>
+                        <span>Priority</span>
+                        <select class="ix-select" value="@(filterPriority?.ToString() ?? "")" @onchange="OnPriorityChanged">
+                            <option value="">Any</option>
+                            @foreach (var p in Enum.GetValues<TicketPriority>().Reverse())
+                            {
+                                <option value="@p">@p</option>
+                            }
+                        </select>
+                    </label>
+                    @if (IsStaff && clients.Count > 1)
+                    {
+                        <label>
+                            <span>Client</span>
+                            <select class="ix-select" value="@(filterClientId?.ToString() ?? "")" @onchange="OnClientFilterChanged">
+                                <option value="">All clients</option>
+                                @foreach (var c in clients.GroupBy(c => c.ClientId).Select(g => g.First()).OrderBy(c => c.ClientName))
+                                {
+                                    <option value="@c.ClientId">@c.ClientName</option>
+                                }
+                            </select>
+                        </label>
+                    }
+                    <label>
+                        <span>Sort by</span>
+                        <select class="ix-select" value="@sortMode" @onchange="OnSortChanged">
+                            <option value="recent">Latest activity</option>
+                            <option value="waiting">Waiting longest</option>
+                            <option value="priority">Priority</option>
+                            <option value="due">Due date</option>
+                        </select>
+                    </label>
+                    @if (RefineCount > 0)
+                    {
+                        <button class="ix-link ix-refine-reset" @onclick="ResetRefine"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+                    }
+                </div>
+            }
         </div>
 
         <ul class="ix-tickets" data-intro="This is your ticket list. Click a ticket to open the conversation." data-step="4">
@@ -86,31 +168,68 @@
             {
                 <li class="ix-tickets-empty">
                     <i class="fa-regular fa-folder-open"></i>
-                    <span>@(string.IsNullOrWhiteSpace(SearchText) ? "No tickets here yet." : $"No tickets match “{SearchText}”.")</span>
+                    <span>@(HasAnyFilter ? "No tickets match these filters." : "No tickets here yet.")</span>
+                    @if (HasAnyFilter)
+                    {
+                        <button class="ix-link" @onclick="ClearAllFilters"><i class="fa-solid fa-filter-circle-xmark"></i> Clear filters</button>
+                    }
                 </li>
             }
             else
             {
                 @foreach (var ticket in VisibleTickets)
                 {
+                    var isUnread = unreadTicketIds.Contains(ticket.Id);
                     <li @key="ticket.Id">
-                        <button type="button" class="ix-ticket @(SelectedTicket?.Id == ticket.Id ? "is-active" : "")"
+                        <button type="button"
+                                class="ix-ticket ix-prio-edge-@ticket.Priority.ToString().ToLowerInvariant() @(SelectedTicket?.Id == ticket.Id ? "is-active" : "") @(isUnread ? "is-unread" : "")"
                                 @onclick="@(() => SelectTicket(ticket))">
-                            <img class="ix-ticket-avatar" alt="" title="@ticket.ClientName"
-                                 src="@(!string.IsNullOrEmpty(ticket.ClientAvatar) ? ticket.ClientAvatar : "/images/default.png")" />
+                            <span class="ix-ticket-avatar-wrap">
+                                @if (!string.IsNullOrEmpty(ticket.ClientAvatar) && !ticket.ClientAvatar.Contains("default"))
+                                {
+                                    <img class="ix-ticket-avatar" alt="" title="@ticket.ClientName" src="@ticket.ClientAvatar" />
+                                }
+                                else
+                                {
+                                    <span class="ix-ticket-avatar ix-initials" title="@ticket.ClientName" style="--h:@Hue(ticket.ClientName)">@Initials(ticket.ClientName)</span>
+                                }
+                                @if (ticket.NeedsReply && IsStaff && ticket.Status is not ("Closed" or "Rejected"))
+                                {
+                                    <span class="ix-needs-dot" title="Waiting for a support reply"></span>
+                                }
+                            </span>
                             <div class="ix-ticket-main">
                                 <div class="ix-ticket-top">
                                     <span class="ix-ticket-title" title="@ticket.IssueTitle">@ticket.IssueTitle</span>
-                                    <span class="ix-ticket-time">@ticket.ResponseTime</span>
+                                    <span class="ix-ticket-time" title="@ticket.LastActivityAt?.ToLocalTime().ToString("MMM d, yyyy h:mm tt")">@ticket.ResponseTime</span>
+                                </div>
+                                <div class="ix-ticket-preview">
+                                    @if (!string.IsNullOrWhiteSpace(ticket.LastMessagePreview) || ticket.LastMessageHasAttachment)
+                                    {
+                                        <span class="ix-preview-who">@PreviewPrefix(ticket)</span>
+                                        @if (ticket.LastMessageHasAttachment)
+                                        {
+                                            <i class="fa-solid fa-paperclip"></i>
+                                        }
+                                        <span class="ix-preview-text">@(string.IsNullOrWhiteSpace(ticket.LastMessagePreview) ? "Attachment" : ticket.LastMessagePreview)</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="ix-preview-text is-empty">No messages yet</span>
+                                    }
+                                    @if (isUnread)
+                                    {
+                                        <span class="ix-unread-dot" title="New message"></span>
+                                    }
                                 </div>
                                 <div class="ix-ticket-bottom">
                                     <span class="ix-mono">@(ticket.IsCase ? ticket.CaseNo : ticket.TicketNo)</span>
+                                    @if (!string.IsNullOrWhiteSpace(ticket.ClientName))
+                                    {
+                                        <span class="ix-ticket-client" title="@ticket.ClientName">· @ticket.ClientName</span>
+                                    }
                                     <span class="ix-status ix-st-@StatusCss(ticket.Status)"><span class="ix-dot"></span>@StatusLabel(ticket.Status)</span>
                                 </div>
-                                @if (!string.IsNullOrWhiteSpace(ticket.ClientName))
-                                {
-                                    <div class="ix-ticket-client">@ticket.ClientName</div>
-                                }
                             </div>
                         </button>
                     </li>
@@ -193,8 +312,46 @@
                         {
                             <span class="ix-meta-text ix-hide-sm"><i class="fa-solid fa-diagram-project"></i> @SelectedTicket.ProjectTitle</span>
                         }
+                        @if (!string.IsNullOrEmpty(SelectedTicket.ClientName))
+                        {
+                            <span class="ix-meta-text ix-hide-sm"><i class="fa-solid fa-building"></i> @SelectedTicket.ClientName</span>
+                        }
+                        @if (SelectedTicket.NeedsReply && IsStaff && SelectedTicket.Status is not ("Closed" or "Rejected"))
+                        {
+                            <span class="ix-waiting"><i class="fa-solid fa-hourglass-half"></i> Waiting for reply</span>
+                        }
                     </div>
                 </div>
+
+                @if (SelectedTicket.SupportTeam?.Any() == true)
+                {
+                    <div class="ix-team ix-hide-sm" title="Support team: @string.Join(", ", SelectedTicket.SupportTeam.Select(s => s.FullName))">
+                        <span class="ix-team-label">Support</span>
+                        <div class="ix-team-stack">
+                            @foreach (var agent in SelectedTicket.SupportTeam.Take(4))
+                            {
+                                <span class="ix-team-avatar" title="@(agent.FullName + (agent.UserId == UserId ? " (you)" : ""))" style="--h:@Hue(agent.FullName)">
+                                    @if (!string.IsNullOrEmpty(agent.Avatar))
+                                    {
+                                        <img src="@AvatarSrc(agent.Avatar)" alt="" />
+                                    }
+                                    else
+                                    {
+                                        @Initials(agent.FullName)
+                                    }
+                                    @if (agent.IsOnline)
+                                    {
+                                        <span class="ix-team-online"></span>
+                                    }
+                                </span>
+                            }
+                            @if (SelectedTicket.SupportTeam.Count > 4)
+                            {
+                                <span class="ix-team-avatar is-more">+@(SelectedTicket.SupportTeam.Count - 4)</span>
+                            }
+                        </div>
+                    </div>
+                }
 
                 @if (SelectedTicket.Status != TicketStatus.Closed.ToString() &&
                      SelectedTicket.Status != TicketStatus.Rejected.ToString() &&
@@ -365,6 +522,10 @@
     </main>
 </div>
 
+@if (showAutoReply)
+{
+    <AutoReplySettings UserId="UserId" UserType="UserState?.UserType" Clients="clients" OnClose="() => showAutoReply = false" />
+}
 @if (showImageModal)
 {
     <div class="image-modal-overlay" @onclick="CloseImage">
@@ -378,232 +539,287 @@
 }
 @if (showTicketModal)
 {
-    <div class="modal show d-block custom-modal-overlay" tabindex="-1">
-        <div class="modal-dialog @(modalMode == "case" ? "modal-dialog-centered modal-sm-case" : "modal-dialog-centered modal-lg")"
-             style="display:flex; justify-content:center;">
-            <div class="custom-modal-content @(modalMode == "case" ? "modal-small" : "modal-large")">
-                <div class="modal-header bg-modal">
-                    <h5 class="modal-title">
-                        @(modalMode == "case" ? "Create New Case" : "Create Ticket")
-                    </h5>
-                    <button type="button" class="btn-close"
-                            style="background-color:white"
-                            @onclick="() => showTicketModal = false"></button>
+    var isCaseMode = modalMode == "case";
+    <div class="tk-backdrop" @onclick="CloseTicketModal">
+        <div class="tk @(isCaseMode ? "is-case" : "")" role="dialog" aria-modal="true" aria-labelledby="tk-title" @onclick:stopPropagation="true">
+            <header class="tk-head">
+                <span class="tk-head-icon"><i class="fa-solid @(isCaseMode ? "fa-pen-to-square" : "fa-ticket")"></i></span>
+                <div class="tk-head-text">
+                    <h2 id="tk-title">@(isCaseMode ? "New case" : "Create ticket")</h2>
+                    <p>@(isCaseMode ? "Start a conversation with our support team." : "Log an issue for a client and route it to the right team.")</p>
                 </div>
+                <button type="button" class="tk-close" title="Close" @onclick="CloseTicketModal"><i class="fa-solid fa-xmark"></i></button>
+            </header>
 
-                <div class="modal-body">
+            @if (AnyTicketMenuOpen)
+            {
+                <div class="tk-menu-scrim" @onclick="CloseTicketMenus"></div>
+            }
 
-                    @if (!string.IsNullOrEmpty(clientValidationError))
+            <div class="tk-body">
+                @if (!string.IsNullOrEmpty(clientValidationError))
+                {
+                    <div class="tk-alert" role="alert">
+                        <i class="fa-solid fa-circle-exclamation"></i>
+                        <span>@clientValidationError.TrimStart('⚠', ' ')</span>
+                    </div>
+                }
+
+                @if (!isCaseMode)
+                {
+                    <!-- TITLE -->
+                    <div class="tk-field">
+                        <label for="tk-issue">Issue title <span class="tk-req">*</span></label>
+                        <input id="tk-issue" class="tk-input tk-input-lg" maxlength="250" autocomplete="off"
+                               placeholder="e.g. Payroll report shows wrong totals"
+                               value="@newTicket.IssueTitle" @oninput="e => { newTicket.IssueTitle = e.Value?.ToString() ?? string.Empty; clientValidationError = string.Empty; }" />
+                        <small class="tk-count">@(newTicket.IssueTitle?.Length ?? 0)/250</small>
+                    </div>
+                }
+
+                <div class="tk-grid">
+                    @if (!isCaseMode && UserState.UserType != 3)
                     {
-                        <div class="alert alert-warning text-center mb-3">
-                            @clientValidationError
+                        <!-- CLIENT -->
+                        <div class="tk-field">
+                            <label>Client <span class="tk-req">*</span></label>
+                            <div class="tk-select-wrap">
+                                <button type="button" class="tk-select @(isClientDropdownOpen ? "is-open" : "")"
+                                        disabled="@(UserState.ClientId != 0)" @onclick="ToggleClientDropdownExclusive">
+                                    @if (selectedClient != null)
+                                    {
+                                        <span class="tk-av" style="--h:@Hue(selectedClient.ClientName)">@Initials(selectedClient.ClientName)</span>
+                                        <span class="tk-select-value">@selectedClient.ClientName</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-regular fa-building tk-select-icon"></i>
+                                        <span class="tk-placeholder">Choose a client</span>
+                                    }
+                                    <i class="fa-solid fa-chevron-down tk-caret"></i>
+                                </button>
+
+                                @if (isClientDropdownOpen)
+                                {
+                                    <div class="tk-menu">
+                                        <div class="tk-menu-search">
+                                            <i class="fa-solid fa-magnifying-glass"></i>
+                                            <input placeholder="Search clients…" @bind="clientSearchText" @bind:event="oninput" />
+                                        </div>
+                                        <div class="tk-menu-list">
+                                            @foreach (var c in FilteredClients)
+                                            {
+                                                <button type="button" class="tk-option @(selectedClient?.ClientId == c.ClientId ? "is-selected" : "")" @onclick="() => SelectClientFromModal(c)">
+                                                    <span class="tk-av" style="--h:@Hue(c.ClientName)">@Initials(c.ClientName)</span>
+                                                    <span class="tk-option-text">
+                                                        <strong>@c.ClientName</strong>
+                                                        @if (!string.IsNullOrWhiteSpace(c.Location))
+                                                        {
+                                                            <small>@c.Location</small>
+                                                        }
+                                                    </span>
+                                                    @if (selectedClient?.ClientId == c.ClientId)
+                                                    {
+                                                        <i class="fa-solid fa-check"></i>
+                                                    }
+                                                </button>
+                                            }
+                                            @if (!FilteredClients.Any())
+                                            {
+                                                <div class="tk-menu-empty">No clients match “@clientSearchText”.</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- CONTACT PERSON -->
+                        <div class="tk-field">
+                            <label>Contact person</label>
+                            <div class="tk-select-wrap">
+                                <button type="button" class="tk-select @(isUserDropdownOpen ? "is-open" : "")"
+                                        disabled="@(selectedClient == null || isLoadingUsers)" @onclick="ToggleUserDropdownExclusive">
+                                    @if (isLoadingUsers)
+                                    {
+                                        <i class="fa-solid fa-circle-notch fa-spin tk-select-icon"></i>
+                                        <span class="tk-placeholder">Loading contacts…</span>
+                                    }
+                                    else if (selectedUser != null && selectedUserId != 0)
+                                    {
+                                        <span class="tk-av is-round" style="--h:@Hue(selectedUser.Name)">@Initials(selectedUser.Name)</span>
+                                        <span class="tk-select-value">@selectedUser.Name</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-regular fa-user tk-select-icon"></i>
+                                        <span class="tk-placeholder">@(selectedClient == null ? "Choose a client first" : "Who reported it?")</span>
+                                    }
+                                    <i class="fa-solid fa-chevron-down tk-caret"></i>
+                                </button>
+
+                                @if (isUserDropdownOpen)
+                                {
+                                    <div class="tk-menu">
+                                        <div class="tk-menu-search">
+                                            <i class="fa-solid fa-magnifying-glass"></i>
+                                            <input placeholder="Search people…" @bind="userSearchText" @bind:event="oninput" />
+                                        </div>
+                                        <div class="tk-menu-list">
+                                            @foreach (var u in FilteredUserClients)
+                                            {
+                                                <button type="button" class="tk-option @(selectedUserId == u.Id ? "is-selected" : "")" @onclick="() => SelectUser(u)">
+                                                    <span class="tk-av is-round" style="--h:@Hue(u.FullName)">@Initials(u.FullName)</span>
+                                                    <span class="tk-option-text">
+                                                        <strong>@u.FullName</strong>
+                                                        <small>@@@u.Username</small>
+                                                    </span>
+                                                    @if (selectedUserId == u.Id)
+                                                    {
+                                                        <i class="fa-solid fa-check"></i>
+                                                    }
+                                                </button>
+                                            }
+                                            @if (!FilteredUserClients.Any())
+                                            {
+                                                <div class="tk-menu-empty">No contacts found for this client.</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
                         </div>
                     }
 
-                    <EditForm Model="@newTicket">
-                        <DataAnnotationsValidator />
-                        <ValidationSummary />
-                        @if (modalMode == "case")
-                        {
-                            <div class="case-center-box">
-                                <label class="fw-semibold d-block mb-2" style="text-align:right">Select Project</label>
-
-                                <InputSelect class="form-select w-100" @bind-Value="selectedProjectId">
-                                    <option value="0">-- Select Project --</option>
-                                    @foreach (var p in projects)
-                                    {
-                                        <option value="@p.Id">@p.Title</option>
-                                    }
-                                </InputSelect>
-                            </div>
-                            <div class="form-group">
-                                <label>Priority</label>
-                                <InputSelect class="form-select" @bind-Value="newTicket.Priority">
-                                    @foreach (var priority in Enum.GetValues<TicketPriority>())
-                                    {
-                                        <option value="@priority">@priority</option>
-                                    }
-                                </InputSelect>
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="modal-grid">
-
-                                @* ---------- ISSUE TITLE ---------- *@
-                                @if (modalMode == "ticket")
+                    <!-- PROJECT -->
+                    <div class="tk-field @(isCaseMode ? "tk-span-2" : "")">
+                        <label>Project <span class="tk-req">*</span></label>
+                        <div class="tk-select-wrap">
+                            <button type="button" class="tk-select @(isProjectDropdownOpen ? "is-open" : "")"
+                                    disabled="@(ProjectPickerDisabled)" @onclick="ToggleProjectDropdownExclusive">
+                                @if (selectedClient != null && isLoadingProjects)
                                 {
-                                    <div class="form-group">
-                                        <label>Issue Title</label>
-                                        <InputText class="form-control" @bind-Value="newTicket.IssueTitle" />
-                                    </div>
+                                    <i class="fa-solid fa-circle-notch fa-spin tk-select-icon"></i>
+                                    <span class="tk-placeholder">Loading projects…</span>
                                 }
-
-                                @* ---------- CLIENT ---------- *@
-                                <div class="form-group">
-                                    @if (UserState.UserType != 3)
-                                    {
-                                        <label class="fw-semibold">Select Client</label>
-                                        <div class="dropdown client-dropdown">
-                                            <button class="btn btn-light border w-100 d-flex justify-content-between"
-                                                    type="button"
-                                                    @onclick="ToggleClientDropdown"
-                                                    disabled="@(UserState.ClientId != 0)">
-                                                <span>
-                                                    @(selectedClient != null ? selectedClient.ClientName : "-- Select Client --")
-                                                </span>
-                                                <i class="bi bi-chevron-down text-muted"></i>
-                                            </button>
-
-                                            @if (isClientDropdownOpen)
-                                            {
-                                                <div class="dropdown-menu show w-100 shadow mt-1 p-2">
-                                                    <input type="text"
-                                                           class="form-control form-control-sm mb-2"
-                                                           placeholder="Search..."
-                                                           @bind="clientSearchText"
-                                                           @bind:event="oninput" />
-
-                                                    @foreach (var c in FilteredClients)
-                                                    {
-                                                        <div class="dropdown-item"
-                                                             @onclick="() => SelectClient(c)">
-                                                            @c.ClientName
-                                                        </div>
-                                                    }
-                                                </div>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-
-                                @* ---------- USER CLIENT DROPDOWN ---------- *@
-                                @if (selectedClient != null)
+                                else if (SelectedModalProject is ProjectDto sp)
                                 {
-                                    <div class="form-group">
-                                        <label class="fw-semibold">Contact Person</label>
-
-                                        @if (isLoadingUsers)
-                                        {
-                                            <div class="text-muted fst-italic">Loading users...</div>
-                                        }
-                                        else
-                                        {
-                                            <div class="dropdown user-dropdown">
-                                                <button class="btn btn-light border w-100 d-flex justify-content-between"
-                                                        type="button"
-                                                        @onclick="ToggleUserDropdown">
-                                                    <span>
-                                                        @(selectedUser != null ? selectedUser.Name : "-- Select User --")
-                                                    </span>
-                                                    <i class="bi bi-chevron-down text-muted"></i>
-                                                </button>
-
-                                                @if (isUserDropdownOpen)
-                                                {
-                                                    <div class="dropdown-menu show w-100 shadow mt-1 p-2">
-                                                        <input type="text"
-                                                               class="form-control form-control-sm mb-2"
-                                                               placeholder="Search user..."
-                                                               @bind="userSearchText"
-                                                               @bind:event="oninput" />
-
-                                                        @foreach (var u in FilteredUserClients)
-                                                        {
-                                                            <div class="dropdown-item"
-                                                                 @onclick="() => SelectUser(u)">
-                                                                @u.FullName (@u.Username)
-                                                            </div>
-                                                        }
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
+                                    <span class="tk-av is-project"><i class="fa-solid fa-diagram-project"></i></span>
+                                    <span class="tk-select-value">@sp.Title</span>
                                 }
-
-                                @* ---------- PROJECT ---------- *@
-                                <div class="form-group">
-                                    <label class="fw-semibold">Project</label>
-
-                                    <div class="dropdown project-dropdown">
-                                        <button class="btn btn-light border w-100 d-flex justify-content-between"
-                                                type="button"
-                                                @onclick="ToggleProjectDropdown">
-                                            <span>
-                                                @(selectedProject != null ? selectedProject.Title : "-- Select Project --")
-                                            </span>
-                                            <i class="bi bi-chevron-down text-muted"></i>
-                                        </button>
-
-                                        @if (isProjectDropdownOpen)
-                                        {
-                                            <div class="dropdown-menu show w-100 shadow mt-1 p-2">
-                                                <input type="text"
-                                                       class="form-control form-control-sm mb-2"
-                                                       placeholder="Search project..."
-                                                       @bind="projectSearchText"
-                                                       @bind:event="oninput" />
-
-                                                @foreach (var p in FilteredProjects)
-                                                {
-                                                    <div class="dropdown-item"
-                                                         @onclick="() => SelectProject(p)">
-                                                        @p.Title
-                                                    </div>
-                                                }
-                                            </div>
-                                        }
-                                    </div>
-                                </div>
-
-                                @* ---------- STATUS ---------- *@
-                                @if (modalMode == "ticket")
+                                else
                                 {
-                                    <div class="form-group">
-                                        <label>Status</label>
-                                        <InputSelect class="form-select" @bind-Value="newTicket.Status">
-                                            @foreach (var status in Enum.GetValues<TicketStatus>())
-                                            {
-                                                <option value="@status">@status</option>
-                                            }
-                                        </InputSelect>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label>Priority</label>
-                                        <InputSelect class="form-select" @bind-Value="newTicket.Priority">
-                                            @foreach (var priority in Enum.GetValues<TicketPriority>())
-                                            {
-                                                <option value="@priority">@priority</option>
-                                            }
-                                        </InputSelect>
-                                    </div>
+                                    <i class="fa-solid fa-diagram-project tk-select-icon"></i>
+                                    <span class="tk-placeholder">@(ProjectPickerDisabled && !projects.Any() ? (selectedClient == null && !isCaseMode ? "Choose a client first" : "No projects available") : "Choose a project")</span>
                                 }
-                            </div>
-                        }
-                        @* ---------- BIG TEXTAREA FOR CONCERN (FULL WIDTH) ---------- *@
-                        @if (modalMode == "ticket")
-                        {
-                            <div class="form-group mt-2 full-width">
-                                <label>Concern</label>
-                                <textarea class="form-control concern-textarea"
-                                          @bind="newTicket.Concern"></textarea>
-                            </div>
-                        }
-                        <div class="modal-footer">
-                            <button class="btn-submit-small mt-3"
-                                    @onclick="@(modalMode == "case" ? CreateCase : HandleCreateTicket)">
-                                @(modalMode == "case" ? "Create Case" : "Submit Ticket")
+                                <i class="fa-solid fa-chevron-down tk-caret"></i>
                             </button>
+
+                            @if (isProjectDropdownOpen)
+                            {
+                                <div class="tk-menu">
+                                    <div class="tk-menu-search">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                        <input placeholder="Search projects…" @bind="projectSearchText" @bind:event="oninput" />
+                                    </div>
+                                    <div class="tk-menu-list">
+                                        @foreach (var p in FilteredProjects)
+                                        {
+                                            <button type="button" class="tk-option @(selectedProjectId == p.Id ? "is-selected" : "")" @onclick="() => SelectProjectFromModal(p)">
+                                                <span class="tk-av is-project"><i class="fa-solid fa-diagram-project"></i></span>
+                                                <span class="tk-option-text">
+                                                    <strong>@p.Title</strong>
+                                                    @if (!string.IsNullOrWhiteSpace(p.TeamName))
+                                                    {
+                                                        <small>@p.TeamName</small>
+                                                    }
+                                                </span>
+                                                @if (selectedProjectId == p.Id)
+                                                {
+                                                    <i class="fa-solid fa-check"></i>
+                                                }
+                                            </button>
+                                        }
+                                        @if (!FilteredProjects.Any())
+                                        {
+                                            <div class="tk-menu-empty">No projects match.</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         </div>
-                    </EditForm>
+                    </div>
+
+                    @if (!isCaseMode)
+                    {
+                        <!-- STATUS -->
+                        <div class="tk-field">
+                            <label for="tk-status">Status</label>
+                            <div class="tk-native-wrap">
+                                <span class="tk-status-dot tk-st-@StatusCss(newTicket.Status)"></span>
+                                <select id="tk-status" class="tk-native" @bind="newTicket.Status">
+                                    @foreach (var status in Enum.GetValues<TicketStatus>())
+                                    {
+                                        <option value="@status">@StatusLabel(status.ToString())</option>
+                                    }
+                                </select>
+                                <i class="fa-solid fa-chevron-down tk-caret"></i>
+                            </div>
+                        </div>
+                    }
                 </div>
+
+                <!-- PRIORITY -->
+                <div class="tk-field">
+                    <label>Priority</label>
+                    <div class="tk-prio" role="radiogroup" aria-label="Priority">
+                        @foreach (var priority in Enum.GetValues<TicketPriority>())
+                        {
+                            var p = priority;
+                            <button type="button" role="radio" aria-checked="@(newTicket.Priority == p)"
+                                    class="tk-prio-opt tk-prio-@p.ToString().ToLowerInvariant() @(newTicket.Priority == p ? "is-on" : "")"
+                                    @onclick="() => newTicket.Priority = p">
+                                <i class="fa-solid @PriorityIcon(p)"></i>
+                                <span>
+                                    <strong>@p</strong>
+                                    <small>@PriorityHint(p)</small>
+                                </span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (!isCaseMode)
+                {
+                    <!-- CONCERN -->
+                    <div class="tk-field">
+                        <label for="tk-concern">Concern <span class="tk-req">*</span></label>
+                        <textarea id="tk-concern" class="tk-input tk-textarea" rows="5" maxlength="4000"
+                                  placeholder="Describe what happened, steps to reproduce, and what was expected…"
+                                  value="@newTicket.Concern" @oninput="e => { newTicket.Concern = e.Value?.ToString() ?? string.Empty; clientValidationError = string.Empty; }"></textarea>
+                        <small class="tk-count">@(newTicket.Concern?.Length ?? 0)/4000</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="tk-note">
+                        <i class="fa-solid fa-circle-info"></i>
+                        A case opens a chat with the support team for this project — you can describe the issue and attach files there.
+                    </div>
+                }
             </div>
+
+            <footer class="tk-foot">
+                <span class="tk-foot-hint"><span class="tk-req">*</span> Required</span>
+                <button type="button" class="tk-btn tk-btn-ghost" @onclick="CloseTicketModal" disabled="@isCreatingTicket">Cancel</button>
+                <button type="button" class="tk-btn tk-btn-primary" @onclick="SubmitTicketModal" disabled="@isCreatingTicket">
+                    <i class="fa-solid @(isCreatingTicket ? "fa-circle-notch fa-spin" : isCaseMode ? "fa-paper-plane" : "fa-check")"></i>
+                    @(isCreatingTicket ? "Creating…" : isCaseMode ? "Create case" : "Create ticket")
+                </button>
+            </footer>
         </div>
     </div>
-}
-@if (showCloseTicketModal)
+}@if (showCloseTicketModal)
 {
     <div class="modal show d-block custom-modal-overlay" tabindex="-1">
         <div class="modal-dialog modal-dialog-centered modal-md">
@@ -682,7 +898,7 @@
     }
     private string? attachmentFileType;
     private int currentPage = 1;
-    private int pageSize = 5;
+    private int pageSize = 20;
     private bool hasMoreTickets = true;
     private int rating = 0;
     private bool canSubmitRating = false;
@@ -724,11 +940,268 @@
     private bool CanSend =>
         !_isSending && (!string.IsNullOrWhiteSpace(NewMessage) || NewAttachments.Any());
 
-    private IEnumerable<TicketDto> VisibleTickets => Tickets.Where(t =>
-        string.IsNullOrWhiteSpace(SearchText)
-        || (t.IssueTitle ?? string.Empty).Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-        || (t.TicketNo ?? string.Empty).Contains(SearchText, StringComparison.OrdinalIgnoreCase)
-        || (t.CaseNo ?? string.Empty).Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+    // Filtering, searching and sorting all happen on the server, so the list is always complete and correctly
+    // ordered (searching used to only look inside the few tickets already loaded)
+    private IEnumerable<TicketDto> VisibleTickets => Tickets;
+
+    // ---------- Filters ----------
+    private bool IsStaff => UserState?.UserType is 1 or 2;
+    private bool showRefine;
+    private bool showAutoReply;
+    private bool filterNeedsReply;
+    private bool filterMine;
+    private TicketPriority? filterPriority;
+    private int? filterClientId;
+    private string sortMode = "recent";
+    private bool isSearching;
+    private CancellationTokenSource? _searchCts;
+    private CancellationTokenSource? _refreshCts;
+    private int _loadVersion;                       // drops responses that belong to an older filter
+    private readonly HashSet<int> unreadTicketIds = new();
+    private const string FilterStorageKey = "inbox.filters.v1";
+
+    private int NewCount;
+    private int NeedsReplyCount;
+    private int ActiveCount => OpenCount + InProgress + NewCount + ResolvedCount + RejectedCount;
+
+    private int RefineCount => (filterPriority.HasValue ? 1 : 0) + (filterClientId.HasValue ? 1 : 0) + (sortMode != "recent" ? 1 : 0);
+    private bool HasAnyFilter => !string.IsNullOrWhiteSpace(SearchText) || filterNeedsReply || filterMine || filterPriority.HasValue || filterClientId.HasValue;
+
+    private sealed class SavedFilters
+    {
+        public bool NeedsReply { get; set; }
+        public bool Mine { get; set; }
+        public TicketPriority? Priority { get; set; }
+        public int? ClientId { get; set; }
+        public string Sort { get; set; } = "recent";
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        SearchText = e.Value?.ToString() ?? string.Empty;
+
+        // Debounced: one request after typing pauses, earlier ones are cancelled
+        _searchCts?.Cancel();
+        var cts = _searchCts = new CancellationTokenSource();
+        isSearching = true;
+
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            await ReloadTicketsAsync();
+        }
+        catch (TaskCanceledException) { }
+        finally
+        {
+            if (ReferenceEquals(cts, _searchCts))
+                isSearching = false;
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchCts?.Cancel();
+        isSearching = false;
+        SearchText = string.Empty;
+        await ReloadTicketsAsync();
+    }
+
+    private async Task ToggleNeedsReply()
+    {
+        filterNeedsReply = !filterNeedsReply;
+        await SaveFiltersAndReloadAsync();
+    }
+
+    private async Task ToggleMine()
+    {
+        filterMine = !filterMine;
+        await SaveFiltersAndReloadAsync();
+    }
+
+    private async Task OnPriorityChanged(ChangeEventArgs e)
+    {
+        filterPriority = Enum.TryParse<TicketPriority>(e.Value?.ToString(), out var p) ? p : null;
+        await SaveFiltersAndReloadAsync();
+    }
+
+    private async Task OnClientFilterChanged(ChangeEventArgs e)
+    {
+        filterClientId = int.TryParse(e.Value?.ToString(), out var id) && id > 0 ? id : null;
+        await SaveFiltersAndReloadAsync();
+    }
+
+    private async Task OnSortChanged(ChangeEventArgs e)
+    {
+        sortMode = e.Value?.ToString() is { Length: > 0 } s ? s : "recent";
+        await SaveFiltersAndReloadAsync();
+    }
+
+    private async Task ResetRefine()
+    {
+        filterPriority = null;
+        filterClientId = null;
+        sortMode = "recent";
+        await SaveFiltersAndReloadAsync();
+    }
+
+    private async Task ClearAllFilters()
+    {
+        _searchCts?.Cancel();
+        SearchText = string.Empty;
+        filterNeedsReply = false;
+        filterMine = false;
+        filterPriority = null;
+        filterClientId = null;
+        sortMode = "recent";
+        await SaveFiltersAndReloadAsync();
+    }
+
+    private async Task SaveFiltersAndReloadAsync()
+    {
+        try
+        {
+            await LocalStorage.SetItemAsync(FilterStorageKey, new SavedFilters
+            {
+                NeedsReply = filterNeedsReply,
+                Mine = filterMine,
+                Priority = filterPriority,
+                ClientId = filterClientId,
+                Sort = sortMode
+            });
+        }
+        catch { /* remembering filters is a convenience only */ }
+
+        await ReloadTicketsAsync();
+    }
+
+    private async Task RestoreFiltersAsync()
+    {
+        try
+        {
+            var saved = await LocalStorage.GetItemAsync<SavedFilters>(FilterStorageKey);
+            if (saved == null)
+                return;
+
+            filterNeedsReply = saved.NeedsReply && IsStaff;
+            filterMine = saved.Mine && IsStaff;
+            filterPriority = saved.Priority;
+            filterClientId = saved.ClientId;
+            sortMode = string.IsNullOrWhiteSpace(saved.Sort) ? "recent" : saved.Sort;
+        }
+        catch { }
+    }
+
+    /// <summary>First page for the current filters, replacing the list.</summary>
+    private async Task ReloadTicketsAsync()
+    {
+        currentPage = 1;
+        hasMoreTickets = true;
+        Tickets.Clear();
+        isLoadingTickets = false;
+        await LoadMoreTickets(true);
+    }
+
+    /// <summary>
+    /// Refreshes the list in place after realtime activity on a ticket that isn't loaded (several agents share a
+    /// client, so tickets change under you). Debounced, keeps the scroll length, never shows skeletons.
+    /// </summary>
+    private void QueueSilentRefresh()
+    {
+        _refreshCts?.Cancel();
+        var cts = _refreshCts = new CancellationTokenSource();
+
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(1200, cts.Token);
+                if (isLoadingTickets) return;
+
+                var size = Math.Clamp(Tickets.Count, pageSize, 100);
+                var response = await FetchTicketsAsync(1, size, cts.Token);
+                if (response == null || cts.IsCancellationRequested) return;
+
+                Tickets.Clear();
+                Tickets.AddRange(response.Tickets);
+                currentPage = (int)Math.Ceiling(response.Tickets.Count / (double)pageSize) + 1;
+                hasMoreTickets = response.HasMore;
+                ApplyCounts(response);
+                StateHasChanged();
+            }
+            catch (TaskCanceledException) { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Silent refresh failed: {ex.Message}");
+            }
+        });
+    }
+
+    private string BuildTicketsUrl(int page, int size)
+    {
+        var url = $"{AppConfig.ChatUrl}TicketMessage/GetTickets/GetTickets" +
+                  $"?userId={UserId}&includeMessages=false&includeHistories=false&page={page}&pageSize={size}&sort={sortMode}";
+
+        if (SelectedStatusFilter.HasValue) url += $"&status={SelectedStatusFilter.Value}";
+        if (!string.IsNullOrWhiteSpace(SearchText)) url += $"&search={Uri.EscapeDataString(SearchText.Trim())}";
+        if (filterPriority.HasValue) url += $"&priority={filterPriority.Value}";
+        if (filterClientId.HasValue) url += $"&clientId={filterClientId.Value}";
+        if (filterNeedsReply) url += "&needsReply=true";
+        if (filterMine) url += "&assignedToMe=true";
+        return url;
+    }
+
+    private Task<TicketPagedResponse?> FetchTicketsAsync(int page, int size, CancellationToken ct = default) =>
+        Http.GetFromJsonAsync<TicketPagedResponse>(BuildTicketsUrl(page, size), EnumJsonOptions, ct);
+
+    private void ApplyCounts(TicketPagedResponse response)
+    {
+        int Count(TicketStatus s) => response.StatusCounts?.FirstOrDefault(c => c.Status == s)?.Count ?? 0;
+
+        OpenCount = Count(TicketStatus.Open);
+        InProgress = Count(TicketStatus.InProgress);
+        NewCount = Count(TicketStatus.New);
+        ResolvedCount = Count(TicketStatus.Resolved);
+        RejectedCount = Count(TicketStatus.Rejected);
+        ClosedCount = Count(TicketStatus.Closed);
+        NeedsReplyCount = response.NeedsReplyCount;
+    }
+
+    private string PreviewPrefix(TicketDto t)
+    {
+        if (t.LastMessageIsAutoReply) return "Auto-reply:";
+        if (t.LastMessageSenderId == UserId) return "You:";
+        return $"{FirstName(t.LastMessageSenderName)}:";
+    }
+
+    private static string FirstName(string? name) =>
+        string.IsNullOrWhiteSpace(name) ? "Someone" : name.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+
+    private static string Initials(string? name)
+    {
+        var parts = (name ?? string.Empty).Split(new[] { ' ', '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
+    }
+
+    // A stable colour per name for initials avatars
+    private static int Hue(string? name)
+    {
+        unchecked
+        {
+            var h = 17;
+            foreach (var c in name ?? string.Empty) h = h * 31 + c;
+            return Math.Abs(h % 360);
+        }
+    }
+
+    private static string AvatarSrc(string value) =>
+        value.StartsWith("data:") || value.StartsWith("http") || value.StartsWith("/") || value.StartsWith("images/")
+            ? value
+            : $"data:image/png;base64,{value}";
 
     // Changes only when the visible conversation changes, so the message list
     // skips re-rendering while the user types
@@ -927,13 +1400,7 @@
     private async Task ApplyStatusFilter(TicketStatus? status)
     {
         SelectedStatusFilter = status;
-
-        // Reset pagination
-        currentPage = 1;
-        hasMoreTickets = true;
-        Tickets.Clear();
-
-        await LoadMoreTickets(true);
+        await ReloadTicketsAsync();
     }
     // Read by NotifyTyping
     private string newMessage => NewMessage;
@@ -1258,11 +1725,16 @@
         TitleService.SetTitle("Inbox");
 
         ChatService.OnMessageInboxReceived += HandleIncomingMessage;
+        ChatService.OnTicketUpdated += HandleTicketUpdated;
         ChatService.OnTypingReceived += HandleTypingStatus;
         ChatService.OnUserStatusChanged += HandleUserStatusChanged;
 
         // Needed by the onboarding tour, which may start while tickets load
         _dotNetRef ??= DotNetObjectReference.Create(this);
+
+        // Coming from a ticket link shows that ticket, not the remembered filters
+        if (string.IsNullOrWhiteSpace(TicketNo))
+            await RestoreFiltersAsync();
 
         // Independent startup work runs concurrently
         await Task.WhenAll(StartChatAsync(), LoadClient(), LoadTickets(true));
@@ -1310,15 +1782,8 @@
                 SelectedStatusFilter = null;
             }
 
-            // Reset pagination
-            currentPage = 1;
-            pageSize = 99;
-            hasMoreTickets = true;
-            Tickets.Clear();
-
-            // 2. ensure tickets are loaded
-            if (Tickets == null || !Tickets.Any())
-                await LoadTickets(true);
+            // 2. load the matching tickets (the search runs on the server)
+            await ReloadTicketsAsync();
 
             // 3. find ticket locally first
             var ticket = Tickets
@@ -1574,54 +2039,53 @@
     }
     private async Task LoadMoreTickets(bool isloading)
     {
-        if (isLoadingTickets)
+        if (isLoadingTickets && currentPage > 1)
             return;
 
         if (Tickets.Count == 0)
             hasMoreTickets = true;
 
-        isLoadingTickets = isloading;
+        // A filter change while a page is loading wins over the older request
+        var version = currentPage == 1 ? ++_loadVersion : _loadVersion;
+        var pageToLoad = currentPage;
 
-        // 🔥 IIS-safe render
+        isLoadingTickets = isloading;
         await InvokeAsync(StateHasChanged);
 
         try
         {
-            string url = $"{AppConfig.ChatUrl}TicketMessage/GetTickets/GetTickets" +
-                         $"?userId={UserId}&includeMessages=false&page={currentPage}&pageSize={pageSize}";
+            var response = await FetchTicketsAsync(pageToLoad, pageSize);
 
-            if (SelectedStatusFilter.HasValue)
-                url += $"&status={SelectedStatusFilter.Value}";
+            if (version != _loadVersion)
+                return;
 
-            var response = await Http.GetFromJsonAsync<TicketPagedResponse>(url, EnumJsonOptions);
-
-            if (response == null || response.Tickets.Count == 0)
+            if (response == null)
             {
                 hasMoreTickets = false;
                 return;
             }
 
-            Tickets.AddRange(response.Tickets);
-            currentPage++;
+            ApplyCounts(response);
 
-            if (response.StatusCounts != null)
-            {
-                OpenCount = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.Open)?.Count ?? 0;
-                InProgress = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.InProgress)?.Count ?? 0;
-                RejectedCount = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.Rejected)?.Count ?? 0;
-                ClosedCount = response.StatusCounts.FirstOrDefault(s => s.Status == TicketStatus.Closed)?.Count ?? 0;
-            }
+            // De-duplicate: a ticket bumped by realtime activity may move between pages
+            var known = Tickets.Select(t => t.Id).ToHashSet();
+            Tickets.AddRange(response.Tickets.Where(t => known.Add(t.Id)));
+
+            currentPage = pageToLoad + 1;
+            hasMoreTickets = response.HasMore;
         }
-        catch
+        catch (Exception ex)
         {
-            hasMoreTickets = false;
+            Console.WriteLine($"Loading tickets failed: {ex.Message}");
+            if (version == _loadVersion)
+                hasMoreTickets = false;
         }
         finally
         {
-            isLoadingTickets = false;
+            if (version == _loadVersion)
+                isLoadingTickets = false;
             await InvokeAsync(StateHasChanged);
         }
-
     }
     private async Task HandleScroll()
     {
@@ -1708,7 +2172,7 @@
                       createdTicketFromResponse.IsArchived,
 
                       createdTicketFromResponse.RequesterEmail ?? string.Empty,
-                      clientEmail.EmailAddress, // ✅ client email now comes from UI
+                      clientEmail?.EmailAddress ?? string.Empty, // no contact chosen → no client email
                       createdTicketFromResponse.DeveloperEmail
                   );
 
@@ -1746,6 +2210,12 @@
     {
         // Clicking another ticket while one is loading must not let the older response win
         var version = ++_selectionVersion;
+
+        unreadTicketIds.Remove(ticket.Id);
+
+        // Opening a ticket reads its bell notifications; replies arriving while it's open stay quiet
+        Notifications.ActiveTicketId = ticket.Id;
+        _ = Notifications.MarkTicketReadAsync(ticket.Id);
 
         SelectedTicket = ticket;
         SelectedTicket.Messages = new List<MessageDto>();
@@ -1879,6 +2349,120 @@
             Console.WriteLine($"Failed to create ticket: {ex.Message}");
         }
     }
+    // ---------- Create ticket / case modal ----------
+    private bool isCreatingTicket;
+
+    private bool AnyTicketMenuOpen => isClientDropdownOpen || isUserDropdownOpen || isProjectDropdownOpen;
+
+    private ProjectDto? SelectedModalProject => projects.FirstOrDefault(p => p.Id == selectedProjectId);
+
+    private bool ProjectPickerDisabled => modalMode == "case"
+        ? !projects.Any()
+        : selectedClient == null || isLoadingProjects || !projects.Any();
+
+    private void CloseTicketMenus()
+    {
+        isClientDropdownOpen = false;
+        isUserDropdownOpen = false;
+        isProjectDropdownOpen = false;
+    }
+
+    private void CloseTicketModal()
+    {
+        if (isCreatingTicket) return;
+        CloseTicketMenus();
+        showTicketModal = false;
+    }
+
+    // Only one picker open at a time
+    private void ToggleClientDropdownExclusive() { var open = !isClientDropdownOpen; CloseTicketMenus(); isClientDropdownOpen = open; }
+    private void ToggleUserDropdownExclusive() { var open = !isUserDropdownOpen; CloseTicketMenus(); isUserDropdownOpen = open; }
+    private void ToggleProjectDropdownExclusive() { var open = !isProjectDropdownOpen; CloseTicketMenus(); isProjectDropdownOpen = open; }
+
+    private async Task SelectClientFromModal(ClientDto client)
+    {
+        clientValidationError = string.Empty;
+        clientSearchText = string.Empty;
+
+        if (selectedClient?.ClientId != client.ClientId)
+        {
+            // A different client has different contacts and projects
+            selectedUser = null;
+            selectedUserId = 0;
+            selectedProject = null;
+            filteredUserClients = new();
+        }
+
+        await SelectClient(client);
+    }
+
+    private void SelectProjectFromModal(ProjectDto project)
+    {
+        clientValidationError = string.Empty;
+        projectSearchText = string.Empty;
+        SelectProject(project);
+    }
+
+    private async Task SubmitTicketModal()
+    {
+        if (isCreatingTicket) return;
+        CloseTicketMenus();
+
+        var isCase = modalMode == "case";
+
+        if (!isCase && string.IsNullOrWhiteSpace(newTicket.IssueTitle))
+        {
+            clientValidationError = "Give the ticket a short title.";
+            return;
+        }
+        if (!isCase && UserState.UserType != 3 && selectedClient == null)
+        {
+            clientValidationError = "Choose the client this ticket is for.";
+            return;
+        }
+        if (selectedProjectId == 0)
+        {
+            clientValidationError = "Choose a project.";
+            return;
+        }
+        if (!isCase && string.IsNullOrWhiteSpace(newTicket.Concern))
+        {
+            clientValidationError = "Describe the concern so the team knows what to look at.";
+            return;
+        }
+
+        isCreatingTicket = true;
+        try
+        {
+            if (isCase)
+                await CreateCase();
+            else
+                await HandleCreateTicket();
+        }
+        finally
+        {
+            isCreatingTicket = false;
+        }
+    }
+
+    private static string PriorityIcon(TicketPriority p) => p switch
+    {
+        TicketPriority.Low => "fa-arrow-down",
+        TicketPriority.Medium => "fa-equals",
+        TicketPriority.High => "fa-arrow-up",
+        TicketPriority.Critical => "fa-fire",
+        _ => "fa-circle"
+    };
+
+    private static string PriorityHint(TicketPriority p) => p switch
+    {
+        TicketPriority.Low => "Minor, no rush",
+        TicketPriority.Medium => "Normal issue",
+        TicketPriority.High => "Blocks work",
+        TicketPriority.Critical => "System down",
+        _ => string.Empty
+    };
+
     private async Task OpenTicketModal(string mode)
     {
         modalMode = mode;  // "ticket" or "case"
@@ -1887,6 +2471,13 @@
         // Reset fields
         newTicket = new CreateTicketCommand();
         selectedProjectId = 0;
+        selectedProject = null;
+        selectedUser = null;
+        selectedUserId = 0;
+        clientSearchText = string.Empty;
+        userSearchText = string.Empty;
+        projectSearchText = string.Empty;
+        CloseTicketMenus();
         clientValidationError = string.Empty;
 
         // Determine correct ClientId
@@ -2013,13 +2604,14 @@
             {
                 if (saved.TicketId == 0)
                     saved.TicketId = ticket.Id;
+                _seenMessageIds.Add(saved.Id);
                 AddMessageToConversation(saved, scroll: true, force: true);
             }
             else if (!ChatService.IsConnected)
                 await LoadConversation(ticket.Id, loadMore: false);
 
             // Move this ticket to the top locally instead of reloading the whole list
-            BumpTicket(ticket.Id);
+            BumpTicket(ticket.Id, saved);
         }
         catch (Exception ex)
         {
@@ -2055,16 +2647,41 @@
         }
     }
 
-    private void BumpTicket(int ticketId)
+    private void BumpTicket(int ticketId, MessageDto? msg = null)
     {
         var item = Tickets.FirstOrDefault(t => t.Id == ticketId);
         if (item == null)
             return;
 
         item.ResponseTime = "Just now";
-        item.ResponseTimeSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        Tickets.Remove(item);
-        Tickets.Insert(0, item);
+        item.ResponseTimeSeconds = 0;
+        item.LastActivityAt = msg?.DateCreated ?? DateTime.UtcNow;
+
+        if (msg != null)
+        {
+            item.LastMessagePreview = msg.Content?.Length > 140 ? msg.Content[..140] : msg.Content;
+            item.LastMessageSenderName = msg.SenderName;
+            item.LastMessageSenderId = msg.SenderId;
+            item.LastMessageFromClient = msg.IsUser;
+            item.LastMessageIsAutoReply = msg.IsAutoReply;
+            item.LastMessageHasAttachment = msg.Attachments?.Any() == true;
+
+            // A human support reply answers the client; an auto reply doesn't
+            if (msg.IsUser)
+                item.NeedsReply = true;
+            else if (!msg.IsAutoReply)
+                item.NeedsReply = false;
+
+            if (SelectedTicket != null && SelectedTicket.Id == ticketId && !ReferenceEquals(SelectedTicket, item))
+                SelectedTicket.NeedsReply = item.NeedsReply;
+        }
+
+        // Only the default "latest activity" order moves a ticket to the top
+        if (sortMode == "recent")
+        {
+            Tickets.Remove(item);
+            Tickets.Insert(0, item);
+        }
     }
 
     /// <summary>Adds a message to the open conversation once (by Id). Returns true if it was new.</summary>
@@ -2105,10 +2722,19 @@
         catch (JSDisconnectedException) { }
     }
 
+    private readonly HashSet<int> _seenMessageIds = new();
+
+    // A ticket was created or its status changed somewhere: refresh the list and counts quietly
+    private void HandleTicketUpdated() => QueueSilentRefresh();
+
     public void Dispose()
     {
         _cts?.Cancel();
         _cts?.Dispose();
+        _searchCts?.Cancel();
+        _refreshCts?.Cancel();
+        ChatService.OnTicketUpdated -= HandleTicketUpdated;
+        Notifications.ActiveTicketId = null;
         typingTimer?.Dispose();
         _dotNetRef?.Dispose();
         ChatService.OnMessageInboxReceived -= HandleIncomingMessage;
@@ -2125,26 +2751,37 @@
                 if (msg == null)
                     return;
 
+                // The same message can arrive twice (ticket group + personal group): handle it once
+                if (msg.Id != 0 && !_seenMessageIds.Add(msg.Id))
+                    return;
+                if (_seenMessageIds.Count > 2000)
+                    _seenMessageIds.Clear();
+
                 var mine = msg.SenderId == UserId;
+                var isOpen = SelectedTicket?.Id == msg.TicketId;
 
                 // The open conversation is updated even when its ticket isn't in the loaded list page
                 var changed = AddMessageToConversation(msg, scroll: true, force: mine);
 
                 var listItem = Tickets.FirstOrDefault(t => t.Id == msg.TicketId);
-                if (listItem != null && !ReferenceEquals(listItem, SelectedTicket))
+                if (listItem != null)
                 {
-                    listItem.Messages ??= new List<MessageDto>();
-                    if (!listItem.Messages.Any(m => m.Id == msg.Id))
-                    {
-                        listItem.Messages.Add(msg);
-                        changed = true;
-                    }
+                    BumpTicket(msg.TicketId, msg);
+                    changed = true;
+                }
+                else if (!mine)
+                {
+                    // A ticket outside the loaded page got a message (e.g. another agent's client chat): refresh quietly
+                    QueueSilentRefresh();
                 }
 
-                if (listItem != null)
-                    BumpTicket(msg.TicketId);
+                if (!isOpen && !mine)
+                {
+                    unreadTicketIds.Add(msg.TicketId);
+                    changed = true;
+                }
 
-                if (changed || listItem != null)
+                if (changed)
                     StateHasChanged();
             });
         }

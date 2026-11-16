@@ -1,0 +1,441 @@
+@using ChatUp.Application.Features.AutoReply
+@using ChatUp.Application.Features.Client.DTOs
+@using ChatUp.Services
+@inject HttpClient Http
+
+@* Chat auto-reply settings (instant reply + scheduled reply), per client with a default row — same model as the AFL chat *@
+<div class="ar-backdrop" @onclick="Close">
+    <div class="ar" role="dialog" aria-modal="true" aria-labelledby="ar-title" @onclick:stopPropagation="true">
+        <header class="ar-head">
+            <div class="ar-head-icon"><i class="fa-solid fa-robot"></i></div>
+            <div>
+                <h2 id="ar-title">Chat auto reply</h2>
+                <p>Answer clients instantly, and let them know when the team is away.</p>
+            </div>
+            <button class="ar-icon-btn" title="Close" @onclick="Close"><i class="fa-solid fa-xmark"></i></button>
+        </header>
+
+        @if (isLoading)
+        {
+            <div class="ar-loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading settings…</div>
+        }
+        else
+        {
+            <div class="ar-body">
+                <!-- ============ TARGETS ============ -->
+                <nav class="ar-targets" aria-label="Who the settings apply to">
+                    <input class="ar-target-search" type="search" placeholder="Search clients…" @bind="search" @bind:event="oninput" />
+
+                    <button class="ar-target @(selectedClientId == null ? "is-active" : "")" @onclick="() => Select(null)">
+                        <span class="ar-target-icon is-default"><i class="fa-solid fa-globe"></i></span>
+                        <span class="ar-target-text">
+                            <strong>Default</strong>
+                            <small>All clients without their own</small>
+                        </span>
+                        @StatusChip(RowFor(null), isDefault: true)
+                    </button>
+
+                    <div class="ar-target-label">Clients</div>
+
+                    @foreach (var c in VisibleClients)
+                    {
+                        var cid = c.ClientId;
+                        <button @key="cid" class="ar-target @(selectedClientId == cid ? "is-active" : "")" @onclick="() => Select(cid)">
+                            <span class="ar-target-icon">@Initials(c.ClientName)</span>
+                            <span class="ar-target-text">
+                                <strong>@c.ClientName</strong>
+                                <small>@(RowFor(cid) == null ? "Uses default" : "Own settings")</small>
+                            </span>
+                            @StatusChip(RowFor(cid) ?? RowFor(null), isDefault: false)
+                        </button>
+                    }
+
+                    @if (!VisibleClients.Any())
+                    {
+                        <div class="ar-target-empty">No clients found.</div>
+                    }
+                </nav>
+
+                <!-- ============ EDITOR ============ -->
+                <section class="ar-editor">
+                    <div class="ar-editor-title">
+                        <h3>@(selectedClientId == null ? "Default settings" : SelectedClientName)</h3>
+                        @if (selectedClientId != null && RowFor(selectedClientId) == null)
+                        {
+                            <span class="ar-pill is-muted"><i class="fa-solid fa-link"></i> Following default — save to customise</span>
+                        }
+                        @if (draft.IsEnabled && WindowActiveNow)
+                        {
+                            <span class="ar-pill is-live"><span class="ar-live-dot"></span> Away reply active now</span>
+                        }
+                    </div>
+
+                    @if (!CanEdit)
+                    {
+                        <div class="ar-notice"><i class="fa-solid fa-lock"></i> Only an administrator can change the default. You can give each of your clients its own settings.</div>
+                    }
+
+                    <fieldset disabled="@(!CanEdit || isSaving)">
+                        <label class="ar-switch">
+                            <input type="checkbox" @bind="draft.IsEnabled" />
+                            <span class="ar-switch-track"><span class="ar-switch-thumb"></span></span>
+                            <span>
+                                <strong>Auto reply @(draft.IsEnabled ? "on" : "off")</strong>
+                                <small>@(selectedClientId == null ? "Turning it off stops replies for every client using the default." : "Off here stops auto replies for this client, whatever the default says.")</small>
+                            </span>
+                        </label>
+
+                        <div class="ar-card @(draft.IsEnabled ? "" : "is-off")">
+                            <div class="ar-card-head">
+                                <span class="ar-card-icon is-instant"><i class="fa-solid fa-bolt"></i></span>
+                                <div>
+                                    <h4>Instant reply</h4>
+                                    <p>Sent when a client writes and nobody from support has replied in the last 15 minutes.</p>
+                                </div>
+                            </div>
+                            <textarea class="ar-textarea" rows="3" maxlength="2000"
+                                      placeholder="e.g. Hi! Thanks for reaching out — a support agent will be with you shortly."
+                                      @bind="draft.InstantMessage" @bind:event="oninput"></textarea>
+                            <div class="ar-hint">@Length(draft.InstantMessage) / 2000 · leave empty for no instant reply</div>
+                        </div>
+
+                        <div class="ar-card @(draft.IsEnabled ? "" : "is-off")">
+                            <div class="ar-card-head">
+                                <span class="ar-card-icon is-scheduled"><i class="fa-regular fa-clock"></i></span>
+                                <div>
+                                    <h4>Scheduled away reply</h4>
+                                    <p>Sent on every client message that arrives inside this window (Philippine time).</p>
+                                </div>
+                            </div>
+
+                            <div class="ar-times">
+                                <label>
+                                    <span>From</span>
+                                    <input type="time" class="ar-input" value="@draft.StartTime" @oninput="e => draft.StartTime = TimeValue(e)" />
+                                </label>
+                                <i class="fa-solid fa-arrow-right-long ar-muted"></i>
+                                <label>
+                                    <span>Until</span>
+                                    <input type="time" class="ar-input" value="@draft.EndTime" @oninput="e => draft.EndTime = TimeValue(e)" />
+                                </label>
+                                <div class="ar-presets">
+                                    <button type="button" @onclick='() => Preset("18:00", "08:00")'>After hours</button>
+                                    <button type="button" @onclick='() => Preset("12:00", "13:00")'>Lunch</button>
+                                    <button type="button" @onclick='() => Preset("00:00", "00:00")'>None</button>
+                                </div>
+                            </div>
+
+                            <div class="ar-days" role="group" aria-label="Active days">
+                                @for (var d = 0; d < 7; d++)
+                                {
+                                    var day = d;
+                                    <button type="button" class="@(draft.ActiveDays.Contains(day) ? "is-on" : "")"
+                                            aria-pressed="@draft.ActiveDays.Contains(day)" @onclick="() => ToggleDay(day)">
+                                        @DayNames[day]
+                                    </button>
+                                }
+                            </div>
+                            <div class="ar-hint">@WindowSummary</div>
+
+                            <textarea class="ar-textarea" rows="3" maxlength="2000"
+                                      placeholder="e.g. Our team is offline right now (8 AM–6 PM, Mon–Fri). We'll get back to you first thing!"
+                                      @bind="draft.ScheduledMessage" @bind:event="oninput"></textarea>
+                            <div class="ar-hint">@Length(draft.ScheduledMessage) / 2000 · leave empty for no away reply</div>
+                        </div>
+
+                        @if (HasPreview)
+                        {
+                            <div class="ar-preview">
+                                <div class="ar-preview-label">Preview — what the client sees</div>
+                                <div class="ar-preview-msg is-client">Hi, I need help with my account.</div>
+                                @if (!string.IsNullOrWhiteSpace(draft.InstantMessage))
+                                {
+                                    <div class="ar-preview-msg is-bot"><span><i class="fa-solid fa-robot"></i> Auto-reply</span>@draft.InstantMessage</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(draft.ScheduledMessage) && HasWindow)
+                                {
+                                    <div class="ar-preview-msg is-bot"><span><i class="fa-regular fa-clock"></i> Away reply · @Display(draft.StartTime)–@Display(draft.EndTime)</span>@draft.ScheduledMessage</div>
+                                }
+                            </div>
+                        }
+                    </fieldset>
+
+                    @if (error != null)
+                    {
+                        <div class="ar-error"><i class="fa-solid fa-circle-exclamation"></i> @error</div>
+                    }
+                    @if (saved != null)
+                    {
+                        <div class="ar-ok"><i class="fa-solid fa-circle-check"></i> @saved</div>
+                    }
+                </section>
+            </div>
+
+            <footer class="ar-foot">
+                @if (selectedClientId != null && RowFor(selectedClientId) != null && CanEdit)
+                {
+                    <button class="ar-btn ar-btn-ghost" @onclick="ResetToDefault" disabled="@isSaving">
+                        <i class="fa-solid fa-rotate-left"></i> Use default instead
+                    </button>
+                }
+                <span class="ar-spacer"></span>
+                <button class="ar-btn ar-btn-ghost" @onclick="Close" disabled="@isSaving">Close</button>
+                <button class="ar-btn ar-btn-primary" @onclick="Save" disabled="@(!CanEdit || isSaving || !IsDirty)">
+                    <i class="fa-solid @(isSaving ? "fa-circle-notch fa-spin" : "fa-floppy-disk")"></i>
+                    @(isSaving ? "Saving…" : "Save")
+                </button>
+            </footer>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public int UserId { get; set; }
+    [Parameter] public int? UserType { get; set; }
+    [Parameter] public List<ClientDto> Clients { get; set; } = new();
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private static readonly string[] DayNames = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+    private List<AutoReplyDto> rows = new();
+    private AutoReplyDto draft = new();
+    private string draftSnapshot = string.Empty;
+    private int? selectedClientId;
+    private string search = string.Empty;
+    private bool isLoading = true;
+    private bool isSaving;
+    private string? error;
+    private string? saved;
+
+    private bool IsAdmin => UserType == 1;
+    private bool CanEdit => IsAdmin || (UserType == 2 && selectedClientId != null);
+
+    private IEnumerable<ClientDto> VisibleClients => Clients
+        .Where(c => c.ClientId > 0)
+        .GroupBy(c => c.ClientId).Select(g => g.First())
+        .Where(c => string.IsNullOrWhiteSpace(search) || (c.ClientName ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(c => c.ClientName);
+
+    private string SelectedClientName =>
+        Clients.FirstOrDefault(c => c.ClientId == selectedClientId)?.ClientName ?? "Client";
+
+    private AutoReplyDto? RowFor(int? clientId) => rows.FirstOrDefault(r => r.ClientId == clientId);
+
+    private bool HasWindow => TimeSpan.TryParse(draft.StartTime, out var s) && TimeSpan.TryParse(draft.EndTime, out var e) && s != e;
+    private bool HasPreview => !string.IsNullOrWhiteSpace(draft.InstantMessage) || (!string.IsNullOrWhiteSpace(draft.ScheduledMessage) && HasWindow);
+    private bool IsDirty => Snapshot(draft) != draftSnapshot || (selectedClientId != null && RowFor(selectedClientId) == null);
+
+    // Philippine time, matching the server's ChatTimeZone default
+    private bool WindowActiveNow
+    {
+        get
+        {
+            if (!HasWindow) return false;
+            var now = DateTime.UtcNow.AddHours(8);
+            var start = TimeSpan.Parse(draft.StartTime);
+            var end = TimeSpan.Parse(draft.EndTime) + TimeSpan.FromMinutes(1);
+            var t = now.TimeOfDay;
+            bool DayOn(DayOfWeek d) => draft.ActiveDays.Count == 0 || draft.ActiveDays.Contains((int)d);
+
+            if (start < end) return t >= start && t < end && DayOn(now.DayOfWeek);
+            if (t >= start) return DayOn(now.DayOfWeek);
+            return t < end && DayOn(now.AddDays(-1).DayOfWeek);
+        }
+    }
+
+    private string WindowSummary
+    {
+        get
+        {
+            if (!HasWindow)
+                return "No away window — set a start and end time to use the away reply.";
+
+            var days = draft.ActiveDays.Count is 0 or 7
+                ? "every day"
+                : string.Join(", ", draft.ActiveDays.OrderBy(d => d).Select(d => DayNames[d]));
+            var overnight = TimeSpan.Parse(draft.EndTime) < TimeSpan.Parse(draft.StartTime) ? " (overnight, into the next morning)" : "";
+            return $"Away from {Display(draft.StartTime)} to {Display(draft.EndTime)}{overnight}, {days}.";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            rows = await Http.GetFromJsonAsync<List<AutoReplyDto>>($"{AppConfig.ChatUrl}AutoReply/GetAll/{UserId}") ?? new();
+        }
+        catch (Exception ex)
+        {
+            error = $"Couldn't load the auto-reply settings ({ex.Message}).";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+
+        // Support agents can't edit the default, so they start on their first client
+        Select(IsAdmin || !VisibleClients.Any() ? null : VisibleClients.First().ClientId);
+    }
+
+    private void Select(int? clientId)
+    {
+        selectedClientId = clientId;
+        error = null;
+        saved = null;
+
+        // A client without its own row starts from the default's text so customising is quick
+        var source = RowFor(clientId) ?? RowFor(null);
+        draft = new AutoReplyDto
+        {
+            Id = RowFor(clientId)?.Id ?? 0,
+            ClientId = clientId,
+            ClientName = clientId == null ? null : SelectedClientName,
+            IsEnabled = source?.IsEnabled ?? true,
+            InstantMessage = source?.InstantMessage,
+            ScheduledMessage = source?.ScheduledMessage,
+            StartTime = source?.StartTime ?? "18:00",
+            EndTime = source?.EndTime ?? "08:00",
+            ActiveDays = source?.ActiveDays.ToList() ?? new List<int>()
+        };
+        draftSnapshot = Snapshot(draft);
+    }
+
+    private void ToggleDay(int day)
+    {
+        if (!draft.ActiveDays.Remove(day))
+            draft.ActiveDays.Add(day);
+    }
+
+    private void Preset(string start, string end)
+    {
+        draft.StartTime = start;
+        draft.EndTime = end;
+        if (start == "18:00" && draft.ActiveDays.Count == 0)
+            draft.ActiveDays = new List<int> { 0, 1, 2, 3, 4, 5, 6 };
+    }
+
+    private async Task Save()
+    {
+        error = null;
+        saved = null;
+        isSaving = true;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}AutoReply/Save/{UserId}", draft);
+            if (!response.IsSuccessStatusCode)
+            {
+                error = await ReadError(response);
+                return;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<AutoReplyDto>();
+            if (result != null)
+            {
+                result.ClientName ??= draft.ClientName;
+                rows.RemoveAll(r => r.ClientId == result.ClientId);
+                rows.Add(result);
+                draft.Id = result.Id;
+                draftSnapshot = Snapshot(draft);
+            }
+            saved = "Saved — new client messages get these replies right away.";
+        }
+        catch (Exception ex)
+        {
+            error = $"Couldn't save: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ResetToDefault()
+    {
+        var row = RowFor(selectedClientId);
+        if (row == null) return;
+
+        error = null;
+        saved = null;
+        isSaving = true;
+        try
+        {
+            var response = await Http.DeleteAsync($"{AppConfig.ChatUrl}AutoReply/Delete/{row.Id}/{UserId}");
+            if (!response.IsSuccessStatusCode)
+            {
+                error = await ReadError(response);
+                return;
+            }
+
+            rows.Remove(row);
+            Select(selectedClientId);
+            saved = "This client now follows the default settings.";
+        }
+        catch (Exception ex)
+        {
+            error = $"Couldn't reset: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private Task Close() => isSaving ? Task.CompletedTask : OnClose.InvokeAsync();
+
+    private RenderFragment StatusChip(AutoReplyDto? row, bool isDefault) => __builder =>
+    {
+        if (row == null)
+        {
+            <span class="ar-chip is-none">@(isDefault ? "Not set" : "None")</span>
+        }
+        else if (!row.IsEnabled)
+        {
+            <span class="ar-chip is-off">Off</span>
+        }
+        else if (row.IsWindowActiveNow)
+        {
+            <span class="ar-chip is-away">Away</span>
+        }
+        else
+        {
+            <span class="ar-chip is-on">On</span>
+        }
+    };
+
+    private static async Task<string> ReadError(HttpResponseMessage response)
+    {
+        var text = await response.Content.ReadAsStringAsync();
+        try
+        {
+            using var doc = JsonDocument.Parse(text);
+            if (doc.RootElement.TryGetProperty("message", out var m))
+                return m.GetString() ?? text;
+        }
+        catch { }
+        return string.IsNullOrWhiteSpace(text) ? $"Request failed ({(int)response.StatusCode})." : text;
+    }
+
+    private static string Snapshot(AutoReplyDto d) =>
+        $"{d.IsEnabled}|{d.InstantMessage}|{d.ScheduledMessage}|{d.StartTime}|{d.EndTime}|{string.Join(',', d.ActiveDays.OrderBy(x => x))}";
+
+    private static int Length(string? s) => s?.Length ?? 0;
+
+    // <input type="time"> gives "HH:mm" (or "" while half-typed)
+    private static string TimeValue(ChangeEventArgs e) =>
+        TimeSpan.TryParse(e.Value?.ToString(), out var t) ? t.ToString(@"hh\:mm") : "00:00";
+
+    private static string Display(string? hhmm) =>
+        TimeSpan.TryParse(hhmm, out var t) ? DateTime.Today.Add(t).ToString("h:mm tt") : "--";
+
+    private static string Initials(string? name)
+    {
+        var parts = (name ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+        };
+    }
+}

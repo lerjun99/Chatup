@@ -40,5 +40,29 @@ namespace ChatUp.Application.Features.TicketMessage.DTOs
         public long ResponseTimeSeconds { get; set; }
         public Dictionary<int, string> ResponseTimesByUser { get; set; } = new();
         public List<TicketHistoryDto> Histories { get; set; } = new();
+
+        // ---- Inbox list: last activity and preview ----
+        public DateTime? LastActivityAt { get; set; }
+        public string? LastMessagePreview { get; set; }
+        public string? LastMessageSenderName { get; set; }
+        public int LastMessageSenderId { get; set; }
+        public bool LastMessageFromClient { get; set; }
+        public bool LastMessageIsAutoReply { get; set; }
+        public bool LastMessageHasAttachment { get; set; }
+
+        /// <summary>The client's latest message has no human support reply yet.</summary>
+        public bool NeedsReply { get; set; }
+        public DateTime? LastClientMessageAt { get; set; }
+
+        /// <summary>Every support agent assigned to the ticket's client (filled on the single-ticket endpoint).</summary>
+        public List<SupportAgentDto> SupportTeam { get; set; } = new();
+    }
+
+    public class SupportAgentDto
+    {
+        public int UserId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string? Avatar { get; set; }
+        public bool IsOnline { get; set; }
     }
 }

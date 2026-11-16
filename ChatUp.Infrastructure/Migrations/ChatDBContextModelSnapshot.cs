@@ -22,6 +22,211 @@ namespace ChatUp.Infrastructure.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("ChatUp.Domain.Entities.ActivityLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActivityType")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("DetailsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<int?>("TicketId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAtUtc");
+
+                    b.HasIndex("ActorUserId", "OccurredAtUtc");
+
+                    b.HasIndex("TicketId", "OccurredAtUtc");
+
+                    b.ToTable("ActivityLogs");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.AdminActivityLog", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("Changes")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<Guid>("CorrelationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("DurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<string>("EntityId")
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("EntityName")
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("HttpMethod")
+                        .HasColumnType("varchar(10)");
+
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("varchar(45)");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("datetime2(3)");
+
+                    b.Property<string>("Route")
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SessionId")
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("Source")
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int?>("StatusCode")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("nvarchar(400)");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserName")
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CorrelationId")
+                        .HasDatabaseName("IX_AdminActivityLogs_CorrelationId");
+
+                    b.HasIndex("EntityId")
+                        .HasDatabaseName("IX_AdminActivityLogs_EntityId");
+
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("IX_AdminActivityLogs_OccurredAt");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("IX_AdminActivityLogs_SessionId");
+
+                    b.HasIndex("Category", "OccurredAt")
+                        .HasDatabaseName("IX_AdminActivityLogs_Category_OccurredAt");
+
+                    b.HasIndex("UserName", "OccurredAt")
+                        .HasDatabaseName("IX_AdminActivityLogs_UserName_OccurredAt");
+
+                    b.ToTable("AdminActivityLogs");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.ApiKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsBuiltIn")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("KeyEncrypted")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
+                    b.Property<string>("KeyPreview")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RevokedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("RotatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeyHash")
+                        .IsUnique();
+
+                    b.ToTable("ApiKeys");
+                });
+
             modelBuilder.Entity("ChatUp.Domain.Entities.ApiTokenModel", b =>
                 {
                     b.Property<int>("Id")
@@ -146,6 +351,113 @@ namespace ChatUp.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Applicants");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.BusinessCalendar", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Holidays")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<TimeSpan>("WorkEnd")
+                        .HasColumnType("time");
+
+                    b.Property<TimeSpan>("WorkStart")
+                        .HasColumnType("time");
+
+                    b.Property<string>("WorkingDays")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BusinessCalendar");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.BusinessCalendarConfig", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<TimeSpan>("WorkEnd")
+                        .HasColumnType("time");
+
+                    b.Property<TimeSpan>("WorkStart")
+                        .HasColumnType("time");
+
+                    b.Property<string>("WorkingDaysJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BusinessCalendarConfigs");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.ChatAutoReply", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActiveDays")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("ClientId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("DateUpdated")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("EndTime")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<string>("InstantMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ScheduledMessage")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("StartTime")
+                        .IsRequired()
+                        .HasMaxLength(5)
+                        .HasColumnType("nvarchar(5)");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientId");
+
+                    b.ToTable("ChatAutoReplies");
                 });
 
             modelBuilder.Entity("ChatUp.Domain.Entities.ChatConversation", b =>
@@ -406,6 +718,38 @@ namespace ChatUp.Infrastructure.Migrations
                     b.ToTable("EmailOtp");
                 });
 
+            modelBuilder.Entity("ChatUp.Domain.Entities.Holiday", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRecurring")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Region")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Date", "Region")
+                        .IsUnique();
+
+                    b.ToTable("Holidays");
+                });
+
             modelBuilder.Entity("ChatUp.Domain.Entities.LoginAttempt", b =>
                 {
                     b.Property<int>("Id")
@@ -629,6 +973,9 @@ namespace ChatUp.Infrastructure.Migrations
                     b.Property<DateTime?>("FirstResponseAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("HasUnreadSupportReply")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsArchived")
                         .HasColumnType("bit");
 
@@ -645,6 +992,12 @@ namespace ChatUp.Infrastructure.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
+                    b.Property<DateTime?>("LastClientMessageAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastSupportReplyAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Priority")
                         .HasColumnType("int");
 
@@ -659,6 +1012,12 @@ namespace ChatUp.Infrastructure.Migrations
 
                     b.Property<int?>("Status")
                         .HasColumnType("int");
+
+                    b.Property<bool>("SupportResponseReminderSent")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("SupportResponseReminderSentAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<int?>("SupportedById")
                         .HasColumnType("int");
@@ -699,10 +1058,16 @@ namespace ChatUp.Infrastructure.Migrations
                     b.Property<int?>("NewPriority")
                         .HasColumnType("int");
 
+                    b.Property<int?>("NewProjectId")
+                        .HasColumnType("int");
+
                     b.Property<int>("NewStatus")
                         .HasColumnType("int");
 
                     b.Property<int?>("OldPriority")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OldProjectId")
                         .HasColumnType("int");
 
                     b.Property<int>("OldStatus")
@@ -773,6 +1138,9 @@ namespace ChatUp.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime2")
                         .HasDefaultValueSql("getutcdate()");
+
+                    b.Property<bool>("IsAutoReply")
+                        .HasColumnType("bit");
 
                     b.Property<bool>("IsCase")
                         .HasColumnType("bit");
@@ -1042,9 +1410,10 @@ namespace ChatUp.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ClientId");
-
                     b.HasIndex("UserId");
+
+                    b.HasIndex("ClientId", "UserId")
+                        .HasDatabaseName("IX_UserClientAssignments_ClientId_UserId");
 
                     b.ToTable("UserClientAssignments");
                 });
@@ -1065,6 +1434,58 @@ namespace ChatUp.Infrastructure.Migrations
                     b.HasIndex("ContractId");
 
                     b.ToTable("UserContracts");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.UserNotification", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("TicketId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "IsRead", "CreatedAt")
+                        .HasDatabaseName("IX_UserNotifications_UserId_IsRead_CreatedAt");
+
+                    b.ToTable("UserNotifications");
                 });
 
             modelBuilder.Entity("ChatUp.Domain.Entities.UserProject", b =>
@@ -1091,6 +1512,33 @@ namespace ChatUp.Infrastructure.Migrations
                     b.HasIndex("UserAccountId");
 
                     b.ToTable("UserProjects");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.ActivityLog", b =>
+                {
+                    b.HasOne("ChatUp.Domain.Entities.UserAccount", "ActorUser")
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ChatUp.Domain.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("ActorUser");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("ChatUp.Domain.Entities.ChatAutoReply", b =>
+                {
+                    b.HasOne("ChatUp.Domain.Entities.Client", "Client")
+                        .WithMany()
+                        .HasForeignKey("ClientId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Client");
                 });
 
             modelBuilder.Entity("ChatUp.Domain.Entities.ChatMessage", b =>

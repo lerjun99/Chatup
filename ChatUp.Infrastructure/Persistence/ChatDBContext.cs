@@ -40,9 +40,46 @@ namespace ChatUp.Infrastructure.Persistence
         public DbSet<Holiday> Holidays { get; set; }
         public DbSet<BusinessCalendarConfig> BusinessCalendarConfigs { get; set; }
         public DbSet<BusinessCalendar> BusinessCalendar { get; set; }
+        public DbSet<ChatAutoReply> ChatAutoReplies { get; set; }
+        public DbSet<UserNotification> UserNotifications { get; set; }
+        public DbSet<AdminActivityLog> AdminActivityLogs { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Audit log: the list pages newest-first and filters by time, user, type, record, session or request
+            modelBuilder.Entity<AdminActivityLog>(b =>
+            {
+                b.HasIndex(x => x.OccurredAt).HasDatabaseName("IX_AdminActivityLogs_OccurredAt");
+                b.HasIndex(x => new { x.UserName, x.OccurredAt }).HasDatabaseName("IX_AdminActivityLogs_UserName_OccurredAt");
+                b.HasIndex(x => new { x.Category, x.OccurredAt }).HasDatabaseName("IX_AdminActivityLogs_Category_OccurredAt");
+                b.HasIndex(x => x.EntityId).HasDatabaseName("IX_AdminActivityLogs_EntityId");
+                b.HasIndex(x => x.SessionId).HasDatabaseName("IX_AdminActivityLogs_SessionId");
+                b.HasIndex(x => x.CorrelationId).HasDatabaseName("IX_AdminActivityLogs_CorrelationId");
+            });
+
+            modelBuilder.Entity<UserNotification>(b =>
+            {
+                // The bell reads "my latest" and "my unread count"
+                b.HasIndex(x => new { x.UserId, x.IsRead, x.CreatedAt })
+                 .HasDatabaseName("IX_UserNotifications_UserId_IsRead_CreatedAt");
+            });
+
+            modelBuilder.Entity<ChatAutoReply>(b =>
+            {
+                b.HasOne(x => x.Client)
+                 .WithMany()
+                 .HasForeignKey(x => x.ClientId)
+                 .OnDelete(DeleteBehavior.Cascade);
+                b.HasIndex(x => x.ClientId);
+            });
+
+            // Several support agents can now cover the same client: tickets are scoped by these lookups
+            modelBuilder.Entity<UserClientAssignment>(b =>
+            {
+                b.HasIndex(x => new { x.ClientId, x.UserId })
+                 .HasDatabaseName("IX_UserClientAssignments_ClientId_UserId");
+            });
 
             modelBuilder.Entity<ApiKey>(entity =>
             {

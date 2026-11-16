@@ -22,6 +22,10 @@ namespace ChatUp.Infrastructure.Services
                 int uid = int.Parse(userId!);
                 Users[uid] = Context.ConnectionId;
 
+                // Personal group: new messages of every ticket the user takes part in reach them live,
+                // not only the ticket they have open (several agents can now share a client)
+                await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(uid));
+
                 // 🟢 Notify everyone this user is online
                 await Clients.All.SendAsync("UserStatusChanged", uid, true, DateTime.UtcNow);
             }
@@ -93,6 +97,7 @@ namespace ChatUp.Infrastructure.Services
         }
 
         public static string GetConversationGroupName(int conversationId) => $"conversation-{conversationId}";
+        public static string GetUserGroupName(int userId) => $"user-{userId}";
 
         // optional client-invokable method to send message via hub (you can either send via API and hub context, or directly via hub)
         public async Task SendMessageToConversation(int conversationId, object messageDto)

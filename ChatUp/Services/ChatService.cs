@@ -22,6 +22,15 @@ namespace ChatUp.Services
         public event Action<MessageDto>? OnMessageInboxReceived;
         public event Action<int, int, bool>? OnTypingReceived;
         public event Action<int>? OnOpenTicketCountChanged;
+
+        /// <summary>A bell notification for the signed-in user ("ReceiveNotification").</summary>
+        public event Action<ChatUp.Application.Features.Notifications.NotificationDto>? OnNotificationReceived;
+
+        /// <summary>Any ticket was created/changed/answered ("ReceiveTicketUpdate") — dashboards refresh on it.</summary>
+        public event Action? OnTicketUpdated;
+
+        /// <summary>Something on a dashboard changed (e.g. a chat reply) without a ticket change ("ReceiveDashboardUpdate").</summary>
+        public event Action? OnDashboardChanged;
         private readonly HttpClient _http;
         public event Action<int, bool, DateTime>? OnUserStatusChanged;
         private static readonly ConcurrentDictionary<int, bool> UserStatuses = new();
@@ -65,6 +74,18 @@ namespace ChatUp.Services
             _hubConnection.On<MessageDto>("ReceiveTicketMessage", message =>
             {
                 OnMessageInboxReceived?.Invoke(message);
+            });
+            _hubConnection.On<ChatUp.Application.Features.Notifications.NotificationDto>("ReceiveNotification", notification =>
+            {
+                OnNotificationReceived?.Invoke(notification);
+            });
+            _hubConnection.On("ReceiveTicketUpdate", () =>
+            {
+                OnTicketUpdated?.Invoke();
+            });
+            _hubConnection.On("ReceiveDashboardUpdate", () =>
+            {
+                OnDashboardChanged?.Invoke();
             });
 
             await _hubConnection.StartAsync();

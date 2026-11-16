@@ -41,7 +41,8 @@ else
 
     foreach (var msg in Messages.OrderBy(m => m.DateCreated))
     {
-        var isMine = msg.SenderId == CurrentUserId;
+        // Auto replies are saved under a support account but were never typed by anyone: always shown on the support side
+        var isMine = msg.SenderId == CurrentUserId && !msg.IsAutoReply;
         var day = msg.DateCreated?.ToLocalTime().Date;
 
         if (day != previousDate)
@@ -54,16 +55,21 @@ else
         // Consecutive messages from the same sender within 5 minutes are grouped
         var grouped = previous != null
                       && previous.SenderId == msg.SenderId
+                      && previous.IsAutoReply == msg.IsAutoReply
                       && msg.DateCreated.HasValue && previous.DateCreated.HasValue
                       && (msg.DateCreated.Value - previous.DateCreated.Value) < TimeSpan.FromMinutes(5);
         previous = msg;
 
-        <div @key="msg" class="ix-msg @(isMine ? "is-mine" : "is-theirs") @(grouped ? "is-grouped" : "")">
+        <div @key="msg" class="ix-msg @(isMine ? "is-mine" : "is-theirs") @(grouped ? "is-grouped" : "") @(msg.IsAutoReply ? "is-auto" : "")">
             @if (!isMine)
             {
                 @if (grouped)
                 {
                     <span class="ix-msg-avatar-spacer"></span>
+                }
+                else if (msg.IsAutoReply)
+                {
+                    <span class="ix-msg-avatar ix-msg-avatar-bot" title="Automatic reply"><i class="fa-solid fa-robot"></i></span>
                 }
                 else
                 {
@@ -75,7 +81,14 @@ else
             <div class="ix-msg-body">
                 @if (!isMine && !grouped)
                 {
-                    <div class="ix-msg-sender">@msg.SenderName</div>
+                    @if (msg.IsAutoReply)
+                    {
+                        <div class="ix-msg-sender"><span class="ix-auto-tag"><i class="fa-solid fa-bolt"></i> Auto-reply</span></div>
+                    }
+                    else
+                    {
+                        <div class="ix-msg-sender">@msg.SenderName</div>
+                    }
                 }
 
                 @if (!string.IsNullOrWhiteSpace(msg.Content))

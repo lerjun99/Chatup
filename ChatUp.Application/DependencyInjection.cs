@@ -24,6 +24,15 @@ namespace ChatUp.Application
 
             // Register pipeline behaviors
             services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+
+            // Audit log: one row per command with its exact data changes (see Auditing/ActivityLoggingBehavior)
+            services.AddTransient(typeof(IPipelineBehavior<,>), typeof(Auditing.ActivityLoggingBehavior<,>));
+
+            // Chat auto replies are sent in the background from their own DI scope
+            services.AddSingleton<Features.AutoReply.ITicketAutoReplyService, Features.AutoReply.TicketAutoReplyService>();
+
+            // Bell notifications are saved and pushed in the background from their own DI scope
+            services.AddSingleton<Features.Notifications.INotificationPublisher, Features.Notifications.NotificationPublisher>();
             services.AddControllers().AddJsonOptions(options =>
             {
                 options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());

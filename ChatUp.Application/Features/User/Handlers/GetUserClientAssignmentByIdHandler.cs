@@ -3,16 +3,15 @@ using ChatUp.Application.Features.User.Queries;
 using ChatUp.Application.Features.UserRegistration.DTOs;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ChatUp.Application.Features.User.Handlers
 {
+    /// <summary>
+    /// Every user↔client assignment with the client's own accounts. Projected in SQL: only the columns the page
+    /// shows, and only the accounts of clients that actually have assignments (it used to load every user).
+    /// </summary>
     public class GetUserClientAssignmentsByClientIdHandler
-    : IRequestHandler<GetUserClientAssignmentsByClientIdQuery, List<UserClientAssignmentDto>>
+        : IRequestHandler<GetUserClientAssignmentsByClientIdQuery, List<UserClientAssignmentDto>>
     {
         private readonly IChatDBContext _context;
 
@@ -23,48 +22,63 @@ namespace ChatUp.Application.Features.User.Handlers
 
         public async Task<List<UserClientAssignmentDto>> Handle(GetUserClientAssignmentsByClientIdQuery request, CancellationToken cancellationToken)
         {
-           // STEP 1: Load all assignments with related User and Client data
             var assignments = await _context.UserClientAssignments
-                .Include(x => x.User)
-                .Include(x => x.Client).Where(a => a.User.IsDeleted == 0)
                 .AsNoTracking()
+                .Where(a => a.User != null && a.User.IsDeleted == 0)
+                .Select(a => new UserClientAssignmentDto
+                {
+                    Id = a.Id,
+                    UserId = a.UserId,
+                    ClientId = a.ClientId,
+                    UserType = a.UserType,
+                    UserName = a.User!.Username,
+                    FullName = a.User.FullName,
+                    UserEmail = a.Client != null ? a.Client.EmailAddress : null,
+                    ClientName = a.Client != null ? a.Client.ClientName : string.Empty,
+                    Location = a.Client != null ? a.Client.Location : null,
+                    AvatarUrl = _context.UploadedFile
+                        .Where(f => f.UserAccountId == a.UserId && f.FileType == "ProfileImg")
+                        .OrderByDescending(f => f.Id)
+                        .Select(f => f.Base64Content)
+                        .FirstOrDefault()
+                })
                 .ToListAsync(cancellationToken);
 
-            if (!assignments.Any())
-                return new List<UserClientAssignmentDto>();
+            if (assignments.Count == 0)
+                return assignments;
 
-            // STEP 2: Load all user accounts once to prevent multiple DB calls
-            var allUserAccounts = await _context.UserAccounts
-                .AsNoTracking()
-                .ToListAsync(cancellationToken);
+            var clientIds = assignments
+                .Where(a => a.ClientId.HasValue)
+                .Select(a => a.ClientId!.Value)
+                .Distinct()
+                .ToList();
 
-            // STEP 3: Build the result list
-            var result = assignments.Select(a => new UserClientAssignmentDto
-            {
-                Id = a.Id,
-                UserId = a.UserId,
-                ClientId = a.ClientId,
-                UserName = a.User?.Username ?? string.Empty,
-                FullName = a.User?.FullName ?? string.Empty,
-                ClientName = a.Client?.ClientName ?? string.Empty,
-                Location = a.Client.Location,
-                UserType = a.UserType,
-                // ✅ Filter only user accounts under the same ClientId
-                UserAccounts = allUserAccounts
-                    .Where(u => u.ClientId == a.ClientId && u.IsDeleted == 0)
-                    .Select(u => new UserAccountSimpleDto
+            var accountsByClient = (await _context.UserAccounts
+                    .AsNoTracking()
+                    .Where(u => u.ClientId.HasValue && clientIds.Contains(u.ClientId.Value) && u.IsDeleted == 0)
+                    .Select(u => new
                     {
-                        Username = u.Username,
-                        FullName = u.FullName,
-                        EmailAddress = u.EmailAddress
-                        
+                        ClientId = u.ClientId!.Value,
+                        Account = new UserAccountSimpleDto
+                        {
+                            Username = u.Username,
+                            FullName = u.FullName,
+                            EmailAddress = u.EmailAddress,
+                            isLoggedIn = u.isLoggedIn
+                        }
                     })
-                    .ToList()
-            })
-            .ToList();
+                    .ToListAsync(cancellationToken))
+                .GroupBy(x => x.ClientId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.Account).ToList());
 
-            return result;
+            foreach (var a in assignments)
+            {
+                a.UserAccounts = a.ClientId.HasValue && accountsByClient.TryGetValue(a.ClientId.Value, out var accounts)
+                    ? accounts
+                    : new List<UserAccountSimpleDto>();
+            }
+
+            return assignments;
         }
-
     }
 }

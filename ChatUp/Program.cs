@@ -25,6 +25,14 @@ builder.Services.AddSignalR();
 // API key: every HttpClient (including the injected one) sends this UI's key to the ChatUp API
 builder.Services.AddSingleton<UiApiKeyStore>();
 builder.Services.AddTransient<ApiKeyMessageHandler>();
+
+// Audit log: the API attributes every call to the signed-in user and their browser (IP, device, session)
+builder.Services.AddScoped<ActivityIdentity>();
+
+// Every page checks with the API that the user's session is still active (see MainLayout / SessionGuard)
+builder.Services.AddScoped<SessionGuard>();
+builder.Services.AddSingleton<CircuitServicesAccessor>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, ServicesAccessorCircuitHandler>();
 builder.Services.ConfigureHttpClientDefaults(http => http.AddHttpMessageHandler<ApiKeyMessageHandler>());
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<ApiKeyAdminService>();
@@ -39,6 +47,8 @@ builder.Services.AddControllers()
 
 builder.Services.AddScoped<LinkService>();
 builder.Services.AddScoped<ChatService>();
+builder.Services.AddScoped<NotificationCenter>();
+builder.Services.AddScoped<AuditLogService>();
 builder.Services.AddScoped<TitleService>();
 builder.Services.AddScoped<SlaService>();
 builder.Services.AddScoped<ContractService>();

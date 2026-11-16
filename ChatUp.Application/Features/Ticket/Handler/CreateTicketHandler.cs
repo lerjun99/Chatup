@@ -17,11 +17,14 @@ public class CreateTicketHandler : IRequestHandler<CreateTicketCommand, TicketCr
     private readonly ITicketRepository _repo;
     private readonly IProjectRepository _projectRepo;
     private readonly IBusinessCalendarRepository _calendarService;
-    public CreateTicketHandler(ITicketRepository repo, IProjectRepository projectRepo, IBusinessCalendarRepository calendarService)
+    private readonly ChatUp.Application.Features.Notifications.INotificationPublisher _notifications;
+    public CreateTicketHandler(ITicketRepository repo, IProjectRepository projectRepo, IBusinessCalendarRepository calendarService,
+        ChatUp.Application.Features.Notifications.INotificationPublisher notifications)
     {
         _repo = repo;
         _projectRepo = projectRepo;
         _calendarService = calendarService;
+        _notifications = notifications;
     }
     public async Task<TicketCreatedDto> Handle(CreateTicketCommand request, CancellationToken cancellationToken)
     {
@@ -52,6 +55,9 @@ public class CreateTicketHandler : IRequestHandler<CreateTicketCommand, TicketCr
             };
 
         await _repo.AddAsync(ticket, cancellationToken);
+
+            // Bell + realtime: the client's support agents and the project's developers hear about it right away
+            _notifications.TicketCreated(ticket.Id, actorUserId: null);
 
             string projectName = string.Empty;
 

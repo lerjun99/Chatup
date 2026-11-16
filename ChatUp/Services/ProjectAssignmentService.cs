@@ -44,6 +44,18 @@ namespace ChatUp.Services
             }
         }
 
+        /// <summary>Adds several developers to one project in one request.</summary>
+        public async Task<ChatUp.Application.Features.Projects.Commands.AssignProjectMembersResult?> AssignUsersAsync(int projectId, IEnumerable<int> userIds)
+        {
+            var endpoint = $"{AppConfig.ChatUrl}Projects/AssignUsers";
+            var response = await _http.PostAsJsonAsync(endpoint, new { ProjectId = projectId, UserIds = userIds.ToList() });
+
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException(await response.Content.ReadAsStringAsync());
+
+            return await response.Content.ReadFromJsonAsync<ChatUp.Application.Features.Projects.Commands.AssignProjectMembersResult>();
+        }
+
         public async Task<bool> DeleteAsync(int id)
         {
             var endpoint = $"{AppConfig.ChatUrl}Projects/DeleteAssignment/Assignment/{id}";

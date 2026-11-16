@@ -1,0 +1,895 @@
+@page "/audit-log"
+@using System.Text
+@using ChatUp.Application.Auditing
+@using ChatUp.Application.Features.AdminActivity
+@using ChatUp.Services
+@implements IDisposable
+@inject AuditLogService Audit
+@inject UserState UserState
+@inject TitleService TitleService
+@inject IJSRuntime JS
+<link href="css/audit.css" rel="stylesheet" />
+
+<div class="au">
+    <header class="au-hero">
+        <div>
+            <div class="au-eyebrow"><i class="fa-solid fa-shield-halved"></i> Security &amp; compliance</div>
+            <h1>Audit log</h1>
+            <p>Every sign-in, page visit and change in ChatUp — who did it, when, from where, and exactly what changed.</p>
+        </div>
+        <div class="au-tabs" role="tablist">
+            <button role="tab" class="@(_view == "dashboard" ? "is-on" : "")" aria-selected="@(_view == "dashboard")" @onclick='() => _view = "dashboard"'>
+                <i class="fa-solid fa-chart-line"></i> Dashboard
+            </button>
+            <button role="tab" class="@(_view == "log" ? "is-on" : "")" aria-selected="@(_view == "log")" @onclick="ShowLogAsync">
+                <i class="fa-solid fa-list-ul"></i> Activity
+            </button>
+        </div>
+    </header>
+
+    @if (UserState.UserType is not null and not 1)
+    {
+        <div class="au-alert is-error"><i class="fa-solid fa-lock"></i> Only administrators can view the audit log.</div>
+    }
+    else if (_view == "dashboard")
+    {
+        <AuditDashboard OnDrill="OnDrillAsync" />
+    }
+    else
+    {
+        <!-- ============ FILTERS ============ -->
+        <section class="au-filters">
+            <div class="au-filter-row">
+                <div class="au-search">
+                    <i class="fa-solid @(_searching ? "fa-circle-notch fa-spin" : "fa-magnifying-glass")"></i>
+                    <input type="search" placeholder="Search summary, user, record id, changed value@(_unlocked ? ", IP" : "")…"
+                           value="@_search" @oninput="OnSearchInput" aria-label="Search the audit log" />
+                </div>
+                <div class="au-user">
+                    <i class="fa-regular fa-user"></i>
+                    <input list="au-users" placeholder="Any user" value="@_userName" @onchange="OnUserChanged" @oninput="OnUserTyping" aria-label="User" />
+                    <datalist id="au-users">
+                        @foreach (var u in _userSuggestions)
+                        {
+                            <option value="@u"></option>
+                        }
+                    </datalist>
+                </div>
+                <label class="au-date">
+                    <span>From</span>
+                    <input type="date" value="@(_dateFrom?.ToString("yyyy-MM-dd"))" @onchange="OnFromChanged" />
+                </label>
+                <label class="au-date">
+                    <span>To</span>
+                    <input type="date" value="@(_dateTo?.ToString("yyyy-MM-dd"))" @onchange="OnToChanged" />
+                </label>
+                <div class="au-seg au-hide-sm" role="group" aria-label="Quick range">
+                    <button class="@(_quick == 1 ? "is-on" : "")" @onclick="() => SetQuickAsync(1)">Today</button>
+                    <button class="@(_quick == 7 ? "is-on" : "")" @onclick="() => SetQuickAsync(7)">7d</button>
+                    <button class="@(_quick == 30 ? "is-on" : "")" @onclick="() => SetQuickAsync(30)">30d</button>
+                </div>
+                <span class="au-spacer"></span>
+                <button class="au-btn au-btn-ghost" title="Refresh" @onclick="ReloadAsync" disabled="@_loading">
+                    <i class="fa-solid fa-rotate-right @(_loading ? "fa-spin" : "")"></i>
+                </button>
+                <button class="au-btn au-btn-ghost" title="Export CSV (current filters, up to 5,000 rows)" @onclick="ExportCsvAsync" disabled="@_exporting">
+                    <i class="fa-solid @(_exporting ? "fa-circle-notch fa-spin" : "fa-file-csv")"></i><span class="au-hide-sm"> Export</span>
+                </button>
+            </div>
+
+            <div class="au-filter-row">
+                <div class="au-chips" role="group" aria-label="Type">
+                    @foreach (var c in ActivityCategories.All)
+                    {
+                        var cat = c;
+                        <button class="au-chip @(_categories.Contains(cat) ? "is-on" : "")" style="--c:@AuditDashboard.CategoryColor(cat)"
+                                aria-pressed="@_categories.Contains(cat)" @onclick="() => ToggleCategoryAsync(cat)">
+                            <i class="@CategoryIcon(cat)"></i> @AuditDashboard.CategoryLabel(cat)
+                        </button>
+                    }
+                </div>
+
+                <div class="au-multi">
+                    <button class="au-select @(_openMenu == "module" ? "is-open" : "")" @onclick='() => ToggleMenu("module")'>
+                        <i class="fa-solid fa-cubes"></i> @(_modules.Count == 0 ? "All modules" : _modules.Count == 1 ? _modules.First() : $"{_modules.Count} modules")
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                    @if (_openMenu == "module")
+                    {
+                        <div class="au-menu-scrim" @onclick="() => _openMenu = null"></div>
+                        <div class="au-menu">
+                            @foreach (var m in _filters.Modules)
+                            {
+                                var mod = m;
+                                <label class="au-menu-item">
+                                    <input type="checkbox" checked="@_modules.Contains(mod)" @onchange="() => ToggleSetAsync(_modules, mod)" />
+                                    <span>@mod</span>
+                                </label>
+                            }
+                            @if (!_filters.Modules.Any())
+                            {
+                                <div class="au-menu-empty">No modules yet.</div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="au-multi">
+                    <button class="au-select @(_openMenu == "action" ? "is-open" : "")" @onclick='() => ToggleMenu("action")'>
+                        <i class="fa-solid fa-bolt"></i> @(_actions.Count == 0 ? "All actions" : _actions.Count == 1 ? AuditDashboard.Label(_actions.First()) : $"{_actions.Count} actions")
+                        <i class="fa-solid fa-chevron-down"></i>
+                    </button>
+                    @if (_openMenu == "action")
+                    {
+                        <div class="au-menu-scrim" @onclick="() => _openMenu = null"></div>
+                        <div class="au-menu">
+                            @foreach (var a in _filters.Actions)
+                            {
+                                var act = a;
+                                <label class="au-menu-item">
+                                    <input type="checkbox" checked="@_actions.Contains(act)" @onchange="() => ToggleSetAsync(_actions, act)" />
+                                    <span>@AuditDashboard.Label(act)</span>
+                                </label>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="au-seg" role="group" aria-label="Result">
+                    <button class="@(_result == "all" ? "is-on" : "")" @onclick='() => SetResultAsync("all")'>All</button>
+                    <button class="@(_result == "ok" ? "is-on" : "")" @onclick='() => SetResultAsync("ok")'><i class="fa-solid fa-check"></i> OK</button>
+                    <button class="@(_result == "failed" ? "is-on" : "")" @onclick='() => SetResultAsync("failed")'><i class="fa-solid fa-xmark"></i> Failed</button>
+                </div>
+
+                <label class="au-toggle">
+                    <input type="checkbox" checked="@_hidePageViews" @onchange="ToggleNavigationAsync" />
+                    <span class="au-toggle-track"><span></span></span>
+                    Hide page views
+                </label>
+
+                @if (HasFilters)
+                {
+                    <button class="au-link" @onclick="ResetFiltersAsync"><i class="fa-solid fa-filter-circle-xmark"></i> Reset</button>
+                }
+            </div>
+
+            @if (_sessionId != null || _correlationId != null || _entityId != null)
+            {
+                <div class="au-pivots">
+                    @if (_sessionId != null)
+                    {
+                        <span class="au-pivot"><i class="fa-solid fa-link"></i> Session @Short(_sessionId)
+                            <button title="Clear" @onclick='() => ClearPivotAsync("session")'><i class="fa-solid fa-xmark"></i></button></span>
+                    }
+                    @if (_correlationId != null)
+                    {
+                        <span class="au-pivot"><i class="fa-solid fa-diagram-next"></i> Request @Short(_correlationId.Value.ToString())
+                            <button title="Clear" @onclick='() => ClearPivotAsync("request")'><i class="fa-solid fa-xmark"></i></button></span>
+                    }
+                    @if (_entityId != null)
+                    {
+                        <span class="au-pivot"><i class="fa-solid fa-hashtag"></i> Record #@_entityId
+                            <button title="Clear" @onclick='() => ClearPivotAsync("entity")'><i class="fa-solid fa-xmark"></i></button></span>
+                    }
+                </div>
+            }
+        </section>
+
+        <!-- ============ PROTECTED DETAILS ============ -->
+        @if (_filters.CanUnlockProtected)
+        {
+            <div class="au-protect @(_unlocked ? "is-open" : "")">
+                @if (_unlocked)
+                {
+                    <i class="fa-solid fa-lock-open"></i>
+                    <span>Protected details (IP, device, route, session) are visible until <strong>@AuditTime.ToLocal(_unlockExpires!.Value).ToString("h:mm tt")</strong>.</span>
+                    <button class="au-link" @onclick="LockAsync">Lock now</button>
+                }
+                else
+                {
+                    <i class="fa-solid fa-lock"></i>
+                    <span>IP addresses, devices, routes and session ids are hidden.</span>
+                    <button class="au-btn au-btn-ghost au-btn-sm" @onclick="() => _showUnlock = true"><i class="fa-solid fa-key"></i> Unlock</button>
+                }
+            </div>
+        }
+
+        @if (_error != null)
+        {
+            <div class="au-alert is-error"><i class="fa-solid fa-circle-exclamation"></i> @_error</div>
+        }
+
+        <!-- ============ TABLE ============ -->
+        <section class="au-table-card @(_loading && _rows.Any() ? "is-stale" : "")">
+            <div class="au-table-scroll">
+                <table class="au-table">
+                    <thead>
+                        <tr>
+                            <th class="au-col-when">@SortHeader("When", "OccurredAt")</th>
+                            <th>@SortHeader("User", "UserName")</th>
+                            <th class="au-col-act">@SortHeader("Activity", "Action")</th>
+                            <th class="au-hide-sm">@SortHeader("Module", "Module")</th>
+                            <th>Summary</th>
+                            <th class="au-col-res" aria-label="Result"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_loading && !_rows.Any())
+                        {
+                            @for (var i = 0; i < 8; i++)
+                            {
+                                <tr class="au-skel-row"><td colspan="6"><div class="au-skel"></div></td></tr>
+                            }
+                        }
+                        else if (!_rows.Any())
+                        {
+                            <tr>
+                                <td colspan="6">
+                                    <div class="au-empty">
+                                        <i class="fa-regular fa-folder-open"></i>
+                                        <p>@(HasFilters ? "No activity matches these filters." : "No activity recorded yet.")</p>
+                                        @if (HasFilters)
+                                        {
+                                            <button class="au-link" @onclick="ResetFiltersAsync">Clear filters</button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var row in _rows)
+                            {
+                                var r = row;
+                                var open = _expanded == r.Id;
+                                <tr @key="r.Id" class="au-row @(open ? "is-open" : "") @(r.IsSuccess ? "" : "is-failed")" @onclick="() => ToggleRow(r)">
+                                    <td class="au-col-when" title="@AuditTime.ToLocal(r.OccurredAt).ToString("dddd, MMM d, yyyy h:mm:ss tt")">
+                                        <strong>@AuditTime.Relative(r.OccurredAt)</strong>
+                                        <small>@AuditTime.ToLocal(r.OccurredAt).ToString("MMM d, h:mm tt")</small>
+                                    </td>
+                                    <td>
+                                        @if (!string.IsNullOrEmpty(r.UserName))
+                                        {
+                                            <button class="au-user-pill" title="Only show @r.UserName" @onclick:stopPropagation="true" @onclick="() => FilterByUserAsync(r.UserName)">
+                                                <span class="au-avatar" style="--h:@Hue(r.UserName)">@Initials(r.UserName)</span>
+                                                <span>@r.UserName</span>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <span class="au-muted"><i class="fa-solid @SourceIcon(r.Source)"></i> @(r.Source == ActivitySources.System ? "System" : "Anonymous")</span>
+                                        }
+                                    </td>
+                                    <td class="au-col-act">
+                                        <span class="au-badge" style="--c:@ActionColor(r)"><i class="@CategoryIcon(r.Category)"></i> @AuditDashboard.Label(r.Action)</span>
+                                    </td>
+                                    <td class="au-hide-sm">@r.Module</td>
+                                    <td class="au-col-sum">
+                                        <span class="au-sum">@r.Summary</span>
+                                        @if (ChangeCount(r) is int n and > 0)
+                                        {
+                                            <span class="au-tag"><i class="fa-solid fa-code-compare"></i> @n field@(n == 1 ? "" : "s")</span>
+                                        }
+                                    </td>
+                                    <td class="au-col-res">
+                                        <i class="fa-solid @(r.IsSuccess ? "fa-circle-check is-ok" : "fa-circle-xmark is-bad")" title="@(r.IsSuccess ? "Succeeded" : "Failed")"></i>
+                                    </td>
+                                </tr>
+                                @if (open)
+                                {
+                                    <tr class="au-detail-row">
+                                        <td colspan="6"><AuditLogDetail Row="r" CanUnlock="_filters.CanUnlockProtected" OnUser="FilterByUserAsync" OnRecord="FilterByEntityAsync" OnSession="FilterBySessionAsync" OnRequest="FilterByRequestAsync" /></td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <footer class="au-pager">
+                <span>@(_total == 0 ? "0" : $"{_pageIndex * _pageSize + 1:N0}–{Math.Min((_pageIndex + 1) * _pageSize, _total):N0}") of @_total.ToString("N0")</span>
+                <span class="au-spacer"></span>
+                <label class="au-pagesize">
+                    Rows
+                    <select value="@_pageSize" @onchange="OnPageSizeChanged">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </label>
+                <button class="au-icon-btn" title="Previous page" disabled="@(_pageIndex == 0 || _loading)" @onclick="() => GoToPageAsync(_pageIndex - 1)"><i class="fa-solid fa-chevron-left"></i></button>
+                <button class="au-icon-btn" title="Next page" disabled="@((_pageIndex + 1) * _pageSize >= _total || _loading)" @onclick="() => GoToPageAsync(_pageIndex + 1)"><i class="fa-solid fa-chevron-right"></i></button>
+            </footer>
+        </section>
+    }
+</div>
+
+<!-- ============ UNLOCK DIALOG ============ -->
+@if (_showUnlock)
+{
+    <div class="au-modal-backdrop" @onclick="() => _showUnlock = false">
+        <div class="au-modal" role="dialog" aria-modal="true" aria-labelledby="au-unlock-title" @onclick:stopPropagation="true">
+            <div class="au-modal-icon"><i class="fa-solid fa-user-shield"></i></div>
+            <h2 id="au-unlock-title">Unlock protected details</h2>
+            <p>IP addresses, devices, routes and session ids are personal or sensitive. Confirm your password to see them for a short time. This is recorded in the audit log.</p>
+            <input type="password" class="au-input" placeholder="Your password" autocomplete="current-password"
+                   @bind="_unlockPassword" @bind:event="oninput" @onkeydown="OnUnlockKey" />
+            @if (_unlockError != null)
+            {
+                <div class="au-alert is-error"><i class="fa-solid fa-circle-exclamation"></i> @_unlockError</div>
+            }
+            <div class="au-modal-foot">
+                <button class="au-btn au-btn-ghost" @onclick="() => _showUnlock = false" disabled="@_unlocking">Cancel</button>
+                <button class="au-btn au-btn-primary" @onclick="UnlockAsync" disabled="@(_unlocking || string.IsNullOrEmpty(_unlockPassword))">
+                    <i class="fa-solid @(_unlocking ? "fa-circle-notch fa-spin" : "fa-lock-open")"></i> Unlock
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _view = "dashboard";
+
+    // Data
+    private ActivityLogFiltersDto _filters = new();
+    private List<ActivityLogDto> _rows = new();
+    private int _total;
+    private bool _loading;
+    private bool _searching;
+    private bool _exporting;
+    private string? _error;
+    private long? _expanded;
+    private bool _filtersLoaded;
+
+    // Filters
+    private string? _search;
+    private string? _userName;
+    private List<string> _userSuggestions = new();
+    private DateTime? _dateFrom;
+    private DateTime? _dateTo;
+    private int _quick = 7;
+    private readonly HashSet<string> _categories = new();
+    private readonly HashSet<string> _modules = new();
+    private readonly HashSet<string> _actions = new();
+    private string _result = "all";
+    private bool _hidePageViews = true;
+    private string? _sessionId;
+    private Guid? _correlationId;
+    private string? _entityId;
+    private string? _openMenu;
+
+    // Paging / sorting
+    private int _pageIndex;
+    private int _pageSize = 25;
+    private string _sortBy = "OccurredAt";
+    private bool _sortDesc = true;
+
+    // Protected details
+    private string? _unlockToken;
+    private DateTime? _unlockExpires;
+    private bool _showUnlock;
+    private bool _unlocking;
+    private string? _unlockPassword;
+    private string? _unlockError;
+    private bool _unlocked => _unlockToken != null && _unlockExpires > DateTime.UtcNow;
+
+    private CancellationTokenSource? _loadCts;
+    private CancellationTokenSource? _searchCts;
+    private CancellationTokenSource? _userCts;
+
+    private bool HasFilters => !string.IsNullOrWhiteSpace(_search) || !string.IsNullOrWhiteSpace(_userName) || _categories.Count > 0 ||
+                               _modules.Count > 0 || _actions.Count > 0 || _result != "all" || _sessionId != null ||
+                               _correlationId != null || _entityId != null;
+
+    protected override void OnInitialized()
+    {
+        TitleService.SetTitle("Audit log");
+        SetQuick(7);
+    }
+
+    // =============================
+    // LOADING
+    // =============================
+    private async Task ShowLogAsync()
+    {
+        _view = "log";
+        await EnsureLogLoadedAsync();
+    }
+
+    private async Task EnsureLogLoadedAsync()
+    {
+        if (!_filtersLoaded)
+        {
+            _filtersLoaded = true;
+            try { _filters = await Audit.GetFiltersAsync(); }
+            catch (Exception ex) { _error = ex.Message; }
+        }
+        await LoadAsync();
+    }
+
+    private SearchActivityLogQuery BuildQuery(int pageIndex, int pageSize) => new()
+    {
+        SearchValue = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+        UserName = string.IsNullOrWhiteSpace(_userName) ? null : _userName.Trim(),
+        Categories = _categories.Count > 0 ? _categories.ToList() : null,
+        Modules = _modules.Count > 0 ? _modules.ToList() : null,
+        Actions = _actions.Count > 0 ? _actions.ToList() : null,
+        IsSuccess = _result switch { "ok" => true, "failed" => false, _ => null },
+        DateFrom = _dateFrom.HasValue ? AuditTime.ToUtc(_dateFrom.Value) : null,
+        DateTo = _dateTo.HasValue ? AuditTime.ToUtc(_dateTo.Value.AddDays(1)) : null,
+        SessionId = _sessionId,
+        CorrelationId = _correlationId,
+        EntityId = _entityId,
+        // A type filter that asks for page views wins over the toggle
+        HidePageViews = _hidePageViews && !_categories.Contains(ActivityCategories.Navigation),
+        SortBy = _sortBy,
+        SortDescending = _sortDesc,
+        PageIndex = pageIndex,
+        PageSize = pageSize,
+        UnlockToken = _unlocked ? _unlockToken : null
+    };
+
+    private async Task LoadAsync()
+    {
+        _loadCts?.Cancel();
+        var cts = _loadCts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var page = await Audit.SearchAsync(BuildQuery(_pageIndex, _pageSize), cts.Token);
+            if (cts.IsCancellationRequested) return;
+
+            _rows = page.Items;
+            _total = page.Total;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            if (ReferenceEquals(cts, _loadCts))
+            {
+                _loading = false;
+                _searching = false;
+            }
+        }
+    }
+
+    private Task ReloadAsync()
+    {
+        _pageIndex = 0;
+        _expanded = null;
+        return LoadAsync();
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        _pageIndex = Math.Max(0, page);
+        _expanded = null;
+        await LoadAsync();
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        _pageSize = int.TryParse(e.Value?.ToString(), out var size) ? size : 25;
+        await ReloadAsync();
+    }
+
+    // =============================
+    // FILTERS
+    // =============================
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString();
+        _searchCts?.Cancel();
+        var cts = _searchCts = new CancellationTokenSource();
+        _searching = true;
+        try
+        {
+            await Task.Delay(350, cts.Token);
+            await ReloadAsync();
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task OnUserTyping(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString();
+        _userCts?.Cancel();
+        var cts = _userCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            _userSuggestions = await Audit.SearchUsersAsync(text, cts.Token);
+        }
+        catch (Exception) { }
+    }
+
+    private async Task OnUserChanged(ChangeEventArgs e)
+    {
+        _userName = e.Value?.ToString();
+        await ReloadAsync();
+    }
+
+    private void SetQuick(int days)
+    {
+        _quick = days;
+        _dateTo = AuditTime.Today;
+        _dateFrom = _dateTo.Value.AddDays(-(days - 1));
+    }
+
+    private async Task SetQuickAsync(int days)
+    {
+        SetQuick(days);
+        await ReloadAsync();
+    }
+
+    private async Task OnFromChanged(ChangeEventArgs e)
+    {
+        _dateFrom = DateTime.TryParse(e.Value?.ToString(), out var v) ? v.Date : null;
+        _quick = 0;
+        await ReloadAsync();
+    }
+
+    private async Task OnToChanged(ChangeEventArgs e)
+    {
+        _dateTo = DateTime.TryParse(e.Value?.ToString(), out var v) ? v.Date : null;
+        _quick = 0;
+        await ReloadAsync();
+    }
+
+    private async Task ToggleCategoryAsync(string category)
+    {
+        if (!_categories.Remove(category))
+            _categories.Add(category);
+        await ReloadAsync();
+    }
+
+    private async Task ToggleSetAsync(HashSet<string> set, string value)
+    {
+        if (!set.Remove(value))
+            set.Add(value);
+        await ReloadAsync();
+    }
+
+    private void ToggleMenu(string menu) => _openMenu = _openMenu == menu ? null : menu;
+
+    private async Task SetResultAsync(string result)
+    {
+        _result = result;
+        await ReloadAsync();
+    }
+
+    private async Task ToggleNavigationAsync()
+    {
+        _hidePageViews = !_hidePageViews;
+        await ReloadAsync();
+    }
+
+    private async Task FilterByUserAsync(string? userName)
+    {
+        _userName = userName;
+        await ReloadAsync();
+    }
+
+    private async Task FilterBySessionAsync(string? sessionId)
+    {
+        _sessionId = sessionId;
+        _hidePageViews = false;
+        _dateFrom = _dateTo = null;
+        _quick = 0;
+        await ReloadAsync();
+    }
+
+    private async Task FilterByRequestAsync(Guid correlationId)
+    {
+        _correlationId = correlationId;
+        _dateFrom = _dateTo = null;
+        _quick = 0;
+        await ReloadAsync();
+    }
+
+    private async Task FilterByEntityAsync(ActivityLogDto row)
+    {
+        _entityId = row.EntityId;
+        _dateFrom = _dateTo = null;
+        _quick = 0;
+        await ReloadAsync();
+    }
+
+    private async Task ClearPivotAsync(string pivot)
+    {
+        switch (pivot)
+        {
+            case "session": _sessionId = null; break;
+            case "request": _correlationId = null; break;
+            case "entity": _entityId = null; break;
+        }
+        await ReloadAsync();
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        _search = null;
+        _userName = null;
+        _categories.Clear();
+        _modules.Clear();
+        _actions.Clear();
+        _result = "all";
+        _hidePageViews = true;
+        _sessionId = null;
+        _correlationId = null;
+        _entityId = null;
+        SetQuick(7);
+        await ReloadAsync();
+    }
+
+    /// <summary>A click on the dashboard opens the list with its filters.</summary>
+    private async Task OnDrillAsync(AuditDrill drill)
+    {
+        _search = null;
+        _userName = drill.UserName;
+        _categories.Clear();
+        _modules.Clear();
+        _actions.Clear();
+        if (drill.Category != null) _categories.Add(drill.Category);
+        if (drill.Module != null) _modules.Add(drill.Module);
+        if (drill.Action != null) _actions.Add(drill.Action);
+        _result = drill.FailedOnly ? "failed" : "all";
+        _hidePageViews = drill.Category != ActivityCategories.Navigation && drill.Module == null;
+        _sessionId = null;
+        _correlationId = null;
+        _entityId = null;
+        _dateFrom = drill.From;
+        _dateTo = drill.To;
+        _quick = 0;
+        _pageIndex = 0;
+        _view = "log";
+        await EnsureLogLoadedAsync();
+    }
+
+    private void ToggleRow(ActivityLogDto row) => _expanded = _expanded == row.Id ? null : row.Id;
+
+    // =============================
+    // SORTING
+    // =============================
+    private RenderFragment SortHeader(string label, string key) => __builder =>
+    {
+        var active = _sortBy == key;
+        <button class="au-sort @(active ? "is-on" : "")" @onclick="() => SortAsync(key)">
+            @label
+            <i class="fa-solid @(active ? (_sortDesc ? "fa-arrow-down" : "fa-arrow-up") : "fa-sort")"></i>
+        </button>
+    };
+
+    private async Task SortAsync(string key)
+    {
+        if (_sortBy == key)
+            _sortDesc = !_sortDesc;
+        else
+        {
+            _sortBy = key;
+            _sortDesc = key == "OccurredAt";
+        }
+        await ReloadAsync();
+    }
+
+    // =============================
+    // PROTECTED DETAILS
+    // =============================
+    private async Task UnlockAsync()
+    {
+        if (string.IsNullOrEmpty(_unlockPassword)) return;
+
+        _unlocking = true;
+        _unlockError = null;
+        try
+        {
+            var result = await Audit.UnlockAsync(_unlockPassword);
+            if (!result.IsSuccess || string.IsNullOrEmpty(result.Token))
+            {
+                _unlockError = result.Message ?? "Couldn't unlock.";
+                return;
+            }
+
+            _unlockToken = result.Token;
+            _unlockExpires = result.ExpiresAtUtc;
+            _showUnlock = false;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _unlockError = ex.Message;
+        }
+        finally
+        {
+            _unlockPassword = null;
+            _unlocking = false;
+        }
+    }
+
+    private async Task OnUnlockKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await UnlockAsync();
+    }
+
+    private async Task LockAsync()
+    {
+        _unlockToken = null;
+        _unlockExpires = null;
+        await LoadAsync();
+    }
+
+    // =============================
+    // EXPORT
+    // =============================
+    private async Task ExportCsvAsync()
+    {
+        _exporting = true;
+        try
+        {
+            var page = await Audit.SearchAsync(BuildQuery(0, 5000));
+            var csv = new StringBuilder();
+            csv.AppendLine("When (PH time),User,Type,Action,Module,Record,Summary,Result,Error,Changed fields" +
+                           (_unlocked ? ",IP address,Device,Route,Status,Duration ms,Session,Request" : ""));
+
+            foreach (var r in page.Items)
+            {
+                var fields = string.Join("; ", ActivityJson.Deserialize(r.Changes)
+                    .SelectMany(c => c.Fields.Select(f => DescribeField(c.Entity, f))));
+
+                var line = new List<string?>
+                {
+                    AuditTime.ToLocal(r.OccurredAt).ToString("yyyy-MM-dd HH:mm:ss"),
+                    r.UserName, r.Category, AuditDashboard.Label(r.Action), r.Module, r.EntityId, r.Summary,
+                    r.IsSuccess ? "OK" : "Failed", r.ErrorMessage, fields
+                };
+                if (_unlocked)
+                    line.AddRange(new[] { r.IpAddress, r.UserAgent, $"{r.HttpMethod} {r.Route}".Trim(), r.StatusCode?.ToString(), r.DurationMs?.ToString(), r.SessionId, r.CorrelationId == Guid.Empty ? null : r.CorrelationId.ToString() });
+
+                csv.AppendLine(string.Join(",", line.Select(Csv)));
+            }
+
+            // UTF-8 with BOM so Excel shows accents and arrows correctly
+            var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray();
+            using var stream = new MemoryStream(bytes);
+            using var streamRef = new DotNetStreamReference(stream);
+            await JS.InvokeVoidAsync("downloadFileFromStream", $"chatup-audit-log-{AuditTime.Today:yyyyMMdd}.csv", streamRef);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Export failed: {ex.Message}";
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    // Kept out of an interpolated string: Razor's tokenizer loses track of quotes nested inside one
+    private static string DescribeField(string entity, FieldChange f)
+    {
+        var before = f.Old ?? "—";
+        var after = f.New ?? "—";
+        return entity + "." + f.Label + ": " + before + " → " + after;
+    }
+
+    private static string Csv(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return string.Empty;
+        // Formula-looking cells are prefixed so spreadsheets don't execute them
+        if (value[0] is '=' or '+' or '-' || value[0] == AtSign) value = "'" + value;
+        const string quote = "\"";
+        var needsQuotes = value.Contains(',') || value.Contains(quote) || value.Contains('\n');
+        return needsQuotes ? quote + value.Replace(quote, quote + quote) + quote : value;
+    }
+
+    // =============================
+    // FORMATTING
+    // =============================
+    private static int ChangeCount(ActivityLogDto row) =>
+        string.IsNullOrEmpty(row.Changes) ? 0 : ActivityJson.Deserialize(row.Changes).Sum(c => c.Fields.Count);
+
+    // Razor reads a literal at-sign in this block as a transition, so it is spelled as a char code
+    private const char AtSign = (char)64;
+
+    private static string Short(string value) => value.Length > 8 ? value[..8] : value;
+
+    private static string CategoryIcon(string? category) => category switch
+    {
+        "Auth" => "fa-solid fa-right-to-bracket",
+        "Navigation" => "fa-regular fa-eye",
+        "Data" => "fa-solid fa-pen-to-square",
+        "Security" => "fa-solid fa-shield-halved",
+        "System" => "fa-solid fa-server",
+        _ => "fa-solid fa-circle"
+    };
+
+    private static string SourceIcon(string? source) => source switch
+    {
+        "Web" => "fa-solid fa-globe",
+        "Api" => "fa-solid fa-plug",
+        _ => "fa-solid fa-gears"
+    };
+
+    private static string SourceLabel(string? source) => source switch
+    {
+        "Web" => "ChatUp web app",
+        "Api" => "API / integration",
+        "System" => "System (background)",
+        _ => source ?? "Unknown"
+    };
+
+    private static string ActionColor(ActivityLogDto row) => row.IsSuccess ? ActionColor(row.Action) : "#dc2626";
+
+    private static string ActionColor(string? action) => action switch
+    {
+        "Create" => "#16a34a",
+        "Update" => "#4f46e5",
+        "Delete" => "#dc2626",
+        "Restore" => "#0891b2",
+        "Login" => "#059669",
+        "Logout" => "#64748b",
+        "LoginFailed" or "AccessDenied" or "Error" or "ProtectedDetailsUnlockFailed" => "#dc2626",
+        "PageView" => "#d97706",
+        "ProtectedDetailsUnlocked" => "#7c3aed",
+        _ => "#475569"
+    };
+
+    private static string Initials(string? name)
+    {
+        var parts = (name ?? string.Empty).Split(new[] { ' ', '.', '_', AtSign }, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => $"{parts[0][0]}{parts[1][0]}".ToUpperInvariant()
+        };
+    }
+
+    private static int Hue(string? name)
+    {
+        unchecked
+        {
+            var h = 17;
+            foreach (var c in name ?? string.Empty) h = h * 31 + c;
+            return Math.Abs(h % 360);
+        }
+    }
+
+    /// <summary>"Chrome on Windows" from a user agent string.</summary>
+    private static string DescribeAgent(string? agent)
+    {
+        if (string.IsNullOrWhiteSpace(agent)) return "—";
+
+        var browser = agent.Contains("Edg/") ? "Edge"
+            : agent.Contains("OPR/") ? "Opera"
+            : agent.Contains("Chrome/") ? "Chrome"
+            : agent.Contains("Firefox/") ? "Firefox"
+            : agent.Contains("Safari/") ? "Safari"
+            : "Browser";
+
+        var os = agent.Contains("Windows") ? "Windows"
+            : agent.Contains("Android") ? "Android"
+            : agent.Contains("iPhone") || agent.Contains("iPad") ? "iOS"
+            : agent.Contains("Mac OS") ? "macOS"
+            : agent.Contains("Linux") ? "Linux"
+            : "an unknown OS";
+
+        return $"{browser} on {os}";
+    }
+
+    public void Dispose()
+    {
+        _loadCts?.Cancel();
+        _searchCts?.Cancel();
+        _userCts?.Cancel();
+    }
+}

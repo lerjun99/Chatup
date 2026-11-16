@@ -7,6 +7,8 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <Compile Remove="Migrations\20261116053919_UserNotifications.cs" />
+	  <Compile Remove="Migrations\20261116053919_UserNotifications.Designer.cs" />
 	  <Compile Remove="Services\ContractExpiryNotificationService.cs" />
 	</ItemGroup>
 

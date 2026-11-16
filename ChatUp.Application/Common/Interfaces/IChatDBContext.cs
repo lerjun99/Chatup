@@ -36,6 +36,8 @@ public interface IChatDBContext
     DbSet<Holiday> Holidays { get; set; }
     DbSet<BusinessCalendarConfig> BusinessCalendarConfigs { get; set; }
     DbSet<BusinessCalendar> BusinessCalendar { get; set; }
+    DbSet<ChatAutoReply> ChatAutoReplies { get; set; }
+    DbSet<UserNotification> UserNotifications { get; set; }
     DbSet<T> Set<T>() where T : class;
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

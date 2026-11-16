@@ -1,0 +1,124 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+@* "Install app" — shown only when the browser can install ChatUp (or on iPhone/iPad, with Add-to-Home-Screen steps) *@
+@if (_visible)
+{
+    <div class="pwa">
+        <button class="pwa-btn" title="Install ChatUp on this device" @onclick="InstallAsync" disabled="@_busy">
+            <i class="fa-solid @(_busy ? "fa-circle-notch fa-spin" : "fa-download")"></i>
+            <span class="pwa-btn-text">Install app</span>
+        </button>
+
+        @if (_showIosHelp)
+        {
+            <div class="pwa-backdrop" @onclick="() => _showIosHelp = false"></div>
+            <div class="pwa-pop" role="dialog" aria-label="Install ChatUp">
+                <div class="pwa-pop-head">
+                    <img src="icons/icon-96.png" alt="" />
+                    <div>
+                        <strong>Install ChatUp</strong>
+                        <small>Get it on your home screen like a regular app.</small>
+                    </div>
+                </div>
+                <ol>
+                    <li>Tap <i class="fa-solid fa-arrow-up-from-bracket"></i> <b>Share</b> in Safari's toolbar.</li>
+                    <li>Scroll and tap <i class="fa-regular fa-square-plus"></i> <b>Add to Home Screen</b>.</li>
+                    <li>Tap <b>Add</b>.</li>
+                </ol>
+                <div class="pwa-pop-foot">
+                    <button class="pwa-link" @onclick="DismissAsync">Don't show again</button>
+                    <button class="pwa-ok" @onclick="() => _showIosHelp = false">Got it</button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private const string DismissKey = "pwa.iosHintDismissed";
+
+    private DotNetObjectReference<InstallAppButton>? _ref;
+    private bool _canInstall;
+    private bool _isIos;
+    private bool _iosDismissed;
+    private bool _busy;
+    private bool _showIosHelp;
+
+    private bool _visible => _canInstall || (_isIos && !_iosDismissed);
+
+    public sealed class InstallState
+    {
+        public bool CanInstall { get; set; }
+        public bool IsStandalone { get; set; }
+        public bool IsIos { get; set; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try { _iosDismissed = await LocalStorage.GetItemAsync<bool>(DismissKey); } catch { }
+
+        try
+        {
+            _ref = DotNetObjectReference.Create(this);
+            Apply(await JS.InvokeAsync<InstallState>("chatupPwa.subscribe", _ref));
+        }
+        catch (JSException) { /* pwa.js not loaded */ }
+        catch (JSDisconnectedException) { }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public Task OnInstallStateChanged(InstallState state)
+    {
+        Apply(state);
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void Apply(InstallState s)
+    {
+        // Already running as the installed app: nothing to offer
+        _canInstall = s.CanInstall && !s.IsStandalone;
+        _isIos = s.IsIos && !s.IsStandalone;
+    }
+
+    private async Task InstallAsync()
+    {
+        if (_isIos && !_canInstall)
+        {
+            _showIosHelp = !_showIosHelp;
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await JS.InvokeAsync<string>("chatupPwa.install");
+        }
+        catch { }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DismissAsync()
+    {
+        _iosDismissed = true;
+        _showIosHelp = false;
+        try { await LocalStorage.SetItemAsync(DismissKey, true); } catch { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_ref != null)
+        {
+            try { await JS.InvokeVoidAsync("chatupPwa.unsubscribe", _ref); } catch { }
+            _ref.Dispose();
+        }
+    }
+}

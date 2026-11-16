@@ -34,7 +34,7 @@
         </div>
         <div class="as-stat">
             <span class="as-stat-icon"><i class="fa-solid fa-building"></i></span>
-            <div><strong>@CoveredClientCount</strong><span>Clients covered</span></div>
+            <div><strong>@CoveredClientCount<small>/@clients.Count</small></strong><span>Clients covered</span></div>
         </div>
         <div class="as-stat">
             <span class="as-stat-icon"><i class="fa-solid fa-diagram-project"></i></span>
@@ -57,6 +57,29 @@
             </button>
         </div>
 
+        @if (activeTab == "dev")
+        {
+            <div class="as-view" role="group" aria-label="Group developer assignments">
+                <button class="@(devView == "project" ? "is-active" : "")" aria-pressed="@(devView == "project")" @onclick='() => SwitchDevView("project")'>
+                    <i class="fa-solid fa-diagram-project"></i><span class="as-hide-sm"> By project</span>
+                </button>
+                <button class="@(devView == "developer" ? "is-active" : "")" aria-pressed="@(devView == "developer")" @onclick='() => SwitchDevView("developer")'>
+                    <i class="fa-solid fa-laptop-code"></i><span class="as-hide-sm"> By developer</span>
+                </button>
+            </div>
+        }
+        @if (activeTab == "client")
+        {
+            <div class="as-view" role="group" aria-label="Group support assignments">
+                <button class="@(clientView == "client" ? "is-active" : "")" aria-pressed="@(clientView == "client")" @onclick='() => clientView = "client"'>
+                    <i class="fa-solid fa-building"></i><span class="as-hide-sm"> By client</span>
+                </button>
+                <button class="@(clientView == "agent" ? "is-active" : "")" aria-pressed="@(clientView == "agent")" @onclick='() => clientView = "agent"'>
+                    <i class="fa-solid fa-headset"></i><span class="as-hide-sm"> By agent</span>
+                </button>
+            </div>
+        }
+
         <div class="as-search">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="search" aria-label="Search"
@@ -70,10 +93,13 @@
             }
         </div>
 
-        <button class="as-btn as-btn-ghost" @onclick="ToggleAll">
-            <i class="fa-solid @(AllExpanded ? "fa-compress" : "fa-expand")"></i>
-            <span class="as-hide-sm">@(AllExpanded ? "Collapse all" : "Expand all")</span>
-        </button>
+        @if (activeTab == "dev" ? devView == "developer" : clientView == "agent")
+        {
+            <button class="as-btn as-btn-ghost" @onclick="ToggleAll">
+                <i class="fa-solid @(AllExpanded ? "fa-compress" : "fa-expand")"></i>
+                <span class="as-hide-sm">@(AllExpanded ? "Collapse all" : "Expand all")</span>
+            </button>
+        }
     </section>
 
     @if (notice != null)
@@ -98,6 +124,78 @@
         for (var i = 0; i < 4; i++)
         {
             <div class="as-skel"></div>
+        }
+    }
+    else if (activeTab == "client" && clientView == "client")
+    {
+        <!-- ============ CLIENTS → SUPPORT TEAM ============ -->
+        <div class="as-tip">
+            <i class="fa-solid fa-circle-info"></i>
+            A client can have several support agents. Every agent on a client sees all of its tickets and can chat with the client.
+        </div>
+
+        @if (!VisibleClientGroups.Any())
+        {
+            <div class="as-empty">
+                <i class="fa-solid fa-building"></i>
+                <p>@(string.IsNullOrWhiteSpace(searchText) ? "No clients found." : $"Nothing matches “{searchText}”.")</p>
+            </div>
+        }
+        else
+        {
+            <div class="as-client-grid">
+                @foreach (var cg in VisibleClientGroups)
+                {
+                    <article @key="cg.ClientId" class="as-client-card @(cg.Agents.Count == 0 ? "is-uncovered" : "")">
+                        <header>
+                            <span class="as-avatar as-avatar-client">@Initials(cg.ClientName)</span>
+                            <div class="as-client-card-text">
+                                <strong title="@cg.ClientName">@Fallback(cg.ClientName)</strong>
+                                <small><i class="fa-solid fa-location-dot"></i> @Fallback(cg.Location)</small>
+                            </div>
+                            @if (cg.Agents.Count == 0)
+                            {
+                                <span class="as-chip is-warn">No support</span>
+                            }
+                            else
+                            {
+                                <span class="as-chip">@Plural(cg.Agents.Count, "agent")</span>
+                            }
+                        </header>
+
+                        <div class="as-agent-list">
+                            @foreach (var agent in cg.Agents)
+                            {
+                                <span @key="agent.Id" class="as-agent">
+                                    <span class="as-avatar as-avatar-xs">
+                                        @if (AvatarSrc(agent.AvatarUrl) is string src)
+                                        {
+                                            <img src="@src" alt="" />
+                                        }
+                                        else
+                                        {
+                                            @Initials(agent.FullName)
+                                        }
+                                    </span>
+                                    <span class="as-agent-name" title="@agent.FullName">@Fallback(agent.FullName, agent.UserName)</span>
+                                    <button class="as-agent-remove" title="Remove @agent.FullName from @cg.ClientName"
+                                            disabled="@(busyId == agent.Id)" @onclick="() => DeleteAssignment(agent)">
+                                        <i class="fa-solid @(busyId == agent.Id ? "fa-circle-notch fa-spin" : "fa-xmark")"></i>
+                                    </button>
+                                </span>
+                            }
+                            <button class="as-agent-add" @onclick="() => AddSupportToClient(cg.ClientId)">
+                                <i class="fa-solid fa-plus"></i> Add support
+                            </button>
+                        </div>
+
+                        @if (cg.AccountCount > 0)
+                        {
+                            <footer><i class="fa-solid fa-user-group"></i> @Plural(cg.AccountCount, "client account")</footer>
+                        }
+                    </article>
+                }
+            </div>
         }
     }
     else if (activeTab == "client")
@@ -222,91 +320,158 @@
     }
     else
     {
-        <!-- ============ DEV TEAM ↔ PROJECTS ============ -->
-        @if (!VisibleProjects.Any())
+        @if (devView == "project")
         {
-            <div class="as-empty">
-                <i class="fa-solid fa-laptop-code"></i>
-                <p>@(string.IsNullOrWhiteSpace(searchText) ? "No projects found." : $"Nothing matches “{searchText}”.")</p>
+            <!-- ============ PROJECTS → DEV TEAM ============ -->
+            <div class="as-tip">
+                <i class="fa-solid fa-circle-info"></i>
+                A project can have several developers. Everyone on a project is notified when one of its tickets is filed or updated.
             </div>
+
+            @if (!ProjectCards.Any())
+            {
+                <div class="as-empty">
+                    <i class="fa-solid fa-diagram-project"></i>
+                    <p>@(string.IsNullOrWhiteSpace(searchText) ? "No projects found." : $"Nothing matches “{searchText}”.")</p>
+                </div>
+            }
+            else
+            {
+                <div class="as-client-grid">
+                    @foreach (var project in ProjectCards)
+                    {
+                        <article @key="project.Id" class="as-client-card @(project.Users.Count == 0 ? "is-uncovered" : "")">
+                            <header>
+                                <span class="as-avatar as-avatar-project"><i class="fa-solid fa-diagram-project"></i></span>
+                                <div class="as-client-card-text">
+                                    <strong title="@project.Title">@Fallback(project.Title)</strong>
+                                    <small><i class="fa-solid fa-building"></i> @Fallback(project.ClientName, "No client")@(string.IsNullOrWhiteSpace(project.TeamName) ? "" : $" · {project.TeamName}")</small>
+                                </div>
+                                @if (project.Users.Count == 0)
+                                {
+                                    <span class="as-chip is-warn">No developers</span>
+                                }
+                                else
+                                {
+                                    <span class="as-chip">@Plural(project.Users.Count, "member")</span>
+                                }
+                            </header>
+
+                            <div class="as-agent-list">
+                                @foreach (var dev in project.Users.OrderBy(u => u.FullName))
+                                {
+                                    <span @key="dev.Id" class="as-agent">
+                                        <span class="as-avatar as-avatar-xs">
+                                            @if (AvatarSrc(dev.AvatarUrl) is string src)
+                                            {
+                                                <img src="@src" alt="" />
+                                            }
+                                            else
+                                            {
+                                                @Initials(dev.FullName)
+                                            }
+                                        </span>
+                                        <span class="as-agent-name" title="@($"{dev.FullName} · {RoleLabel(dev.UserType)}")">@Fallback(dev.FullName)</span>
+                                        <button class="as-agent-remove" title="Remove @dev.FullName from @project.Title"
+                                                disabled="@(busyId == dev.Id)" @onclick="() => DeleteDevAssignment(project, dev)">
+                                            <i class="fa-solid @(busyId == dev.Id ? "fa-circle-notch fa-spin" : "fa-xmark")"></i>
+                                        </button>
+                                    </span>
+                                }
+                                <button class="as-agent-add" @onclick="() => AddDeveloperToProject(project)">
+                                    <i class="fa-solid fa-plus"></i> Add developer
+                                </button>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(project.Description))
+                            {
+                                <footer title="@project.Description"><i class="fa-regular fa-file-lines"></i> @Truncate(project.Description, 90)</footer>
+                            }
+                        </article>
+                    }
+                </div>
+            }
         }
         else
         {
-            @foreach (var project in VisibleProjects)
+            <!-- ============ DEVELOPERS → PROJECTS ============ -->
+            @if (!VisibleDevGroups.Any())
             {
-                var key = $"p_{project.Id}";
-                var isOpen = IsExpanded(key);
-
-                <article @key="key" class="as-group @(isOpen ? "is-open" : "")">
-                    <button class="as-group-head" aria-expanded="@isOpen" @onclick="() => Toggle(key)">
-                        <span class="as-avatar as-avatar-project"><i class="fa-solid fa-diagram-project"></i></span>
-                        <span class="as-group-text">
-                            <strong>@Fallback(project.Title)</strong>
-                            <small><i class="fa-solid fa-building"></i> @Fallback(project.ClientName, "No client")</small>
-                        </span>
-                        <span class="as-chip @(project.Users.Count == 0 ? "is-warn" : "")">@Plural(project.Users.Count, "member")</span>
-                        <i class="fa-solid fa-chevron-down as-caret"></i>
-                    </button>
-
-                    @if (isOpen)
+                <div class="as-empty">
+                    <i class="fa-solid fa-laptop-code"></i>
+                    <p>@(string.IsNullOrWhiteSpace(searchText) ? "No developers are assigned to projects yet." : $"Nothing matches “{searchText}”.")</p>
+                    @if (string.IsNullOrWhiteSpace(searchText))
                     {
-                        <div class="as-group-body">
-                            @if (!project.Users.Any())
-                            {
-                                <div class="as-group-empty">
-                                    <span><i class="fa-solid fa-triangle-exclamation"></i> Nobody is assigned to this project yet.</span>
-                                    <button class="as-btn as-btn-ghost as-btn-sm" @onclick="() => AddDeveloperToProject(project)">
-                                        <i class="fa-solid fa-plus"></i> Assign developer
-                                    </button>
-                                </div>
-                            }
-                            else
-                            {
+                        <button class="as-btn as-btn-primary" @onclick="AddNewAssignment"><i class="fa-solid fa-plus"></i> Assign developers</button>
+                    }
+                </div>
+            }
+            else
+            {
+                @foreach (var group in VisibleDevGroups)
+                {
+                    var key = $"d_{group.UserId}";
+                    var isOpen = IsExpanded(key);
+
+                    <article @key="key" class="as-group @(isOpen ? "is-open" : "")">
+                        <button class="as-group-head" aria-expanded="@isOpen" @onclick="() => Toggle(key)">
+                            <span class="as-avatar">
+                                @if (AvatarSrc(group.AvatarUrl) is string src)
+                                {
+                                    <img src="@src" alt="" />
+                                }
+                                else
+                                {
+                                    @Initials(group.FullName)
+                                }
+                            </span>
+                            <span class="as-group-text">
+                                <strong>@Fallback(group.FullName)</strong>
+                                <small>@Fallback(group.TeamName, "No team")</small>
+                            </span>
+                            <span class="as-chip">@Plural(group.Items.Count, "project")</span>
+                            <i class="fa-solid fa-chevron-down as-caret"></i>
+                        </button>
+
+                        @if (isOpen)
+                        {
+                            <div class="as-group-body">
                                 <div class="as-rows">
                                     <div class="as-row as-row-head as-cols-dev">
-                                        <span>Member</span>
+                                        <span>Project</span>
+                                        <span>Client</span>
                                         <span>Role</span>
-                                        <span>Team</span>
                                         <span></span>
                                     </div>
 
-                                    @foreach (var dev in project.Users)
+                                    @foreach (var item in group.Items)
                                     {
-                                        <div @key="dev.Id" class="as-row as-cols-dev">
+                                        <div @key="item.Member.Id" class="as-row as-cols-dev">
                                             <div class="as-cell-main">
-                                                <span class="as-avatar as-avatar-sm">
-                                                    @if (AvatarSrc(dev.AvatarUrl) is string src)
-                                                    {
-                                                        <img src="@src" alt="" />
-                                                    }
-                                                    else
-                                                    {
-                                                        @Initials(dev.FullName)
-                                                    }
-                                                </span>
-                                                <span class="as-strong">@Fallback(dev.FullName)</span>
+                                                <span class="as-avatar as-avatar-sm as-avatar-project"><i class="fa-solid fa-diagram-project"></i></span>
+                                                <span class="as-strong">@Fallback(item.Project.Title)</span>
                                             </div>
+                                            <div class="as-cell" data-label="Client"><i class="fa-solid fa-building as-muted"></i> @Fallback(item.Project.ClientName)</div>
                                             <div class="as-cell" data-label="Role">
-                                                <span class="as-role as-role-@dev.UserType">@RoleLabel(dev.UserType)</span>
+                                                <span class="as-role as-role-@item.Member.UserType">@RoleLabel(item.Member.UserType)</span>
                                             </div>
-                                            <div class="as-cell" data-label="Team">@Fallback(dev.TeamName, "No team")</div>
                                             <div class="as-actions">
-                                                <button class="as-icon-btn" title="Change assignment" @onclick="() => EditDevAssignment(project, dev)">
+                                                <button class="as-icon-btn" title="Move to another project" @onclick="() => EditDevAssignment(item.Project, item.Member)">
                                                     <i class="fa-solid fa-pen"></i>
                                                 </button>
                                                 <button class="as-icon-btn is-danger" title="Remove from project"
-                                                        disabled="@(busyId == dev.Id)"
-                                                        @onclick="() => DeleteDevAssignment(project, dev)">
-                                                    <i class="fa-solid @(busyId == dev.Id ? "fa-circle-notch fa-spin" : "fa-user-minus")"></i>
+                                                        disabled="@(busyId == item.Member.Id)"
+                                                        @onclick="() => DeleteDevAssignment(item.Project, item.Member)">
+                                                    <i class="fa-solid @(busyId == item.Member.Id ? "fa-circle-notch fa-spin" : "fa-user-minus")"></i>
                                                 </button>
                                             </div>
                                         </div>
                                     }
                                 </div>
-                            }
-                        </div>
-                    }
-                </article>
+                            </div>
+                        }
+                    </article>
+                }
             }
         }
     }
@@ -320,12 +485,108 @@
             <header class="as-modal-head">
                 <div>
                     <h2 id="as-modal-title">@(isEdit ? "Change" : "New") @(activeTab == "dev" ? "developer assignment" : "support assignment")</h2>
-                    <p>@(activeTab == "dev" ? "Give a developer access to a client's project." : "Make a support agent responsible for a client.")</p>
+                    <p>@(activeTab == "dev"
+                            ? (IsMulti ? "Pick a project and every developer who works on it." : "Move this developer to another project.")
+                            : (IsMulti ? "Pick a client and every support agent who should handle it." : "Move this assignment to another agent or client."))</p>
                 </div>
                 <button class="as-icon-btn" title="Close" @onclick="CloseModal"><i class="fa-solid fa-xmark"></i></button>
             </header>
 
             <div class="as-modal-body">
+                @if (IsMulti)
+                {
+                    <!-- CLIENT FIRST, THEN ANY NUMBER OF AGENTS -->
+                    <div class="as-field">
+                        <label>Client</label>
+                        <select class="as-native-select @(validationTried && selectedClient == null ? "is-invalid" : "")"
+                                value="@(selectedClient?.Id.ToString() ?? "0")" @onchange="OnMultiClientChanged">
+                            <option value="0">Select a client…</option>
+                            @foreach (var c in clients.OrderBy(c => c.ClientName))
+                            {
+                                <option value="@c.Id">@c.ClientName</option>
+                            }
+                        </select>
+                        @if (validationTried && selectedClient == null)
+                        {
+                            <small class="as-error">Please choose a client.</small>
+                        }
+                    </div>
+
+                    @if (activeTab == "dev")
+                    {
+                        <div class="as-field">
+                            <label>Project</label>
+                            @if (selectedClient == null)
+                            {
+                                <div class="as-hint"><i class="fa-solid fa-circle-info"></i> Choose a client first to see its projects.</div>
+                            }
+                            else if (isLoadingProjects)
+                            {
+                                <div class="as-hint"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading projects…</div>
+                            }
+                            else if (!projects.Any())
+                            {
+                                <div class="as-hint"><i class="fa-solid fa-triangle-exclamation"></i> This client has no projects yet.</div>
+                            }
+                            else
+                            {
+                                <select class="as-native-select @(validationTried && selectedProjectId == 0 ? "is-invalid" : "")"
+                                        value="@selectedProjectId" @onchange="OnMultiProjectChanged">
+                                    <option value="0">Select a project…</option>
+                                    @foreach (var p in projects)
+                                    {
+                                        <option value="@p.Id">@p.Title</option>
+                                    }
+                                </select>
+                            }
+                            @if (validationTried && selectedClient != null && selectedProjectId == 0 && projects.Any())
+                            {
+                                <small class="as-error">Please choose a project.</small>
+                            }
+                        </div>
+                    }
+
+                    <div class="as-field">
+                        <label>
+                            @(activeTab == "dev" ? "Developers" : "Support agents")
+                            @if (selectedUserIds.Count > 0)
+                            {
+                                <span class="as-count-pill">@selectedUserIds.Count selected</span>
+                            }
+                        </label>
+                        <input class="as-menu-search as-multi-search" type="search" placeholder="@(activeTab == "dev" ? "Search developers…" : "Search agents…")" @bind="userSearchText" @bind:event="oninput" />
+                        <div class="as-multi @(validationTried && selectedUserIds.Count == 0 ? "is-invalid" : "")">
+                            @if (!FilteredUsers.Any())
+                            {
+                                <div class="as-menu-empty">@(activeTab == "dev" ? "No matching developers." : "No matching support agents.")</div>
+                            }
+                            @foreach (var u in FilteredUsers)
+                            {
+                                var already = AssignedUserIds.Contains(u.Id);
+                                var isChecked = already || selectedUserIds.Contains(u.Id);
+                                <label @key="u.Id" class="as-multi-item @(isChecked ? "is-checked" : "") @(already ? "is-locked" : "")">
+                                    <input type="checkbox" checked="@isChecked" disabled="@already" @onchange="() => ToggleUser(u.Id)" />
+                                    <span class="as-avatar as-avatar-xs">@Initials(u.Name)</span>
+                                    <span class="as-multi-name">@u.Name</span>
+                                    @if (already)
+                                    {
+                                        <span class="as-multi-tag">@(activeTab == "dev" ? "Already on project" : "Already assigned")</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa-solid fa-check as-multi-check"></i>
+                                    }
+                                </label>
+                            }
+                        </div>
+                        @if (validationTried && selectedUserIds.Count == 0)
+                        {
+                            <small class="as-error">Choose at least one @(activeTab == "dev" ? "developer" : "support agent").</small>
+                        }
+                    </div>
+                }
+                else
+                {
                 <!-- USER -->
                 <div class="as-field">
                     <label>@(activeTab == "dev" ? "Developer" : "Support agent")</label>
@@ -425,9 +686,10 @@
                         <small class="as-error">Please choose a client.</small>
                     }
                 </div>
+                }
 
-                <!-- PROJECT (dev only) -->
-                @if (activeTab == "dev")
+                <!-- PROJECT (dev only, when editing — creating shows it above the developer list) -->
+                @if (activeTab == "dev" && !IsMulti)
                 {
                     <div class="as-field">
                         <label>Project</label>
@@ -470,7 +732,7 @@
                 <button class="as-btn as-btn-ghost" @onclick="CloseModal" disabled="@isSaving">Cancel</button>
                 <button class="as-btn as-btn-primary" @onclick="SaveAssignment" disabled="@isSaving">
                     <i class="fa-solid @(isSaving ? "fa-circle-notch fa-spin" : "fa-floppy-disk")"></i>
-                    @(isSaving ? "Saving…" : isEdit ? "Save changes" : "Create assignment")
+                    @(isSaving ? "Saving…" : isEdit ? "Save changes" : IsMulti && selectedUserIds.Count > 1 ? $"Assign {selectedUserIds.Count} {(activeTab == "dev" ? "developers" : "agents")}" : "Create assignment")
                 </button>
             </footer>
         </div>
@@ -518,6 +780,127 @@
     private string clientSearchText = string.Empty;
 
     private sealed record SupportGroup(string Key, string? UserName, string? FullName, string? AvatarUrl, List<UserClientAssignmentDto> Items);
+    private sealed record ClientGroup(int ClientId, string? ClientName, string? Location, List<UserClientAssignmentDto> Agents, int AccountCount);
+
+    // Multi-support: a client can have several agents
+    private string clientView = "client";
+    private readonly HashSet<int> selectedUserIds = new();
+
+    // Creating (not editing) picks any number of people at once, on both tabs
+    private bool IsMulti => !isEdit;
+
+    // People already on the selected client / project (shown checked and locked in the picker)
+    private HashSet<int> AssignedUserIds => activeTab == "dev"
+        ? projectAssignments.FirstOrDefault(p => p.Id == selectedProjectId)?.Users.Select(u => u.UserId).ToHashSet() ?? new HashSet<int>()
+        : selectedClient == null
+            ? new HashSet<int>()
+            : assignments.Where(a => a.UserType == 2 && a.ClientId == selectedClient.Id && a.UserId.HasValue)
+                         .Select(a => a.UserId!.Value).ToHashSet();
+
+    // ---- Dev team views ----
+    private string devView = "project";
+
+    private sealed record DevGroup(int UserId, string? FullName, string? AvatarUrl, string? TeamName, List<(ProjectDto Project, ChatUp.Application.Features.Projects.DTOs.UserAccountDto Member)> Items);
+
+    private List<DevGroup> DevGroups => projectAssignments
+        .SelectMany(p => p.Users.Select(u => (Project: p, Member: u)))
+        .GroupBy(x => x.Member.UserId)
+        .Select(g => new DevGroup(g.Key, g.First().Member.FullName, g.First().Member.AvatarUrl, g.First().Member.TeamName,
+                                  g.OrderBy(x => x.Project.Title).ToList()))
+        .OrderBy(g => g.FullName)
+        .ToList();
+
+    private IEnumerable<DevGroup> VisibleDevGroups =>
+        string.IsNullOrWhiteSpace(searchText)
+            ? DevGroups
+            : DevGroups
+                .Select(g => Matches(g.FullName) ? g : g with { Items = g.Items.Where(i => Matches(i.Project.Title) || Matches(i.Project.ClientName)).ToList() })
+                .Where(g => g.Items.Any());
+
+    // Projects without members first, so gaps stand out
+    private IEnumerable<ProjectDto> ProjectCards => VisibleProjects
+        .OrderBy(p => p.Users.Count > 0)
+        .ThenBy(p => p.ClientName)
+        .ThenBy(p => p.Title);
+
+    private async Task OnMultiProjectChanged(ChangeEventArgs e)
+    {
+        selectedProjectId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        selectedUserIds.ExceptWith(AssignedUserIds);
+        await Task.CompletedTask;
+    }
+
+    private void SwitchDevView(string view) => devView = view;
+
+    // Every client, with its whole support team — clients nobody covers are listed first
+    private List<ClientGroup> ClientGroups
+    {
+        get
+        {
+            var byClient = assignments
+                .Where(a => a.UserType == 2 && a.ClientId.HasValue)
+                .GroupBy(a => a.ClientId!.Value)
+                .ToDictionary(g => g.Key, g => g.OrderBy(a => a.FullName).ToList());
+
+            var groups = clients
+                .Select(c => new ClientGroup(
+                    c.Id,
+                    c.ClientName,
+                    c.Location,
+                    byClient.GetValueOrDefault(c.Id, new List<UserClientAssignmentDto>()),
+                    byClient.GetValueOrDefault(c.Id)?.FirstOrDefault()?.UserAccounts?.Count ?? 0))
+                .ToList();
+
+            // Assignments whose client isn't in the client list still show
+            foreach (var (clientId, agents) in byClient.Where(kv => groups.All(g => g.ClientId != kv.Key)))
+                groups.Add(new ClientGroup(clientId, agents[0].ClientName, agents[0].Location, agents, agents[0].UserAccounts?.Count ?? 0));
+
+            return groups
+                .OrderBy(g => g.Agents.Count > 0)
+                .ThenBy(g => g.ClientName)
+                .ToList();
+        }
+    }
+
+    private IEnumerable<ClientGroup> VisibleClientGroups =>
+        string.IsNullOrWhiteSpace(searchText)
+            ? ClientGroups
+            : ClientGroups.Where(g => Matches(g.ClientName) || Matches(g.Location) || g.Agents.Any(a => Matches(a.FullName) || Matches(a.UserName)));
+
+    private void ToggleUser(int userId)
+    {
+        if (!selectedUserIds.Remove(userId))
+            selectedUserIds.Add(userId);
+    }
+
+    private async Task OnMultiClientChanged(ChangeEventArgs e)
+    {
+        var id = int.TryParse(e.Value?.ToString(), out var v) ? v : 0;
+        var changed = selectedClient?.Id != id;
+        selectedClient = clients.FirstOrDefault(c => c.Id == id);
+        model.ClientId = selectedClient?.Id;
+
+        if (activeTab == "dev" && changed)
+        {
+            selectedProjectId = 0;
+            if (selectedClient != null)
+                await LoadProjects(selectedClient.Id);
+            else
+                projects = new();
+        }
+
+        // People already on the newly chosen client/project can't be picked again
+        selectedUserIds.ExceptWith(AssignedUserIds);
+    }
+
+    private void AddSupportToClient(int clientId)
+    {
+        ResetModal();
+        isEdit = false;
+        selectedClient = clients.FirstOrDefault(c => c.Id == clientId);
+        model.ClientId = selectedClient?.Id;
+        isModalVisible = true;
+    }
 
     // =============================
     // DERIVED VIEW DATA
@@ -570,7 +953,7 @@
     // EXPAND / COLLAPSE (pure component state — no Bootstrap/JS)
     // =============================
     private IEnumerable<string> GroupKeys => activeTab == "dev"
-        ? VisibleProjects.Select(p => $"p_{p.Id}")
+        ? VisibleDevGroups.Select(g => $"d_{g.UserId}")
         : VisibleSupportGroups.Select(g => $"s_{g.Key}");
 
     // While searching, every matching group is shown open
@@ -729,6 +1112,7 @@
         isClientDropdownOpen = false;
         userSearchText = string.Empty;
         clientSearchText = string.Empty;
+        selectedUserIds.Clear();
     }
 
     private void AddNewAssignment()
@@ -809,6 +1193,15 @@
         validationTried = true;
         errorMessage = null;
 
+        if (IsMulti)
+        {
+            if (activeTab == "dev")
+                await SaveProjectTeamAsync();
+            else
+                await SaveSupportTeamAsync();
+            return;
+        }
+
         if (selectedUser == null || selectedClient == null || (activeTab == "dev" && selectedProjectId == 0))
             return;
 
@@ -856,6 +1249,76 @@
                 expanded.Add($"s_{selectedUser.Id}");
                 notice = isEdit ? "Support assignment updated." : $"{selectedUser.Name} now supports {selectedClient.ClientName}.";
             }
+
+            isModalVisible = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ExtractMessage(ex.Message);
+            if (string.IsNullOrWhiteSpace(errorMessage))
+                errorMessage = "Couldn't save the assignment. Please try again.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    /// <summary>Adds every picked developer to the project in one request.</summary>
+    private async Task SaveProjectTeamAsync()
+    {
+        if (selectedClient == null || selectedProjectId == 0 || selectedUserIds.Count == 0)
+            return;
+
+        isSaving = true;
+        try
+        {
+            var result = await ProjectAssignmentService.AssignUsersAsync(selectedProjectId, selectedUserIds);
+            await LoadUserProjects();
+
+            expanded.Add($"p_{selectedProjectId}");
+            foreach (var id in selectedUserIds)
+                expanded.Add($"d_{id}");
+
+            var projectTitle = projects.FirstOrDefault(p => p.Id == selectedProjectId)?.Title ?? "the project";
+            var added = result?.Added ?? selectedUserIds.Count;
+            notice = added == 1
+                ? $"{allUsers.FirstOrDefault(u => selectedUserIds.Contains(u.Id))?.Name ?? "1 developer"} joined {projectTitle}."
+                : $"{added} developers joined {projectTitle}.";
+
+            isModalVisible = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ExtractMessage(ex.Message);
+            if (string.IsNullOrWhiteSpace(errorMessage))
+                errorMessage = "Couldn't save the assignment. Please try again.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    /// <summary>Adds every picked agent to the client in one request.</summary>
+    private async Task SaveSupportTeamAsync()
+    {
+        if (selectedClient == null || selectedUserIds.Count == 0)
+            return;
+
+        isSaving = true;
+        try
+        {
+            var result = await AssignmentService.AssignSupportsAsync(selectedClient.Id, selectedUserIds);
+            await LoadAssignments();
+
+            foreach (var id in selectedUserIds)
+                expanded.Add($"s_{id}");
+
+            var added = result?.Added ?? selectedUserIds.Count;
+            notice = added == 1
+                ? $"{allUsers.FirstOrDefault(u => selectedUserIds.Contains(u.Id))?.Name ?? "1 agent"} now supports {selectedClient.ClientName}."
+                : $"{added} agents now support {selectedClient.ClientName}.";
 
             isModalVisible = false;
         }
@@ -966,6 +1429,9 @@
         string.IsNullOrWhiteSpace(value) ? fallback ?? "—" : value;
 
     private static string Plural(int n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")}";
+
+    private static string Truncate(string? value, int max) =>
+        string.IsNullOrEmpty(value) || value.Length <= max ? value ?? string.Empty : value[..max].TrimEnd() + "…";
 
     private static string RoleLabel(int? userType) => userType switch
     {

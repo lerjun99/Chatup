@@ -16,12 +16,42 @@
 @inject Blazored.SessionStorage.ISessionStorageService SessionStorage
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @inject AuthenticationStateProvider AuthStateProvider
+@inject ChatUp.Services.Security.ActivityIdentity ActivityIdentity
+@inject ChatUp.Services.Security.SessionGuard SessionGuard
+@using ChatUp.Services.Security
 <FluentToastProvider />
 <FluentDialogProvider />
 <FluentTooltipProvider />
 <FluentMessageBarProvider />
 <FluentMenuProvider />
 
+@if (_isPublicRoute)
+{
+    @Body
+}
+else if (_gate != GateState.Granted)
+{
+    @* Nothing from the page is rendered (or loaded) until the API confirms the session *@
+    <div class="app-gate" role="status" aria-live="polite">
+        @if (_gate == GateState.Unavailable)
+        {
+            <i class="fa-solid fa-plug-circle-exclamation app-gate-icon"></i>
+            <h2>Can't confirm your session</h2>
+            <p>The server isn't responding right now. Check your connection, then try again.</p>
+            <div class="app-gate-actions">
+                <button class="app-gate-btn" @onclick="RetryGateAsync">Try again</button>
+                <a class="app-gate-link" href="/login">Go to sign in</a>
+            </div>
+        }
+        else
+        {
+            <span class="app-gate-spinner" aria-hidden="true"></span>
+            <p>Checking your session…</p>
+        }
+    </div>
+}
+else
+{
 <div class="app @(_navCollapsed ? "is-nav-collapsed" : "") @(_drawerOpen ? "is-drawer-open" : "")"
      @onkeydown="OnKeyDown">
 
@@ -57,15 +87,20 @@
             </div>
 
             <div class="app-actions">
+                <InstallAppButton />
                 @if (InboxUrl != null)
                 {
-                    <a class="app-icon-btn app-bell" href="@InboxUrl" title="@(_openTicketCount > 0 ? $"{_openTicketCount} open tickets" : "Inbox")">
-                        <i class="fa-regular fa-bell"></i>
+                    <a class="app-icon-btn app-inbox-btn" href="@InboxUrl" title="@(_openTicketCount > 0 ? $"Inbox · {_openTicketCount} open tickets" : "Inbox")">
+                        <i class="fa-regular fa-envelope"></i>
                         @if (_openTicketCount > 0)
                         {
-                            <span class="app-bell-badge">@(_openTicketCount > 99 ? "99+" : _openTicketCount.ToString())</span>
+                            <span class="app-bell-badge is-muted">@(_openTicketCount > 99 ? "99+" : _openTicketCount.ToString())</span>
                         }
                     </a>
+                }
+                @if (_hubUserId is int bellUserId)
+                {
+                    <NotificationBell UserId="bellUserId" />
                 }
 
                 <div class="app-user">
@@ -124,7 +159,21 @@
         </header>
 
         <article class="app-content">
-            @Body
+            @if (_forbidden)
+            {
+                <div class="app-gate app-gate-inline" role="alert">
+                    <i class="fa-solid fa-lock app-gate-icon"></i>
+                    <h2>You don't have access to this page</h2>
+                    <p>Your account (@ChatUp.Shared.NavCatalog.RoleLabel(UserState.UserType)) can't open this page. Ask an administrator if you need it.</p>
+                    <div class="app-gate-actions">
+                        <a class="app-gate-btn" href="@HomeUrl">Back to my workspace</a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @Body
+            }
         </article>
     </div>
 
@@ -151,6 +200,7 @@
         </button>
     </nav>
 </div>
+}
 
 <SessionExpiredModal @bind-Show="_showSessionExpired" />
 
@@ -164,7 +214,9 @@
     private bool _userMenuOpen;
     private int _openTicketCount;
     private int? _countUserId;
-    private IDisposable? _ticketUpdateSubscription;
+    private bool _ticketUpdateHooked;
+    private CancellationTokenSource? _countCts;
+    private int? _hubUserId;
     private ElementReference _sidebar;
     private string PageTitle = string.Empty;
 
@@ -202,7 +254,157 @@
     {
         if (firstRender)
         {
+            if (RouteAccess.IsPublic(Navigation.Uri))
+            {
+                _isPublicRoute = true;
+                StateHasChanged();
+                return;
+            }
+
+            await InitializeAppAsync();
+        }
+
+        if (_focusSidebar)
+        {
+            _focusSidebar = false;
+            await _sidebar.FocusAsync(); // move focus into the drawer for keyboard/screen-reader users
+        }
+    }
+
+    // =============================
+    // SESSION GUARD — every route needs a live session
+    // =============================
+    private enum GateState { Checking, Granted, Unavailable }
+
+    private GateState _gate = GateState.Checking;
+    private bool _isPublicRoute;
+    private bool _forbidden;
+    private bool _appStarted;
+    private IDisposable? _navigationGuard;
+
+    private string HomeUrl
+    {
+        get
+        {
+            var first = ChatUp.Shared.NavCatalog.VisibleFor(UserState.UserType).FirstOrDefault();
+            return first == null ? "/login" : ChatUp.Shared.NavCatalog.BuildUrl(first, UserState.UserId, LinkService) ?? "/login";
+        }
+    }
+
+    /// <summary>
+    /// Confirms the session with the API before anything from the page renders. A missing, logged-out or expired
+    /// session goes to sign in; a link that isn't for this role shows "no access"; another user's link is corrected.
+    /// </summary>
+    private async Task InitializeAppAsync()
+    {
+        var check = await SessionGuard.CheckAsync();
+        if (!await HandleInactiveAsync(check))
+            return;
+
+        if (!_appStarted)
+        {
+            _appStarted = true;
+            await StartAppAsync(check);
+        }
+
+        // A link with someone else's id: reload on the user's own id rather than render the other user's page
+        var decision = RouteAccess.Evaluate(Navigation.Uri, UserState.UserId, UserState.UserType, LinkService, out var redirectTo);
+        if (decision == RouteDecision.Redirect && redirectTo != null)
+        {
+            Navigation.NavigateTo(redirectTo, forceLoad: true, replace: true);
+            return;
+        }
+
+        _forbidden = decision == RouteDecision.Forbidden;
+        _navigationGuard ??= Navigation.RegisterLocationChangingHandler(OnLocationChangingAsync);
+        _gate = GateState.Granted;
+        StateHasChanged();
+    }
+
+    /// <summary>True when the session is active; otherwise sends the user where they need to go.</summary>
+    private async Task<bool> HandleInactiveAsync(SessionCheck check)
+    {
+        switch (check.Status)
+        {
+            case SessionStatus.Active:
+                ApplySession(check);
+                return true;
+
+            case SessionStatus.Expired:
+                Navigation.NavigateTo("/session-expired", forceLoad: true, replace: true);
+                return false;
+
+            case SessionStatus.SignedOut:
+                await SessionGuard.ClearAsync(); // leftovers would make the sign-in page bounce back here
+                Navigation.NavigateTo("/login", forceLoad: true, replace: true);
+                return false;
+
+            default:
+                _gate = GateState.Unavailable;
+                StateHasChanged();
+                return false;
+        }
+    }
+
+    /// <summary>The API's answer is the truth about who is signed in (also fills in "remember me" tabs).</summary>
+    private void ApplySession(SessionCheck check)
+    {
+        UserState.UserId = check.UserId;
+        UserState.UserType = check.UserType;
+        if (!string.IsNullOrWhiteSpace(check.Username))
+            UserState.Username = check.Username;
+        if (check.ClientId.HasValue)
+            UserState.ClientId = check.ClientId;
+    }
+
+    /// <summary>Runs before every in-app navigation: no live session, no navigation.</summary>
+    private async ValueTask OnLocationChangingAsync(LocationChangingContext context)
+    {
+        var target = Navigation.ToAbsoluteUri(context.TargetLocation).ToString();
+        if (RouteAccess.IsPublic(target))
+            return;
+
+        SessionCheck check;
+        try
+        {
+            check = await SessionGuard.CheckAsync(context.CancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return; // superseded by a newer navigation
+        }
+
+        if (check.Status != SessionStatus.Active)
+        {
+            context.PreventNavigation();
+            await InvokeAsync(() => HandleInactiveAsync(check));
+            return;
+        }
+
+        ApplySession(check);
+
+        var decision = RouteAccess.Evaluate(target, check.UserId, check.UserType, LinkService, out var redirectTo);
+        if (decision == RouteDecision.Redirect && redirectTo != null)
+        {
+            context.PreventNavigation();
+            _ = InvokeAsync(() => Navigation.NavigateTo(redirectTo, replace: true));
+        }
+    }
+
+    private async Task RetryGateAsync()
+    {
+        _gate = GateState.Checking;
+        StateHasChanged();
+        await InitializeAppAsync();
+    }
+
+    private async Task StartAppAsync(SessionCheck check)
+    {
+        {
             await UserState.LoadAsync();
+            ApplySession(check); // storage may be stale or empty; the API's values win
+            await LoadActivityIdentityAsync();
+            LogPageView(Navigation.Uri);
 
             try
             {
@@ -214,16 +416,6 @@
             }
 
             await LoadTicketCountAsync();
-
-            // Re-render once with the loaded user — previously this ran after *every* render,
-            // which kept the whole layout re-rendering in a loop
-            StateHasChanged();
-        }
-
-        if (_focusSidebar)
-        {
-            _focusSidebar = false;
-            await _sidebar.FocusAsync(); // move focus into the drawer for keyboard/screen-reader users
         }
     }
 
@@ -248,21 +440,51 @@
 
         _countUserId = userId;
 
+        // The realtime connection starts with the app, not only on the inbox: notifications, badges and
+        // dashboards need it on every page
+        try
+        {
+            await ChatService.StartAsync(userId.Value);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Realtime connection failed: {ex.Message}");
+        }
+
+        _hubUserId = userId;
+
         try
         {
             await ChatService.LoadOpenTicketCount(userId.Value);
 
-            // Keep the count fresh — one subscription, disposed with the layout
-            _ticketUpdateSubscription ??= ChatService.HubConnection?.On("ReceiveTicketUpdate", async () =>
+            // Keep the count fresh (debounced: a burst of ticket events costs one request)
+            if (!_ticketUpdateHooked)
             {
-                if (_countUserId.HasValue)
-                    await ChatService.LoadOpenTicketCount(_countUserId.Value);
-            });
+                ChatService.OnTicketUpdated += HandleTicketUpdated;
+                _ticketUpdateHooked = true;
+            }
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Open ticket count failed: {ex.Message}");
         }
+    }
+
+    private void HandleTicketUpdated()
+    {
+        _countCts?.Cancel();
+        var cts = _countCts = new CancellationTokenSource();
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(800, cts.Token);
+                if (_countUserId.HasValue)
+                    await ChatService.LoadOpenTicketCount(_countUserId.Value);
+            }
+            catch (TaskCanceledException) { }
+            catch (Exception ex) { Console.WriteLine($"Open ticket count failed: {ex.Message}"); }
+        });
     }
 
     public void Dispose()
@@ -272,7 +494,10 @@
         SessionService.OnSessionExpired -= HandleSessionExpired;
         ChatService.OnOpenTicketCountChanged -= HandleOpenTicketCountChanged;
         Navigation.LocationChanged -= HandleLocationChanged;
-        _ticketUpdateSubscription?.Dispose();
+        _navigationGuard?.Dispose();
+        if (_ticketUpdateHooked)
+            ChatService.OnTicketUpdated -= HandleTicketUpdated;
+        _countCts?.Cancel();
     }
 
     // =============================
@@ -297,7 +522,72 @@
         // Close overlays on navigation and refresh the active item
         _drawerOpen = false;
         _userMenuOpen = false;
+        if (_gate == GateState.Granted)
+            _forbidden = RouteAccess.Evaluate(e.Location, UserState.UserId, UserState.UserType, LinkService, out _) == RouteDecision.Forbidden;
         InvokeAsync(StateHasChanged);
+        LogPageView(e.Location);
+    }
+
+    // =============================
+    // AUDIT LOG
+    // =============================
+    private const string AuditSessionKey = "auditSessionId";
+    private string? _lastLoggedPage;
+
+    /// <summary>
+    /// Lets the API know who is acting: the signed-in user's session token (the API verifies it) and one session id
+    /// per browser tab, kept across page reloads so Login → … → Logout reads as one session.
+    /// </summary>
+    private async Task LoadActivityIdentityAsync()
+    {
+        try
+        {
+            var stored = await SessionStorage.GetItemAsync<string>("AuthToken");
+            if (string.IsNullOrEmpty(stored))
+                stored = await LocalStorage.GetItemAsync<string>("AuthToken");
+            if (!string.IsNullOrEmpty(stored))
+            {
+                var token = LinkService.Unprotect(Uri.UnescapeDataString(stored));
+                ActivityIdentity.UserToken = string.IsNullOrWhiteSpace(token) ? null : token;
+            }
+
+            var sessionId = await SessionStorage.GetItemAsync<string>(AuditSessionKey);
+            if (string.IsNullOrWhiteSpace(sessionId))
+                await SessionStorage.SetItemAsync(AuditSessionKey, ActivityIdentity.SessionId);
+            else
+                ActivityIdentity.SessionId = sessionId;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Audit identity not loaded: {ex.Message}");
+        }
+    }
+
+    /// <summary>Reports the page the user opened (fire-and-forget; never slows navigation).</summary>
+    private void LogPageView(string uri)
+    {
+        if (string.IsNullOrEmpty(ActivityIdentity.UserToken))
+            return;
+
+        var path = new Uri(uri).AbsolutePath;
+        var first = path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? string.Empty;
+        var route = "/" + first; // the rest of the path is usually an encrypted id
+
+        if (route == _lastLoggedPage)
+            return;
+        _lastLoggedPage = route;
+
+        var title = ChatUp.Shared.NavCatalog.Active(uri)?.Label
+                    ?? (string.IsNullOrWhiteSpace(PageTitle) ? ChatUp.Application.Auditing.ChangeFormatter.Humanize(first.Replace('-', ' ')) : PageTitle);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Http.PostAsJsonAsync($"{AppConfig.ChatUrl}AdminActivity/PageView", new { Route = route, Title = title });
+            }
+            catch { /* page visits are best effort */ }
+        });
     }
 
     private async void HandleSessionExpired()
@@ -398,6 +688,7 @@
             // 🧹 Clear both session & local storage
             await SessionStorage.ClearAsync();
             await LocalStorage.ClearAsync();
+            ActivityIdentity.UserToken = null;
 
             if (UserState != null)
             {

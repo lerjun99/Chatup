@@ -291,6 +291,7 @@ namespace ChatUp.Infrastructure.Services
                     .Where(m =>
                         m.TicketId == ticket.Id &&
                         !m.IsUser &&
+                        !m.IsAutoReply && // an auto reply is not a support response
                         m.DateCreated.HasValue &&
                         m.DateCreated.Value > clientMessageDate)
                     .OrderByDescending(m => m.DateCreated)

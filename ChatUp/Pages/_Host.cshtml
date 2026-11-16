@@ -7,8 +7,18 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <base href="~/" />
+
+    <!-- PWA: installable app -->
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#1e1b4b" />
+    <meta name="application-name" content="ChatUp" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="ChatUp" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 
     <!-- CORE STYLES -->
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
@@ -19,6 +29,8 @@
     <link href="css/applicant.css" rel="stylesheet" />
     <link href="css/intro.min.css" rel="stylesheet" />
     <link href="ChatUp.styles.css" rel="stylesheet" />
+    <link href="css/notifications.css" rel="stylesheet" />
+    <link href="css/pwa.css" rel="stylesheet" />
 
     <!-- ICONS -->
     <link rel="icon" type="image/png" href="~/images/odecci-icon.png" />
@@ -30,7 +42,16 @@
 
 <body>
     <!-- MAIN APP (NO PRERENDER TO PREVENT DOUBLE EXECUTION) -->
-    <component type="typeof(App)" render-mode="Server" />
+    @{
+        // The audit log records the browser's own address and device (the API only ever sees this web server)
+        var forwardedFor = HttpContext.Request.Headers["X-Forwarded-For"].ToString();
+        var remoteIp = HttpContext.Connection.RemoteIpAddress;
+        var clientIp = !string.IsNullOrWhiteSpace(forwardedFor)
+            ? forwardedFor.Split(',')[0].Trim()
+            : (remoteIp == null ? null : (remoteIp.IsIPv4MappedToIPv6 ? remoteIp.MapToIPv4() : remoteIp).ToString());
+        var clientAgent = HttpContext.Request.Headers.UserAgent.ToString();
+    }
+    <component type="typeof(App)" render-mode="Server" param-ClientIp="clientIp" param-ClientAgent="clientAgent" />
 
     <!-- BLAZOR ERROR UI -->
     <div id="blazor-error-ui">
@@ -55,6 +76,8 @@
 
     <!-- CUSTOM JS (DEFERRED) -->
     <script src="js/chat.js" defer></script>
+    <script src="js/notify.js" defer></script>
+    <script src="js/pwa.js"></script>
     <script src="js/falling.js" defer></script>
     <script src="js/faceCamera.js" defer></script>
     <script src="js/activityTracker.js" defer></script>

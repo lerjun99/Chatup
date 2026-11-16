@@ -18,6 +18,7 @@ namespace ChatUp.Domain.Entities
 
         public bool IsUser { get; set; }   // True = client/user, False = support agent
         public bool IsCase { get; set; }   // True = client/user, False = support agent
+        public bool IsAutoReply { get; set; } // Sent by the chat auto reply, not typed by the sender
         public string Content { get; set; } = string.Empty;
         public DateTime? DateCreated { get; set; } = DateTime.UtcNow;
         public List<TicketInteraction> Interactions { get; set; } = new();

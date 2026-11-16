@@ -28,6 +28,7 @@ namespace ChatUp.Application.Common.Security
         public const string KeyNameClaim = "apikey_name";
         public const string UserIdClaim = "user_id";
         public const string UserTypeClaim = "user_type";
+        public const string UserNameClaim = "user_name";
 
         /// <summary>Config path (C:\app\chatup\appconfig.json) of the shared default UI key.</summary>
         public const string DefaultKeyConfigPath = "ApiKeys:Default";

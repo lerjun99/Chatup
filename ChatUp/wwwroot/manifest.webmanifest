@@ -1,0 +1,20 @@
+{
+  "name": "ChatUp — Odecci Support",
+  "short_name": "ChatUp",
+  "description": "Tickets, client chat and support notifications from Odecci.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [ "window-controls-overlay", "standalone", "minimal-ui" ],
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#1e1b4b",
+  "categories": [ "business", "productivity" ],
+  "icons": [
+    { "src": "/icons/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

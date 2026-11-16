@@ -15,11 +15,11 @@
     </div>
 
     <div class="nv-scroll">
-        @foreach (var section in Sections)
+        @foreach (var navGroup in Sections)
         {
             @if (!Collapsed)
             {
-                <div class="nv-section">@section.Key</div>
+                <div class="nv-section">@navGroup.Key</div>
             }
             else
             {
@@ -27,7 +27,7 @@
             }
 
             <ul class="nv-list">
-                @foreach (var item in section)
+                @foreach (var item in navGroup)
                 {
                     var isActive = item.Key == ActiveKey;
                     var url = UrlFor(item);

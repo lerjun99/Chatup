@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @inject IJSRuntime JS
 @inject SessionService SessionService
+@inject ChatUp.Services.Security.ActivityIdentity ActivityIdentity
 
 <CascadingAuthenticationState>
     <Router AppAssembly="@typeof(App).Assembly">
@@ -34,6 +35,16 @@
 @code {
     [CascadingParameter]
     private Task<AuthenticationState> AuthenticationStateTask { get; set; }
+
+    /// <summary>The browser's IP address and device, from the page request (_Host) — for the audit log.</summary>
+    [Parameter] public string? ClientIp { get; set; }
+    [Parameter] public string? ClientAgent { get; set; }
+
+    protected override void OnInitialized()
+    {
+        ActivityIdentity.ClientIp = ClientIp;
+        ActivityIdentity.UserAgent = ClientAgent;
+    }
 
     private AuthenticationState? context;
 

@@ -170,7 +170,7 @@ namespace ChatUp.Infrastructure.Services.Security
                 return await _db.UserAccounts
                     .AsNoTracking()
                     .Where(u => u.JWToken == token && u.isLoggedIn == 1)
-                    .Select(u => new { u.Id, u.UserType })
+                    .Select(u => new { u.Id, u.UserType, u.Username, u.FullName })
                     .FirstOrDefaultAsync();
             });
 
@@ -179,6 +179,11 @@ namespace ChatUp.Infrastructure.Services.Security
 
             claims.Add(new Claim(ApiKeyDefaults.UserIdClaim, user.Id.Value.ToString()));
             claims.Add(new Claim(ApiKeyDefaults.UserTypeClaim, (user.UserType ?? 0).ToString()));
+
+            // Names the user on audit log rows
+            var name = !string.IsNullOrWhiteSpace(user.Username) ? user.Username : user.FullName;
+            if (!string.IsNullOrWhiteSpace(name))
+                claims.Add(new Claim(ApiKeyDefaults.UserNameClaim, name));
         }
 
         protected override async Task HandleChallengeAsync(AuthenticationProperties properties)

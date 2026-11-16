@@ -40,7 +40,25 @@ namespace ChatUp.Services
         {
             var url = $"{AppConfig.ChatUrl}User/Update/{model.Id}";
             var response = await _http.PutAsJsonAsync(url, model);
+            if (!response.IsSuccessStatusCode)
+            {
+                var msg = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(msg);
+            }
             return await response.Content.ReadFromJsonAsync<UserClientAssignmentDto>();
+        }
+
+        /// <summary>Adds several support agents to one client in one request. Returns how many were added.</summary>
+        public async Task<ChatUp.Application.Features.User.Commands.AssignClientSupportsResult?> AssignSupportsAsync(int clientId, IEnumerable<int> userIds)
+        {
+            var url = $"{AppConfig.ChatUrl}User/AssignSupports";
+            var response = await _http.PostAsJsonAsync(url, new { ClientId = clientId, UserIds = userIds.ToList() });
+            if (!response.IsSuccessStatusCode)
+            {
+                var msg = await response.Content.ReadAsStringAsync();
+                throw new InvalidOperationException(msg);
+            }
+            return await response.Content.ReadFromJsonAsync<ChatUp.Application.Features.User.Commands.AssignClientSupportsResult>();
         }
 
         public async Task<bool> DeleteAsync(int id)

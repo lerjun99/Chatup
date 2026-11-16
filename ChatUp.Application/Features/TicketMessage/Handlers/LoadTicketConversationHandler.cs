@@ -76,6 +76,7 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                     m.Content,
                     m.DateCreated,
                     m.IsCase,
+                    m.IsAutoReply,
                     SenderFullName = m.Sender.FullName
                 })
                 .ToDictionaryAsync(x => x.Id, ct);
@@ -167,6 +168,7 @@ namespace ChatUp.Application.Features.TicketMessage.Handlers
                                 : "images/default.png",
                     DateCreated = msgData.DateCreated,
                     IsCase = msgData.IsCase,
+                    IsAutoReply = msgData.IsAutoReply,
                     Attachments = msgAttachments.GetValueOrDefault(key.Id, new List<TicketUploadDto>())
                 };
 

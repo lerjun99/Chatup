@@ -12,6 +12,7 @@ namespace ChatUp.Application.Features.TicketMessage.DTOs
         public string Content { get; set; } = string.Empty;
         public bool IsUser { get; set; }
         public bool IsCase { get; set; }
+        public bool IsAutoReply { get; set; }
         public DateTime? DateCreated { get; set; } // nullable to prevent SqlNullValueException
         public int SenderId { get; set; }
         public string SenderName { get; set; } = string.Empty;

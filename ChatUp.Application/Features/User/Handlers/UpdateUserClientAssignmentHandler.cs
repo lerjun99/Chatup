@@ -2,11 +2,7 @@
 using ChatUp.Application.Features.User.Commands;
 using ChatUp.Application.Features.UserRegistration.DTOs;
 using MediatR;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatUp.Application.Features.User.Handlers
 {
@@ -21,10 +17,16 @@ namespace ChatUp.Application.Features.User.Handlers
 
         public async Task<UserClientAssignmentDto> Handle(UpdateUserClientAssignmentCommand request, CancellationToken cancellationToken)
         {
-            var entity = await _context.UserClientAssignments.FindAsync(request.Id);
+            var entity = await _context.UserClientAssignments
+                .FirstOrDefaultAsync(x => x.Id == request.Id, cancellationToken)
+                ?? throw new InvalidOperationException("Assignment not found.");
 
-            if (entity == null)
-                throw new Exception("Assignment not found");
+            // Moving the assignment onto a pair that already exists would create a duplicate
+            bool duplicate = await _context.UserClientAssignments
+                .AnyAsync(x => x.Id != request.Id && x.UserId == request.UserId && x.ClientId == request.ClientId, cancellationToken);
+
+            if (duplicate)
+                throw new InvalidOperationException("This user is already assigned to the selected client.");
 
             entity.UserId = request.UserId;
             entity.ClientId = request.ClientId;
@@ -35,7 +37,8 @@ namespace ChatUp.Application.Features.User.Handlers
             {
                 Id = entity.Id,
                 UserId = entity.UserId,
-                ClientId = entity.ClientId
+                ClientId = entity.ClientId,
+                UserType = entity.UserType
             };
         }
     }

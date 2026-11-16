@@ -2,6 +2,7 @@
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 @inject PasswordRecoveryService PasswordService
+@inject LinkService LinkService
 @layout LoginLayout
 @using System.Timers
 @using ChatUp.Application.Features.EmailOTP.Commands
@@ -114,8 +115,10 @@
 
             if (success)
             {
-                // Navigate to change password page
-                Nav.NavigateTo($"/change-password/{Uri.EscapeDataString(Email)}");
+                // Only a verified code earns a reset link: signed, for this email, valid 15 minutes.
+                // (A bare email in the URL is no longer accepted by the change-password page.)
+                var resetToken = LinkService.ProtectTimed(PasswordResetLink.Purpose, Email, PasswordResetLink.Lifetime);
+                Nav.NavigateTo($"/change-password/{resetToken}");
             }
             else
             {

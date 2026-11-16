@@ -1,0 +1,519 @@
+@using System.Globalization
+@using ChatUp.Application.Features.AdminActivity
+@using ChatUp.Services
+@inject AuditLogService Audit
+@inject IJSRuntime JS
+
+@* Audit log dashboard (AFL-CMS "Admin Activity" dashboard): every chart drills into the activity list *@
+<section class="au-dash">
+    <div class="au-dash-bar">
+        <div class="au-seg" role="group" aria-label="Range">
+            @foreach (var (days, label) in Ranges)
+            {
+                <button class="@(_rangeDays == days ? "is-on" : "")" @onclick="() => SetRangeAsync(days)">@label</button>
+            }
+        </div>
+        <label class="au-date">
+            <span>From</span>
+            <input type="date" value="@_from.ToString("yyyy-MM-dd")" max="@_to.ToString("yyyy-MM-dd")" @onchange="OnFromChanged" />
+        </label>
+        <label class="au-date">
+            <span>To</span>
+            <input type="date" value="@_to.ToString("yyyy-MM-dd")" min="@_from.ToString("yyyy-MM-dd")" @onchange="OnToChanged" />
+        </label>
+        <span class="au-spacer"></span>
+        <button class="au-btn au-btn-ghost" title="Refresh" @onclick="LoadAsync" disabled="@_loading">
+            <i class="fa-solid fa-rotate-right @(_loading ? "fa-spin" : "")"></i>
+        </button>
+        <button class="au-btn au-btn-ghost" title="Print or save as PDF" @onclick="PrintAsync" disabled="@(_data == null)">
+            <i class="fa-solid fa-file-pdf"></i><span class="au-hide-sm"> Export PDF</span>
+        </button>
+    </div>
+
+    @if (_error != null)
+    {
+        <div class="au-alert is-error"><i class="fa-solid fa-circle-exclamation"></i> @_error</div>
+    }
+
+    @if (_data == null)
+    {
+        <div class="au-kpis">
+            @for (var i = 0; i < 6; i++)
+            {
+                <div class="au-skel au-skel-kpi"></div>
+            }
+        </div>
+        <div class="au-skel au-skel-chart"></div>
+    }
+    else
+    {
+        var d = _data;
+        <div class="au-print-head">Audit log · @AuditTime.ToLocal(d.DateFrom).ToString("MMM d, yyyy") – @AuditTime.ToLocal(d.DateTo).AddTicks(-1).ToString("MMM d, yyyy") (Philippine time)</div>
+
+        <!-- KPIs -->
+        <div class="au-kpis @(_loading ? "is-stale" : "")">
+            <button class="au-kpi" @onclick="() => DrillAsync()">
+                <span class="au-kpi-icon is-indigo"><i class="fa-solid fa-wave-square"></i></span>
+                <span class="au-kpi-label">Total activity</span>
+                <strong>@N(d.Total)</strong>
+                @Delta(d.Total, d.PreviousTotal)
+            </button>
+            <button class="au-kpi" @onclick="() => DrillAsync()">
+                <span class="au-kpi-icon is-cyan"><i class="fa-solid fa-user-group"></i></span>
+                <span class="au-kpi-label">Active users</span>
+                <strong>@N(d.ActiveUsers)</strong>
+                @Delta(d.ActiveUsers, d.PreviousActiveUsers)
+            </button>
+            <button class="au-kpi" @onclick='() => DrillAsync(category: "Auth")'>
+                <span class="au-kpi-icon is-green"><i class="fa-solid fa-right-to-bracket"></i></span>
+                <span class="au-kpi-label">Sign-ins</span>
+                <strong>@N(d.SignIns)</strong>
+                <small class="@(d.FailedSignIns > 0 ? "is-bad" : "")">@N(d.FailedSignIns) failed · @N(d.SignOuts) sign-outs</small>
+            </button>
+            <button class="au-kpi" @onclick='() => DrillAsync(category: "Data")'>
+                <span class="au-kpi-icon is-violet"><i class="fa-solid fa-pen-to-square"></i></span>
+                <span class="au-kpi-label">Data changes</span>
+                <strong>@N(d.DataChanges)</strong>
+                <small>@string.Join(" · ", d.DataActions.Take(3).Select(a => $"{N(a.Count)} {Label(a.Key).ToLowerInvariant()}"))</small>
+            </button>
+            <button class="au-kpi" @onclick="() => DrillAsync(failedOnly: true)">
+                <span class="au-kpi-icon is-red"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                <span class="au-kpi-label">Failures</span>
+                <strong>@N(d.Failures)</strong>
+                @Delta(d.Failures, d.PreviousFailures, upIsBad: true)
+            </button>
+            <button class="au-kpi" @onclick='() => DrillAsync(category: "Navigation")'>
+                <span class="au-kpi-icon is-amber"><i class="fa-regular fa-eye"></i></span>
+                <span class="au-kpi-label">Page views</span>
+                <strong>@N(d.PageViews)</strong>
+                <small>@N(d.AccessDenied) denied · @N(d.Errors) errors</small>
+            </button>
+        </div>
+
+        <div class="au-grid">
+            <!-- DAILY TREND -->
+            <article class="au-card au-span-2">
+                <header>
+                    <h3>Activity per day</h3>
+                    <div class="au-legend">
+                        @foreach (var c in CategoryOrder)
+                        {
+                            <span><i style="background:@CategoryColor(c)"></i>@CategoryLabel(c)</span>
+                        }
+                    </div>
+                </header>
+                @{
+                    var max = NiceMax(d.Days.Count == 0 ? 0 : d.Days.Max(x => x.Total));
+                    const double W = 760, H = 220, L = 38, B = 26, T = 10;
+                    var plotW = W - L - 8;
+                    var plotH = H - B - T;
+                    var slot = d.Days.Count == 0 ? 0 : plotW / d.Days.Count;
+                    var bar = Math.Max(2, Math.Min(26, slot * 0.7));
+                    var labelEvery = Math.Max(1, (int)Math.Ceiling(d.Days.Count / 10.0));
+                }
+                <svg class="au-trend" viewBox="0 0 @F(W) @F(H)" preserveAspectRatio="none" role="img" aria-label="Activity per day">
+                    @for (var g = 0; g <= 4; g++)
+                    {
+                        var y = T + plotH - plotH * g / 4.0;
+                        <line x1="@F(L)" x2="@F(W - 8)" y1="@F(y)" y2="@F(y)" class="au-gridline" />
+                        @SvgText(L - 6, y + 4, "end", "au-axis", N(max * g / 4))
+                    }
+                    @for (var i = 0; i < d.Days.Count; i++)
+                    {
+                        var day = d.Days[i];
+                        var x = L + slot * i + (slot - bar) / 2;
+                        var yBase = T + plotH;
+                        <g class="au-daybar" @onclick="() => DrillDayAsync(day.Date)">
+                            <title>@DayTooltip(day)</title>
+                            <rect x="@F(L + slot * i)" y="@F(T)" width="@F(slot)" height="@F(plotH)" class="au-hit" />
+                            @foreach (var c in CategoryOrder)
+                            {
+                                var v = day.ByCategory.GetValueOrDefault(c);
+                                if (v <= 0) continue;
+                                var h = max == 0 ? 0 : plotH * v / max;
+                                yBase -= h;
+                                <rect x="@F(x)" y="@F(yBase)" width="@F(bar)" height="@F(h)" rx="2" fill="@CategoryColor(c)" />
+                            }
+                        </g>
+                        @if (i % labelEvery == 0)
+                        {
+                            @SvgText(L + slot * i + slot / 2, H - 8, "middle", "au-axis", day.Date.ToString("MMM d"))
+                        }
+                    }
+                </svg>
+            </article>
+
+            <!-- BY TYPE -->
+            <article class="au-card">
+                <header><h3>By type</h3></header>
+                @{
+                    var total = Math.Max(1, d.Categories.Sum(c => c.Count));
+                    double acc = 0;
+                }
+                <div class="au-donut-wrap">
+                    <svg viewBox="0 0 200 200" class="au-donut" role="img" aria-label="Activity by type">
+                        <circle cx="100" cy="100" r="70" class="au-donut-track" />
+                        @foreach (var c in d.Categories)
+                        {
+                            var frac = (double)c.Count / total;
+                            var dash = 2 * Math.PI * 70;
+                            var cat = c.Key;
+                            <circle cx="100" cy="100" r="70" fill="none" stroke="@CategoryColor(cat)" stroke-width="26"
+                                    stroke-dasharray="@F(dash * frac) @F(dash)" stroke-dashoffset="@F(-dash * acc)"
+                                    transform="rotate(-90 100 100)" class="au-donut-seg" @onclick="() => DrillAsync(category: cat)">
+                                <title>@CategoryLabel(cat): @N(c.Count)</title>
+                            </circle>
+                            acc += frac;
+                        }
+                        @SvgText(100, 96, "middle", "au-donut-num", N(d.Total))
+                        @SvgText(100, 118, "middle", "au-donut-cap", "activities")
+                    </svg>
+                    <ul class="au-donut-legend">
+                        @foreach (var c in d.Categories)
+                        {
+                            var cat = c.Key;
+                            <li @onclick="() => DrillAsync(category: cat)">
+                                <i style="background:@CategoryColor(cat)"></i>
+                                <span>@CategoryLabel(cat)</span>
+                                <strong>@Percent(c.Count, d.Total)</strong>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </article>
+
+            <!-- HEATMAP -->
+            <article class="au-card au-span-2">
+                <header><h3>When people are active</h3><small>Philippine time</small></header>
+                @{
+                    var heatMax = d.HourOfWeek.DefaultIfEmpty(0).Max();
+                    string[] week = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
+                    int[] weekIndex = { 1, 2, 3, 4, 5, 6, 0 };
+                }
+                <div class="au-heat">
+                    <span></span>
+                    @for (var h = 0; h < 24; h++)
+                    {
+                        <span class="au-heat-hour">@(h % 3 == 0 ? HourLabel(h) : "")</span>
+                    }
+                    @for (var r = 0; r < 7; r++)
+                    {
+                        <span class="au-heat-day">@week[r]</span>
+                        @for (var h = 0; h < 24; h++)
+                        {
+                            var value = d.HourOfWeek[weekIndex[r] * 24 + h];
+                            <span class="au-heat-cell" style="background:@HeatColor(value, heatMax)" title="@($"{week[r]} {HourLabel(h)}–{HourLabel((h + 1) % 24)}: {value:N0} activities")"></span>
+                        }
+                    }
+                </div>
+            </article>
+
+            <!-- SOURCES + ACTIONS -->
+            <article class="au-card">
+                <header><h3>Data changes by action</h3></header>
+                @BarList(d.DataActions, key => DrillAsync(category: "Data", action: key), labeler: Label)
+                <header class="au-subhead"><h3>Where from</h3></header>
+                @BarList(d.Sources, null, labeler: SourceLabel)
+            </article>
+
+            <article class="au-card">
+                <header><h3>Most active users</h3></header>
+                @BarList(d.TopUsers, key => DrillAsync(userName: key), showFailures: true)
+            </article>
+
+            <article class="au-card">
+                <header><h3>Busiest modules</h3></header>
+                @BarList(d.TopModules, key => DrillAsync(module: key), showFailures: true)
+            </article>
+
+            <article class="au-card">
+                <header><h3>Most visited pages</h3></header>
+                @BarList(d.TopPages, key => DrillAsync(module: key, category: "Navigation"))
+            </article>
+
+            <!-- FAILURES -->
+            <article class="au-card au-span-2">
+                <header>
+                    <h3>Recent failures</h3>
+                    <button class="au-link" @onclick="() => DrillAsync(failedOnly: true)">See all <i class="fa-solid fa-arrow-right"></i></button>
+                </header>
+                @if (!d.RecentFailures.Any())
+                {
+                    <div class="au-empty-sm"><i class="fa-solid fa-circle-check"></i> No failures in this period.</div>
+                }
+                else
+                {
+                    <ul class="au-fail-list">
+                        @foreach (var f in d.RecentFailures)
+                        {
+                            var fail = f;
+                            <li @onclick="() => DrillAsync(userName: fail.UserName, failedOnly: true)">
+                                <span class="au-badge is-bad">@Label(f.Action)</span>
+                                <span class="au-fail-text">
+                                    <strong>@f.Summary</strong>
+                                    @if (!string.IsNullOrWhiteSpace(f.ErrorMessage))
+                                    {
+                                        <small>@f.ErrorMessage</small>
+                                    }
+                                </span>
+                                <span class="au-fail-meta">
+                                    <span>@(f.UserName ?? "Anonymous")</span>
+                                    <small title="@AuditTime.ToLocal(f.OccurredAt).ToString("MMM d, yyyy h:mm:ss tt")">@AuditTime.Relative(f.OccurredAt)</small>
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                }
+            </article>
+
+            <article class="au-card">
+                <header><h3>Failed sign-ins</h3></header>
+                @if (!d.FailedSignInUsers.Any())
+                {
+                    <div class="au-empty-sm"><i class="fa-solid fa-shield-halved"></i> None in this period.</div>
+                }
+                else
+                {
+                    @BarList(d.FailedSignInUsers, key => DrillAsync(userName: key, action: "LoginFailed"), danger: true)
+                }
+            </article>
+        </div>
+    }
+</section>
+
+@code {
+    /// <summary>Opens the activity list with these filters.</summary>
+    [Parameter] public EventCallback<AuditDrill> OnDrill { get; set; }
+
+    private static readonly (int Days, string Label)[] Ranges = { (1, "Today"), (7, "7 days"), (30, "30 days"), (90, "90 days") };
+    private static readonly string[] CategoryOrder = { "Data", "Auth", "Navigation", "Security", "System" };
+
+    private ActivityDashboardDto? _data;
+    private bool _loading;
+    private string? _error;
+    private int _rangeDays = 30;
+    private DateTime _from;
+    private DateTime _to;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetRange(_rangeDays);
+        await LoadAsync();
+    }
+
+    private void SetRange(int days)
+    {
+        _rangeDays = days;
+        _to = AuditTime.Today;
+        _from = _to.AddDays(-(days - 1));
+    }
+
+    private async Task SetRangeAsync(int days)
+    {
+        SetRange(days);
+        await LoadAsync();
+    }
+
+    private async Task OnFromChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var v)) { _from = v.Date; _rangeDays = -1; await LoadAsync(); }
+    }
+
+    private async Task OnToChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var v)) { _to = v.Date; _rangeDays = -1; await LoadAsync(); }
+    }
+
+    public async Task LoadAsync()
+    {
+        _cts?.Cancel();
+        var cts = _cts = new CancellationTokenSource();
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var from = _from <= _to ? _from : _to;
+            var result = await Audit.GetDashboardAsync(new GetActivityDashboardQuery
+            {
+                DateFrom = AuditTime.ToUtc(from),
+                DateTo = AuditTime.ToUtc(_to.AddDays(1)),
+                TimeZoneId = AuditTime.ZoneId
+            }, cts.Token);
+
+            if (!cts.IsCancellationRequested)
+                _data = result;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            if (ReferenceEquals(cts, _cts))
+                _loading = false;
+        }
+    }
+
+    private async Task PrintAsync()
+    {
+        try { await JS.InvokeVoidAsync("print"); } catch { }
+    }
+
+    private Task DrillAsync(string? userName = null, string? module = null, string? category = null, string? action = null, bool failedOnly = false) =>
+        OnDrill.InvokeAsync(new AuditDrill(userName, module, category, action, failedOnly, _from, _to));
+
+    private Task DrillDayAsync(DateTime day) =>
+        OnDrill.InvokeAsync(new AuditDrill(null, null, null, null, false, day.Date, day.Date));
+
+    // ---------- rendering helpers ----------
+    private RenderFragment BarList(List<ActivityCountDto> items, Func<string, Task>? onClick, bool showFailures = false, bool danger = false, Func<string, string>? labeler = null) => __builder =>
+    {
+        if (!items.Any())
+        {
+            <div class="au-empty-sm">Nothing yet.</div>
+            return;
+        }
+
+        var top = Math.Max(1, items.Max(i => i.Count));
+        <ul class="au-bars">
+            @foreach (var item in items)
+            {
+                var key = item.Key;
+                <li class="@(onClick != null ? "is-link" : "")" @onclick="() => OnBarClick(onClick, key)"
+                    title="@($"{key}: {item.Count:N0}" + (showFailures && item.Failures > 0 ? $" ({item.Failures:N0} failed)" : ""))">
+                    <span class="au-bar-label">@(labeler?.Invoke(key) ?? key)</span>
+                    <span class="au-bar-track"><span class="au-bar-fill @(danger ? "is-bad" : "")" style="width:@F(Ratio(item.Count, top))%"></span></span>
+                    <span class="au-bar-num">
+                        @N(item.Count)
+                        @if (showFailures && item.Failures > 0)
+                        {
+                            <small class="is-bad">@N(item.Failures)✕</small>
+                        }
+                    </span>
+                </li>
+            }
+        </ul>
+    };
+
+    private RenderFragment Delta(int current, int previous, bool upIsBad = false) => __builder =>
+    {
+        if (previous == 0 && current == 0)
+        {
+            <small>No change</small>
+            return;
+        }
+        if (previous == 0)
+        {
+            <small>New this period</small>
+            return;
+        }
+
+        var change = (current - previous) * 100.0 / previous;
+        var up = change >= 0;
+        var bad = up == upIsBad && Math.Abs(change) >= 0.5;
+        <small class="@(bad ? "is-bad" : Math.Abs(change) >= 0.5 ? "is-good" : "")">
+            <i class="fa-solid @(up ? "fa-arrow-trend-up" : "fa-arrow-trend-down")"></i>
+            @(Math.Abs(change).ToString("0", CultureInfo.InvariantCulture))% vs previous
+        </small>
+    };
+
+    // An SVG <text> element: Razor reserves the <text> tag inside code blocks, so it's written out as markup
+    private static MarkupString SvgText(double x, double y, string anchor, string cssClass, string content) =>
+        new($"<text x=\"{F(x)}\" y=\"{F(y)}\" text-anchor=\"{anchor}\" class=\"{cssClass}\">{System.Net.WebUtility.HtmlEncode(content)}</text>");
+
+    private static string N(int value) => value.ToString("N0", CultureInfo.InvariantCulture);
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+    private static double Ratio(int value, int max) => max <= 0 ? 0 : Math.Clamp(100.0 * value / max, 0, 100);
+
+    private static string Percent(int part, int whole)
+    {
+        if (whole <= 0) return "0%";
+        var pct = 100.0 * part / whole;
+        return pct.ToString(pct >= 1 ? "0" : "0.#", CultureInfo.InvariantCulture) + "%";
+    }
+
+    private static int NiceMax(int value)
+    {
+        if (value <= 4) return 4;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(value)));
+        foreach (var step in new[] { 1, 2, 2.5, 5, 10 })
+        {
+            var candidate = step * magnitude;
+            if (candidate >= value && candidate % 4 == 0) return (int)candidate;
+            if (candidate >= value) return (int)(Math.Ceiling(candidate / 4) * 4);
+        }
+        return (int)(Math.Ceiling(value / 4.0) * 4);
+    }
+
+    private static string DayTooltip(ActivityDayStatDto day)
+    {
+        var parts = CategoryOrder.Where(c => day.ByCategory.GetValueOrDefault(c) > 0)
+            .Select(c => $"{CategoryLabel(c)}: {day.ByCategory[c]:N0}");
+        var failures = day.Failures > 0 ? $"\n{day.Failures:N0} failed" : string.Empty;
+        var lines = string.Join(Environment.NewLine, parts);
+        return day.Date.ToString("dddd, MMM d") + ": " + N(day.Total) + " activities" + Environment.NewLine + lines + failures + Environment.NewLine + "Click to see them";
+    }
+
+    private static string HourLabel(int hour)
+    {
+        if (hour == 0) return "12a";
+        if (hour == 12) return "12p";
+        return hour > 12 ? $"{hour - 12}p" : $"{hour}a";
+    }
+
+    private static Task OnBarClick(Func<string, Task>? onClick, string key) =>
+        onClick == null ? Task.CompletedTask : onClick(key);
+
+    private static string HeatColor(int value, int max)
+    {
+        if (value <= 0 || max <= 0) return "var(--au-heat-0)";
+        var t = Math.Sqrt((double)value / max); // sqrt: quiet hours stay visible next to busy ones
+        var alpha = 0.12 + 0.88 * t;
+        var a = alpha.ToString("0.###", CultureInfo.InvariantCulture);
+        return "rgba(79, 70, 229, " + a + ")";
+    }
+
+    public static string CategoryColor(string? category) => category switch
+    {
+        "Data" => "#6366f1",
+        "Auth" => "#10b981",
+        "Navigation" => "#f59e0b",
+        "Security" => "#ef4444",
+        "System" => "#64748b",
+        _ => "#94a3b8"
+    };
+
+    public static string CategoryLabel(string? category) => category switch
+    {
+        "Data" => "Data changes",
+        "Auth" => "Sign-in",
+        "Navigation" => "Page views",
+        "Security" => "Security",
+        "System" => "System errors",
+        _ => category ?? "Other"
+    };
+
+    private static string SourceLabel(string source) => source switch
+    {
+        "Web" => "ChatUp web app",
+        "Api" => "API / integrations",
+        "System" => "System (background)",
+        _ => source
+    };
+
+    public static string Label(string? action) => action switch
+    {
+        "LoginFailed" => "Failed sign-in",
+        "Login" => "Sign-in",
+        "Logout" => "Sign-out",
+        "PageView" => "Page view",
+        "AccessDenied" => "Access denied",
+        "ProtectedDetailsUnlocked" => "Details unlocked",
+        "ProtectedDetailsUnlockFailed" => "Unlock refused",
+        null => string.Empty,
+        _ => ChatUp.Application.Auditing.ChangeFormatter.Humanize(action)
+    };
+}

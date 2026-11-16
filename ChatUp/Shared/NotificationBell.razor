@@ -1,0 +1,304 @@
+@using ChatUp.Application.Features.Notifications
+@using ChatUp.Services
+@implements IDisposable
+@inject NotificationCenter Center
+@inject NavigationManager Navigation
+@inject LinkService LinkService
+@inject IJSRuntime JS
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+
+@* Notification bell: live ticket notifications with sound, toasts and desktop popups *@
+<div class="nb">
+    <button class="app-icon-btn app-bell @(_ring ? "is-ringing" : "")" title="@(Center.UnreadCount > 0 ? $"{Center.UnreadCount} unread notifications" : "Notifications")"
+            aria-haspopup="dialog" aria-expanded="@_open" @onclick="Toggle">
+        <i class="@(Center.UnreadCount > 0 ? "fa-solid" : "fa-regular") fa-bell"></i>
+        @if (Center.UnreadCount > 0)
+        {
+            <span class="app-bell-badge">@(Center.UnreadCount > 99 ? "99+" : Center.UnreadCount.ToString())</span>
+        }
+    </button>
+
+    @if (_open)
+    {
+        <div class="nb-backdrop" @onclick="Close"></div>
+        <section class="nb-panel" role="dialog" aria-label="Notifications">
+            <header class="nb-head">
+                <div>
+                    <h3>Notifications</h3>
+                    <small>@(Center.UnreadCount == 0 ? "You're all caught up" : $"{Center.UnreadCount} unread")</small>
+                </div>
+                <div class="nb-tabs" role="tablist">
+                    <button role="tab" class="@(_unreadOnly ? "" : "is-active")" @onclick="() => _unreadOnly = false">All</button>
+                    <button role="tab" class="@(_unreadOnly ? "is-active" : "")" @onclick="() => _unreadOnly = true">Unread</button>
+                </div>
+            </header>
+
+            <div class="nb-list">
+                @if (!Center.IsLoaded)
+                {
+                    @for (var i = 0; i < 3; i++)
+                    {
+                        <div class="nb-skel"></div>
+                    }
+                }
+                else if (!Visible.Any())
+                {
+                    <div class="nb-empty">
+                        <i class="fa-regular fa-bell-slash"></i>
+                        <p>@(_unreadOnly ? "No unread notifications." : "No notifications yet.")</p>
+                        <small>New tickets, replies and status changes will show up here.</small>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var group in Visible.GroupBy(n => DayLabel(n.CreatedAt)))
+                    {
+                        <div class="nb-day">@group.Key</div>
+                        @foreach (var n in group)
+                        {
+                            <button @key="n.Id" class="nb-item @(n.IsRead ? "" : "is-unread")" @onclick="() => Open(n)">
+                                <span class="nb-icon nb-icon-@n.Type.ToLowerInvariant()"><i class="@Icon(n.Type)"></i></span>
+                                <span class="nb-text">
+                                    <strong>@n.Title</strong>
+                                    <span class="nb-msg">@n.Message</span>
+                                    <small>
+                                        @Relative(n.CreatedAt)
+                                        @if (!string.IsNullOrEmpty(n.TicketStatus) && n.TicketId.HasValue)
+                                        {
+                                            <span class="nb-status nb-st-@n.TicketStatus.ToLowerInvariant()">@StatusLabel(n.TicketStatus)</span>
+                                        }
+                                    </small>
+                                </span>
+                                @if (!n.IsRead)
+                                {
+                                    <span class="nb-dot" title="Unread"></span>
+                                }
+                            </button>
+                        }
+                    }
+
+                    @if (Center.HasMore && !_unreadOnly)
+                    {
+                        <button class="nb-more" @onclick="Center.LoadMoreAsync"><i class="fa-solid fa-chevron-down"></i> Older notifications</button>
+                    }
+                }
+            </div>
+
+            <footer class="nb-foot">
+                <button class="nb-link" disabled="@(Center.UnreadCount == 0)" @onclick="Center.MarkAllReadAsync">
+                    <i class="fa-solid fa-check-double"></i> Mark all read
+                </button>
+                <span class="nb-spacer"></span>
+                <button class="nb-toggle @(_sound ? "is-on" : "")" title="@(_sound ? "Sound on" : "Sound off")" @onclick="ToggleSound">
+                    <i class="fa-solid @(_sound ? "fa-volume-high" : "fa-volume-xmark")"></i>
+                </button>
+                @if (_permission == "granted")
+                {
+                    <span class="nb-toggle is-on" title="Desktop notifications are on"><i class="fa-solid fa-desktop"></i></span>
+                }
+                else if (_permission == "default")
+                {
+                    <button class="nb-enable" @onclick="EnableDesktop"><i class="fa-solid fa-desktop"></i> Enable pop-ups</button>
+                }
+                else if (_permission == "denied")
+                {
+                    <span class="nb-toggle" title="Desktop notifications are blocked in the browser settings for this site"><i class="fa-solid fa-desktop"></i></span>
+                }
+            </footer>
+        </section>
+    }
+
+    <!-- Toasts (shown while ChatUp is in front; desktop pop-ups take over when it isn't) -->
+    <div class="nb-toasts" aria-live="polite">
+        @foreach (var t in _toasts)
+        {
+            <div @key="t.Id" class="nb-toast" role="status">
+                <span class="nb-icon nb-icon-@t.Type.ToLowerInvariant()"><i class="@Icon(t.Type)"></i></span>
+                <button class="nb-toast-body" @onclick="() => OpenToast(t)">
+                    <strong>@t.Title</strong>
+                    <span>@t.Message</span>
+                </button>
+                <button class="nb-toast-close" title="Dismiss" @onclick="() => _toasts.Remove(t)"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public int UserId { get; set; }
+
+    private const string SoundKey = "notify.sound";
+
+    private bool _open;
+    private bool _unreadOnly;
+    private bool _sound = true;
+    private bool _ring;
+    private string _permission = "default";
+    private readonly List<NotificationDto> _toasts = new();
+    private int _lastTitleCount = -1;
+
+    private IEnumerable<NotificationDto> Visible => _unreadOnly ? Center.Items.Where(n => !n.IsRead) : Center.Items;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Center.OnChange += HandleChange;
+        Center.OnAlert += HandleAlert;
+        await Center.InitializeAsync(UserId);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (UserId > 0)
+            await Center.InitializeAsync(UserId);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { _sound = await LocalStorage.GetItemAsync<bool?>(SoundKey) ?? true; } catch { }
+            try { _permission = await JS.InvokeAsync<string>("chatupNotify.permission"); } catch { }
+            StateHasChanged();
+        }
+
+        // Keep the browser tab title in step with the unread count
+        if (_lastTitleCount != Center.UnreadCount)
+        {
+            _lastTitleCount = Center.UnreadCount;
+            try { await JS.InvokeVoidAsync("chatupNotify.setTitleBadge", Center.UnreadCount); } catch { }
+        }
+    }
+
+    private void HandleChange() => InvokeAsync(StateHasChanged);
+
+    private void HandleAlert(NotificationDto n) => InvokeAsync(async () =>
+    {
+        if (_sound)
+        {
+            try { await JS.InvokeAsync<bool>("chatupNotify.chime"); } catch { }
+        }
+
+        var hidden = false;
+        try { hidden = await JS.InvokeAsync<bool>("chatupNotify.isHidden"); } catch { }
+
+        if (hidden && _permission == "granted")
+        {
+            // ChatUp isn't in front: a system pop-up, which opens the ticket when clicked
+            try { await JS.InvokeAsync<bool>("chatupNotify.show", n.Title, n.Message, LinkFor(n) ?? "/", $"ticket-{n.TicketId}-{n.Type}"); } catch { }
+        }
+        else if (!_open)
+        {
+            _toasts.RemoveAll(t => t.Id == n.Id);
+            _toasts.Insert(0, n);
+            if (_toasts.Count > 3) _toasts.RemoveAt(_toasts.Count - 1);
+            _ = DismissLaterAsync(n);
+        }
+
+        // Short shake of the bell
+        _ring = true;
+        StateHasChanged();
+        await Task.Delay(1200);
+        _ring = false;
+        StateHasChanged();
+    });
+
+    private async Task DismissLaterAsync(NotificationDto n)
+    {
+        await Task.Delay(6000);
+        await InvokeAsync(() =>
+        {
+            if (_toasts.Remove(n))
+                StateHasChanged();
+        });
+    }
+
+    private async Task Toggle()
+    {
+        _open = !_open;
+        if (_open)
+        {
+            _toasts.Clear();
+            await Center.ReloadAsync();
+        }
+    }
+
+    private void Close() => _open = false;
+
+    private async Task Open(NotificationDto n)
+    {
+        _open = false;
+        await Center.MarkReadAsync(n);
+        if (LinkFor(n) is string url)
+            Navigation.NavigateTo(url);
+    }
+
+    private async Task OpenToast(NotificationDto n)
+    {
+        _toasts.Remove(n);
+        await Open(n);
+    }
+
+    private async Task ToggleSound()
+    {
+        _sound = !_sound;
+        try { await LocalStorage.SetItemAsync(SoundKey, _sound); } catch { }
+        if (_sound)
+        {
+            try { await JS.InvokeAsync<bool>("chatupNotify.chime"); } catch { }
+        }
+    }
+
+    private async Task EnableDesktop()
+    {
+        try
+        {
+            _permission = await JS.InvokeAsync<string>("chatupNotify.requestPermission");
+            if (_permission == "granted")
+                await JS.InvokeAsync<bool>("chatupNotify.show", "Notifications are on", "You'll get a pop-up for new tickets and replies.", "", "chatup-welcome");
+        }
+        catch { }
+    }
+
+    /// <summary>The inbox, opened on the ticket.</summary>
+    private string? LinkFor(NotificationDto n)
+    {
+        if (UserId <= 0) return null;
+        var token = Uri.EscapeDataString(LinkService.Protect(UserId.ToString()));
+        return n.TicketId.HasValue && !string.IsNullOrEmpty(n.TicketNo)
+            ? $"/inbox/ticket/{token}/{Uri.EscapeDataString(n.TicketNo)}/{n.TicketStatus ?? "Open"}"
+            : $"/inbox/{token}";
+    }
+
+    private static string Icon(string type) => type switch
+    {
+        NotificationTypes.TicketCreated => "fa-solid fa-ticket",
+        NotificationTypes.TicketReply => "fa-solid fa-comment-dots",
+        NotificationTypes.TicketStatus => "fa-solid fa-arrows-rotate",
+        _ => "fa-solid fa-bell"
+    };
+
+    private static string StatusLabel(string s) => s == "InProgress" ? "In progress" : s;
+
+    private static string DayLabel(DateTime utc)
+    {
+        var day = utc.ToLocalTime().Date;
+        if (day == DateTime.Today) return "Today";
+        if (day == DateTime.Today.AddDays(-1)) return "Yesterday";
+        return day.ToString(day.Year == DateTime.Today.Year ? "MMMM d" : "MMMM d, yyyy");
+    }
+
+    private static string Relative(DateTime utc)
+    {
+        var minutes = (DateTime.UtcNow - utc).TotalMinutes;
+        if (minutes < 1) return "Just now";
+        if (minutes < 60) return $"{(int)minutes}m ago";
+        if (minutes < 1440) return $"{(int)(minutes / 60)}h ago";
+        return utc.ToLocalTime().ToString("MMM d, h:mm tt");
+    }
+
+    public void Dispose()
+    {
+        Center.OnChange -= HandleChange;
+        Center.OnAlert -= HandleAlert;
+    }
+}

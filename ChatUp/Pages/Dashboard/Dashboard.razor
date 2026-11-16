@@ -11,6 +11,7 @@
 @inject NavigationManager Navigation
 @inject UserState UserState
 @inject IJSRuntime JS
+@inject ChatUp.Services.ChatService ChatService
 <link href="css/dashboard.css" rel="stylesheet" />
 
 <div class="dx">
@@ -42,9 +43,15 @@
                 else if (_lastUpdated.HasValue)
                 {
                     <i class="fa-regular fa-clock"></i>
-                    <span>Updated @_lastUpdated.Value.ToString("h:mm tt", CultureInfo.InvariantCulture)</span>
+                    <span>Updated @_lastUpdated.Value.ToString("h:mm:ss tt", CultureInfo.InvariantCulture)</span>
                 }
             </span>
+            @if (ChatService.IsConnected)
+            {
+                <span class="dx-live" title="This dashboard updates by itself when tickets are filed, answered or change status">
+                    <span class="dx-live-dot"></span> Live
+                </span>
+            }
             <button class="dx-btn dx-btn-glass" @onclick="RefreshAsync" disabled="@IsBusy" title="Reload all dashboard data">
                 <i class="fa-solid fa-rotate-right"></i> Refresh
             </button>
@@ -463,7 +470,7 @@
                         {
                             <div class="dx-inline-error">
                                 <i class="fa-solid fa-circle-exclamation"></i> @_activityError
-                                <button class="dx-link" @onclick="LoadActivityAsync">Retry</button>
+                                <button class="dx-link" @onclick="() => LoadActivityAsync()">Retry</button>
                             </div>
                         }
                         else if (_activity == null && _activityLoading)
@@ -673,8 +680,38 @@
         objRef = DotNetObjectReference.Create(this);
         SetPresetRange(activePreset);
 
+        // Live: ticket created / answered / status changed anywhere → refresh quietly
+        ChatService.OnTicketUpdated += QueueLiveRefresh;
+        ChatService.OnDashboardChanged += QueueLiveRefresh;
+
         // Independent requests run concurrently instead of one after another
         await Task.WhenAll(ReloadDataAsync(), LoadProjectsAsync(), LoadHolidaysAsync());
+    }
+
+    // =============================
+    // REALTIME
+    // =============================
+    private CancellationTokenSource? _liveCts;
+
+    /// <summary>Debounced: a burst of ticket events costs one quiet reload, without skeletons or a spinner.</summary>
+    private void QueueLiveRefresh()
+    {
+        _liveCts?.Cancel();
+        var cts = _liveCts = new CancellationTokenSource();
+
+        _ = InvokeAsync(async () =>
+        {
+            try
+            {
+                await Task.Delay(1500, cts.Token);
+                await Task.WhenAll(LoadDashboardAsync(_currentPage, silent: true), LoadActivityAsync(silent: true));
+            }
+            catch (TaskCanceledException) { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Live dashboard refresh failed: {ex.Message}");
+            }
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -705,6 +742,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        ChatService.OnTicketUpdated -= QueueLiveRefresh;
+        ChatService.OnDashboardChanged -= QueueLiveRefresh;
+        _liveCts?.Cancel();
         _dashboardCts?.Cancel();
         _activityCts?.Cancel();
 
@@ -726,15 +766,22 @@
 
     private Task RefreshAsync() => ReloadDataAsync();
 
-    private async Task LoadDashboardAsync(int page)
+    private async Task LoadDashboardAsync(int page, bool silent = false)
     {
+        // A live refresh never interrupts a load the user started
+        if (silent && _dashboardLoading)
+            return;
+
         // A newer request supersedes any in-flight one, so stale responses never overwrite fresh data
         _dashboardCts?.Cancel();
         var cts = _dashboardCts = new CancellationTokenSource();
 
-        _dashboardLoading = true;
-        _dashboardError = null;
-        StateHasChanged();
+        if (!silent)
+        {
+            _dashboardLoading = true;
+            _dashboardError = null;
+            StateHasChanged();
+        }
 
         var query = $"?userId={UserId}&page={page}&pageSize={SlaPageSize}{BuildRangeQuery()}";
         if (projectFilter.HasValue)
@@ -771,18 +818,24 @@
         }
     }
 
-    private async Task LoadActivityAsync()
+    private async Task LoadActivityAsync(bool silent = false)
     {
         // Client users never see the activity feed, so don't fetch it for them
         if (IsClientUser)
             return;
 
+        if (silent && _activityLoading)
+            return;
+
         _activityCts?.Cancel();
         var cts = _activityCts = new CancellationTokenSource();
 
-        _activityLoading = true;
-        _activityError = null;
-        StateHasChanged();
+        if (!silent)
+        {
+            _activityLoading = true;
+            _activityError = null;
+            StateHasChanged();
+        }
 
         var query = $"?userId={UserId}&page=1&pageSize={ActivityPageSize}{BuildRangeQuery()}";
 

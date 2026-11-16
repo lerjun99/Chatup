@@ -41,6 +41,8 @@ namespace ChatUp.Shared
                 new[] { "assignments" }, t => t == 1),
             new("users", "Users", "fa-solid fa-users-gear", AdminSection, "/users", false,
                 new[] { "users", "user-registers" }, t => t == 1),
+            new("auditlog", "Audit log", "fa-solid fa-clock-rotate-left", AdminSection, "/audit-log", false,
+                new[] { "audit-log" }, t => t == 1),
             new("apikeys", "API keys", "fa-solid fa-key", AdminSection, "/settings/api-keys", false,
                 new[] { "settings" }, t => t == 1),
         };

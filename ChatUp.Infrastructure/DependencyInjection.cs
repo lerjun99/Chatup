@@ -1,4 +1,8 @@
-﻿using ChatUp.Application.Common.Interfaces;
+﻿using ChatUp.Application.Auditing;
+using ChatUp.Application.Common.Interfaces;
+using ChatUp.Application.Features.AdminActivity;
+using ChatUp.Infrastructure.Auditing;
+using Microsoft.AspNetCore.DataProtection;
 using ChatUp.Application.Common.Security;
 using ChatUp.Application.Features.Messages.Handlers;
 using ChatUp.Domain.Interfaces;
@@ -32,10 +36,22 @@ namespace ChatUp.Infrastructure
             // EF CORE
             // ============================================================
 
-            services.AddDbContext<ChatDBContext>(options =>
+            // Audit log (same pipeline as AFL-CMS "Admin Activity"): the request scope, the EF interceptor that
+            // captures exact field changes, and a background writer so requests never wait on the log
+            services.AddScoped<IActivityScope, ActivityScope>();
+            services.AddScoped<AuditSaveChangesInterceptor>();
+            services.AddSingleton<ActivityLogQueue>();
+            services.AddSingleton<IActivityLogQueue>(sp => sp.GetRequiredService<ActivityLogQueue>());
+            services.AddHostedService<ActivityLogWriter>();
+            services.AddHostedService<ActivityLogRetentionService>();
+            services.AddScoped<IActivityUnlockService, ActivityUnlockService>();
+            services.AddDataProtection();
+
+            services.AddDbContext<ChatDBContext>((sp, options) =>
                 options.UseSqlServer(
-                    configuration.GetConnectionString(
-                        "Chatup_ConnectionString")));
+                        configuration.GetConnectionString(
+                            "Chatup_ConnectionString"))
+                    .AddInterceptors(sp.GetRequiredService<AuditSaveChangesInterceptor>()));
 
             services.AddScoped<IChatDBContext>(
                 sp => sp.GetRequiredService<ChatDBContext>());

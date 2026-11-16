@@ -1,0 +1,189 @@
+@using ChatUp.Application.Auditing
+@using ChatUp.Application.Features.AdminActivity
+@using ChatUp.Services
+
+@* One audit row, expanded: what changed (field by field), and who / where / how *@
+<div class="au-detail">
+    <div class="au-detail-main">
+        <h4>@Row.Summary</h4>
+
+        @if (!string.IsNullOrWhiteSpace(Row.Details))
+        {
+            <p class="au-detail-text">@Row.Details</p>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(Row.ErrorMessage))
+        {
+            <div class="au-alert is-error"><i class="fa-solid fa-circle-exclamation"></i> @Row.ErrorMessage</div>
+        }
+
+        @if (_changes.Any())
+        {
+            @foreach (var c in _changes)
+            {
+                <div class="au-change">
+                    <div class="au-change-head">
+                        <span class="au-badge" style="--c:@ActionColor(c.Action)">@ActivityLogFactory.PastTense(c.Action)</span>
+                        <strong>@c.Entity</strong>
+                        @if (!string.IsNullOrEmpty(c.EntityId))
+                        {
+                            <span class="au-muted">#@c.EntityId</span>
+                        }
+                    </div>
+                    @if (c.Fields.Any())
+                    {
+                        <table class="au-diff">
+                            <thead>
+                                <tr><th>Field</th><th>Before</th><th>After</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var f in c.Fields)
+                                {
+                                    <tr>
+                                        <td>@f.Label</td>
+                                        <td class="au-diff-old">@(f.Old ?? "—")</td>
+                                        <td class="au-diff-new">@(f.New ?? "—")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    }
+                </div>
+            }
+        }
+        else if (Row.Category == ActivityCategories.Data)
+        {
+            <p class="au-muted">No field-level changes were recorded for this action.</p>
+        }
+    </div>
+
+    <aside class="au-detail-side">
+        <dl>
+            <dt>When</dt>
+            <dd>@AuditTime.ToLocal(Row.OccurredAt).ToString("dddd, MMM d, yyyy h:mm:ss tt")</dd>
+            <dt>Type</dt>
+            <dd>@AuditDashboard.CategoryLabel(Row.Category)</dd>
+            <dt>Module</dt>
+            <dd>@Row.Module</dd>
+            @if (!string.IsNullOrEmpty(Row.EntityId))
+            {
+                <dt>Record</dt>
+                <dd>@RecordLabel</dd>
+            }
+            <dt>Source</dt>
+            <dd>@SourceLabel</dd>
+            @if (Row.DetailsLocked)
+            {
+                <dt>Protected</dt>
+                <dd class="au-muted"><i class="fa-solid fa-lock"></i> @LockedText</dd>
+            }
+            else
+            {
+                <dt>IP address</dt>
+                <dd class="au-mono">@(Row.IpAddress ?? "—")</dd>
+                <dt>Device</dt>
+                <dd title="@Row.UserAgent">@Device</dd>
+                @if (!string.IsNullOrEmpty(Row.Route))
+                {
+                    <dt>Request</dt>
+                    <dd class="au-mono">@RequestLabel</dd>
+                }
+                @if (Row.DurationMs.HasValue)
+                {
+                    <dt>Duration</dt>
+                    <dd>@($"{Row.DurationMs} ms")</dd>
+                }
+            }
+        </dl>
+
+        <div class="au-detail-actions">
+            @if (!string.IsNullOrEmpty(Row.UserName))
+            {
+                <button class="au-btn au-btn-ghost au-btn-sm" @onclick="() => OnUser.InvokeAsync(Row.UserName)"><i class="fa-regular fa-user"></i> This user</button>
+            }
+            @if (!string.IsNullOrEmpty(Row.EntityId))
+            {
+                <button class="au-btn au-btn-ghost au-btn-sm" @onclick="() => OnRecord.InvokeAsync(Row)"><i class="fa-solid fa-hashtag"></i> This record</button>
+            }
+            @if (!string.IsNullOrEmpty(Row.SessionId))
+            {
+                <button class="au-btn au-btn-ghost au-btn-sm" @onclick="() => OnSession.InvokeAsync(Row.SessionId)"><i class="fa-solid fa-link"></i> This session</button>
+            }
+            @if (Row.CorrelationId != Guid.Empty)
+            {
+                <button class="au-btn au-btn-ghost au-btn-sm" @onclick="() => OnRequest.InvokeAsync(Row.CorrelationId)"><i class="fa-solid fa-diagram-next"></i> This request</button>
+            }
+        </div>
+    </aside>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ActivityLogDto Row { get; set; } = default!;
+    [Parameter] public bool CanUnlock { get; set; }
+    [Parameter] public EventCallback<string?> OnUser { get; set; }
+    [Parameter] public EventCallback<ActivityLogDto> OnRecord { get; set; }
+    [Parameter] public EventCallback<string?> OnSession { get; set; }
+    [Parameter] public EventCallback<Guid> OnRequest { get; set; }
+
+    private List<EntityChange> _changes = new();
+
+    protected override void OnParametersSet() => _changes = ActivityJson.Deserialize(Row.Changes);
+
+    private string RecordLabel => $"{Row.EntityName} #{Row.EntityId}".Trim();
+
+    private string RequestLabel
+    {
+        get
+        {
+            var status = Row.StatusCode.HasValue ? " → " + Row.StatusCode : string.Empty;
+            return (Row.HttpMethod + " " + Row.Route + status).Trim();
+        }
+    }
+
+    private string LockedText => CanUnlock
+        ? "IP, device, route and session are hidden — unlock above to see them."
+        : "IP, device, route and session are hidden.";
+
+    private string SourceLabel => Row.Source switch
+    {
+        "Web" => "ChatUp web app",
+        "Api" => "API / integration",
+        "System" => "System (background)",
+        _ => Row.Source ?? "Unknown"
+    };
+
+    private static string ActionColor(string? action) => action switch
+    {
+        "Create" => "#16a34a",
+        "Update" => "#4f46e5",
+        "Delete" => "#dc2626",
+        "Restore" => "#0891b2",
+        _ => "#475569"
+    };
+
+    /// <summary>"Chrome on Windows" from the user agent.</summary>
+    private string Device
+    {
+        get
+        {
+            var agent = Row.UserAgent;
+            if (string.IsNullOrWhiteSpace(agent)) return "—";
+
+            var browser = agent.Contains("Edg/") ? "Edge"
+                : agent.Contains("OPR/") ? "Opera"
+                : agent.Contains("Chrome/") ? "Chrome"
+                : agent.Contains("Firefox/") ? "Firefox"
+                : agent.Contains("Safari/") ? "Safari"
+                : "Browser";
+
+            var os = agent.Contains("Windows") ? "Windows"
+                : agent.Contains("Android") ? "Android"
+                : agent.Contains("iPhone") || agent.Contains("iPad") ? "iOS"
+                : agent.Contains("Mac OS") ? "macOS"
+                : agent.Contains("Linux") ? "Linux"
+                : "an unknown OS";
+
+            return $"{browser} on {os}";
+        }
+    }
+}
